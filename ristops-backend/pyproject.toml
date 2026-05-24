@@ -11,6 +11,7 @@ dependencies = [
     "ristops-lib-be",
     "ristops-lib-sql",
     "ristops-lib-redis",
+    "ristops-lib-neo4j",
 ]
 
 [tool.uv.sources]
@@ -22,6 +23,7 @@ ristops-lib-core = { workspace = true }
 ristops-lib-be = { workspace = true }
 ristops-lib-sql = { workspace = true }
 ristops-lib-redis = { workspace = true }
+ristops-lib-neo4j = { workspace = true }
 
 
 [tool.uv.workspace]

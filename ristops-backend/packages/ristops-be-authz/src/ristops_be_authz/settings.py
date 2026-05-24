@@ -16,18 +16,6 @@ class BackendServiceSettings(BaseServiceSettings):
     )
 
 
-class Neo4jSettings(BaseServiceSettings):
-    model_config = SettingsConfigDict(
-        env_prefix=ENVVARS_PREFIX + "NEO4J_",
-    )
-    host: str = Field(description="Database host address")
-    user: str = Field("neo4j", description="Database user")
-    pwd: str = Field(description="Database password")
-
-    def get_url(self):
-        return f"neo4j://{self.host}"
-
-
 class RedisUserConsumerSettings(BaseRedisConsumerSettings):
     model_config = SettingsConfigDict(
         env_prefix=REDIS_STREAM_PREFIX + "USER_",

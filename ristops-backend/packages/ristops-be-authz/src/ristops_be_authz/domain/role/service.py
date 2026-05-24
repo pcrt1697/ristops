@@ -2,7 +2,7 @@ from http import HTTPStatus
 
 from fastapi import HTTPException
 
-from ristops_be_authz.database.engine import get_neo4j_transaction
+from ristops_lib_neo4j.engine import get_neo4j_transaction
 from ristops_be_authz.domain.models import RoleNode
 
 

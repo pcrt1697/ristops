@@ -3,9 +3,9 @@ from http import HTTPStatus
 
 from fastapi import HTTPException
 from neo4j import Record
-from redis.typing import EncodableT
+from ristops_lib_redis.engine import StreamPayload
 
-from ristops_be_authz.database.engine import get_neo4j_transaction, neo4j_transaction_provider
+from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
 from ristops_be_authz.domain.models import ResourceNode
 from ristops_lib_be.authz.events import (
     authz_resource_event_adapter, AuthZResourceCreatedEvent,
@@ -148,7 +148,7 @@ async def delete_resource(resource_type: ResourceType, resource_id: str) -> None
     _logger.info(f"Deleted resource {_id}")
 
 
-async def on_resource_event(_: str, payload: EncodableT) -> None:
+async def on_resource_event(_: str, payload: StreamPayload) -> None:
     event = authz_resource_event_adapter.validate_json(payload)
     async with neo4j_transaction_provider.context():
         if event.operation == ResourceEventType.CREATED:

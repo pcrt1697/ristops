@@ -1,19 +1,20 @@
 import asyncio
 import logging
 from asyncio import Lock, Task
-from typing import Callable, Awaitable, Protocol
+from typing import Any, Callable, Awaitable, Protocol
 
 from redis import ResponseError
 from redis.asyncio import Redis
-from redis.typing import EncodableT
 
+from ristops_lib_core.context import APP_CONTEXT, ContextKey
 from ristops_lib_redis.exception import RedisClientError
 from ristops_lib_redis.settings import RedisSettings
 
 _logger = logging.getLogger(__name__)
 
-RedisStream = tuple[str, EncodableT]
-MessageProcessor = Callable[[str, EncodableT], Awaitable[None]]
+StreamPayload = dict[str, Any]
+RedisStream = tuple[str, StreamPayload]
+MessageProcessor = Callable[[str, StreamPayload], Awaitable[None]]
 
 
 class RedisClient:
@@ -103,7 +104,10 @@ class RedisStreamConsumer:
             if not e.args[0].startswith("BUSYGROUP"):
                 raise
 
-    async def _process_message(self, stream_id: str, data: EncodableT) -> None:
+    async def _process_message(self, stream_id: str, data: StreamPayload) -> None:
+        APP_CONTEXT.reset()
+        if correlation_id := data.get(ContextKey.CORRELATION_ID):
+            APP_CONTEXT.set(ContextKey.CORRELATION_ID, correlation_id)
         _extra = {"redis_stream_id": stream_id}
         if self._config.log_payload:
             _logger.info("Processing message: %s", data, extra=_extra)

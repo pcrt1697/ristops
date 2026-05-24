@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PySourceRootDetectionService">
+    <option name="sourcePathsSet">
+      <set>
+        <option value="$PROJECT_DIR$/packages/ristops-lib-sql/src" />
+        <option value="$PROJECT_DIR$/packages/ristops-lib-sql" />
+        <option value="$PROJECT_DIR$/packages/ristops-lib-redis/src" />
+        <option value="$PROJECT_DIR$/packages/ristops-lib-redis" />
+        <option value="$PROJECT_DIR$/packages/ristops-be-authz/src" />
+        <option value="$PROJECT_DIR$/packages/ristops-be-authz" />
+        <option value="$PROJECT_DIR$/packages/ristops-batch-demo/src" />
+        <option value="$PROJECT_DIR$/packages/ristops-batch-demo" />
+        <option value="$PROJECT_DIR$/packages/ristops-lib-core/src" />
+        <option value="$PROJECT_DIR$/packages/ristops-lib-core" />
+        <option value="$PROJECT_DIR$/packages/ristops-lib-be/src" />
+        <option value="$PROJECT_DIR$/packages/ristops-lib-be" />
+      </set>
+    </option>
+  </component>
+</project>

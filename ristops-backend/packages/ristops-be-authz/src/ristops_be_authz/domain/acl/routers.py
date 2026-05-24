@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from ristops_be_authz.database.engine import neo4j_transactional
+from ristops_lib_neo4j.engine import neo4j_transactional
 from ristops_be_authz.domain.acl.service import check_acl_authorization, grant_access
 from ristops_lib_be.authz.policy import policy, Policy, BaseResourceResolver, resolve_body_attribute
 from ristops_lib_core.schema.authz import (

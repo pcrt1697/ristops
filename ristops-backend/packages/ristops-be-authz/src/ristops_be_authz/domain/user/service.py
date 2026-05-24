@@ -2,9 +2,9 @@ import logging
 from http import HTTPStatus
 
 from fastapi import HTTPException
-from redis.typing import EncodableT
+from ristops_lib_redis.engine import StreamPayload
 
-from ristops_be_authz.database.engine import get_neo4j_transaction, neo4j_transaction_provider
+from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
 from ristops_be_authz.domain.acl.service import create_member_acl
 from ristops_be_authz.domain.models import UserNode
 from ristops_be_authz.domain.resource.service import find_or_create_user_resource, delete_resource
@@ -49,7 +49,7 @@ async def remove_user(user_id: str) -> None:
     _logger.info(f"Deleted user {user_id}")
 
 
-async def on_user_event(_: str, payload: EncodableT) -> None:
+async def on_user_event(_: str, payload: StreamPayload) -> None:
     event = AuthZUserEvent.model_validate(payload)
     async with neo4j_transaction_provider.context():
         if event.operation == ResourceEventType.CREATED:

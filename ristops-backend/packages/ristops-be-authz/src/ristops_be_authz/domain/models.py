@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from ristops_be_authz.database.migration import MigrationNode
+from ristops_lib_neo4j.migration import MigrationNode
 
 logging.getLogger("neo4j.notifications").setLevel(logging.WARNING)
 

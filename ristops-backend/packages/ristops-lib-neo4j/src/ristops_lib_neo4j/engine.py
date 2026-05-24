@@ -6,8 +6,8 @@ from typing import Callable, Optional, AsyncGenerator
 
 from neo4j import AsyncTransaction, AsyncDriver, AsyncGraphDatabase
 
-from ristops_be_authz.database.exception import Neo4TransactionError
-from ristops_be_authz.settings import Neo4jSettings
+from ristops_lib_neo4j.exception import Neo4TransactionError
+from ristops_lib_neo4j.settings import Neo4jSettings
 
 _NEO4J_TRANSACTION_CONTEXT: ContextVar[Optional[AsyncTransaction]] = ContextVar("neo4j_transaction", default=None)
 
@@ -56,7 +56,6 @@ def neo4j_transactional(func: Callable) -> Callable:
     Works in any async context: FastAPI route handlers, CLI commands, background tasks.
     Use ``get_neo4j_transaction()`` to access the transaction from within the call.
     """
-
     @wraps(func)
     async def wrapper(*args, **kwargs):
         if has_neo4j_transaction():
@@ -68,10 +67,15 @@ def neo4j_transactional(func: Callable) -> Callable:
 
 
 def get_neo4j_transaction() -> AsyncTransaction:
-    session = _NEO4J_TRANSACTION_CONTEXT.get()
-    if session is None:
+    """Return the Neo4j transaction for the current context.
+
+    Raises ``Neo4TransactionError`` if no transaction is open.
+    Use ``@neo4j_transactional`` to open one.
+    """
+    transaction = _NEO4J_TRANSACTION_CONTEXT.get()
+    if transaction is None:
         raise Neo4TransactionError("No neo4j transaction defined in context")
-    return session
+    return transaction
 
 
 class AsyncNeo4jTransactionProvider:
@@ -95,7 +99,7 @@ class AsyncNeo4jTransactionProvider:
                 _settings.get_url(),
                 auth=(_settings.user, _settings.pwd),
                 max_connection_pool_size=30,
-                connection_acquisition_timeout=30,  # how long to wait for a free connection
+                connection_acquisition_timeout=30,
             )
 
     async def __call__(self) -> AsyncGenerator[AsyncTransaction, None]:
@@ -124,7 +128,7 @@ class AsyncNeo4jTransactionProvider:
             yield transaction
 
     async def close(self) -> None:
-        """Call on app shutdown to release all connections."""
+        """Release all connections. Call on app or CLI shutdown."""
         async with self._lock:
             await self.driver.close()
 

@@ -15,12 +15,8 @@ def _get_dotenv_path() -> Path:
     env_path = os.environ.get(DOTENV_VAR)
     if not env_path:
         _env_path = Path(os.getcwd()) / ".env"
-        _logger.debug("No .env path set with variable %s, defaulting to %s", DOTENV_VAR, _env_path)
     else:
         _env_path = Path(env_path)
-    _logger.info("Using .env path %s", _env_path)
-    if not _env_path.is_file():
-        _logger.debug("No .env file found at %s", _env_path)
     return _env_path
 
 
