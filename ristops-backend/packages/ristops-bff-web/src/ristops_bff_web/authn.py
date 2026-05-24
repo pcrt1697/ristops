@@ -1,7 +1,6 @@
 import logging
 import time
 
-from fastapi import FastAPI
 from jwt import ExpiredSignatureError
 from starlette import status
 from starlette.middleware.base import RequestResponseEndpoint
@@ -12,7 +11,7 @@ from starsessions import load_session
 
 from ristops_bff_web.domain.auth.service import refresh_access_token
 from ristops_bff_web.session import update_context, SessionField
-from ristops_lib_core.auth.authn import AuthNMiddleware, JwtDecoder
+from ristops_lib_core.auth.authn import AuthNMiddleware, JwtDecoder, PublicRoutesRegistry
 from ristops_lib_core.exception import create_error_response
 
 _logger = logging.getLogger(__name__)
@@ -40,8 +39,8 @@ class SessionAuthNMiddleware(AuthNMiddleware):
     All graphql requests are considered non-public.
     """
 
-    def __init__(self, app: ASGIApp, api: FastAPI, jwt_decoder: JwtDecoder) -> None:
-        super().__init__(app, api)
+    def __init__(self, app: ASGIApp, public_registry: PublicRoutesRegistry, jwt_decoder: JwtDecoder) -> None:
+        super().__init__(app, public_registry)
         self._jwt_decoder = jwt_decoder
 
     async def _dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:

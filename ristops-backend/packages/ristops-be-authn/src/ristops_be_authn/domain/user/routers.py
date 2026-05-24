@@ -28,6 +28,7 @@ user_router = APIRouter(
     "/me",
     response_model=UserResponse
 )
+@policy()
 @sql_transactional
 async def get_me() -> UserResponse:
     """
@@ -100,6 +101,7 @@ async def update(
     "/me",
     status_code=HTTPStatus.NO_CONTENT,
 )
+@policy()
 @sql_transactional
 async def delete_me(
 ) -> None:

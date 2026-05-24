@@ -5,9 +5,14 @@ from fastapi import HTTPException
 from neo4j import Record
 from redis.typing import EncodableT
 
-from ristops_be_authz.database.engine import get_neo4j_transaction
+from ristops_be_authz.database.engine import get_neo4j_transaction, neo4j_transaction_provider
 from ristops_be_authz.domain.models import ResourceNode
-from ristops_lib_core.schema.authz import ResourceType, CreateAuthorizationResourceRequest, AuthorizationResource
+from ristops_lib_be.authz.events import (
+    authz_resource_event_adapter, AuthZResourceCreatedEvent,
+    AuthZResourceDeletedEvent
+)
+from ristops_lib_be.events import ResourceEventType
+from ristops_lib_core.schema.authz import ResourceType, AuthorizationResource
 
 _logger = logging.getLogger(__name__)
 
@@ -32,25 +37,24 @@ async def find_or_create_user_resource(user_id: str) -> None:
             resource_type=ResourceType.USER,
         )
     ]
-    request = CreateAuthorizationResourceRequest(resources=resources)
     await find_or_create_resources(
         parent_type=ResourceType.APP,
         parent_id="*",
-        request=request,
+        resources=resources,
     )
 
 
 async def find_or_create_resources(
         parent_type: ResourceType,
         parent_id: str,
-        request: CreateAuthorizationResourceRequest
+        resources: list[AuthorizationResource],
 ) -> list[ResourceNode]:
-    _logger.info("Creating %s resources", len(request.resources))
+    _logger.info("Creating %s resources", len(resources))
     parent = await find_resource_or_throw(parent_type, parent_id)
     transaction = get_neo4j_transaction()
     nodes = []
     # todo: maybe optimize this with a single query
-    for resource in request.resources:
+    for resource in resources:
         _id = make_resource_id(resource.resource_type, resource.resource_id)
         result = await transaction.run(
             """
@@ -67,7 +71,8 @@ async def find_or_create_resources(
             resource_type=resource.resource_type,
         )
         record = await result.single()
-        assert record is not None, "Failed to create resource"
+        if record is None:
+            raise RuntimeError("Failed to create resource")
         node = ResourceNode.model_validate(record["c"])
         _logger.info("Created resource %s", node.id)
         nodes.append(node)
@@ -95,7 +100,8 @@ async def _find_or_create_resource(
         resource_type=resource_type,
     )
     record = await result.single()
-    assert record is not None, "Failed to get or create resource"
+    if record is None:
+        raise RuntimeError("Failed to get or create resource")
     node = ResourceNode.model_validate(record["r"])
     _logger.info("Created resource %s", node.id)
     return node
@@ -129,7 +135,7 @@ async def throw_if_resource_not_exists(resource_type: str, resource_id: str) -> 
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Resource not found")
 
 
-async def delete_resource(resource_type: str, resource_id: str) -> None:
+async def delete_resource(resource_type: ResourceType, resource_id: str) -> None:
     transaction = get_neo4j_transaction()
     _id = make_resource_id(resource_type, resource_id)
     await transaction.run(
@@ -142,5 +148,12 @@ async def delete_resource(resource_type: str, resource_id: str) -> None:
     _logger.info(f"Deleted resource {_id}")
 
 
-async def on_resource_event(stream_id: str, payload: EncodableT) -> None:
-    pass
+async def on_resource_event(_: str, payload: EncodableT) -> None:
+    event = authz_resource_event_adapter.validate_json(payload)
+    async with neo4j_transaction_provider.context():
+        if event.operation == ResourceEventType.CREATED:
+            _event: AuthZResourceCreatedEvent = event
+            await find_or_create_resources(_event.parent_type, _event.parent_id, _event.resources)
+        elif event.operation == ResourceEventType.DELETED:
+            _event: AuthZResourceDeletedEvent = event
+            await delete_resource(_event.resource_type, _event.resource_id)

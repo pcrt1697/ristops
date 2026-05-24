@@ -1,13 +1,12 @@
 import logging
 
-from fastapi import FastAPI
 from starlette import status
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from ristops_lib_core.auth.authn import JwtDecoder, AuthNMiddleware
+from ristops_lib_core.auth.authn import JwtDecoder, AuthNMiddleware, PublicRoutesRegistry
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
 from ristops_lib_core.exception import create_error_response
 
@@ -17,8 +16,8 @@ _logger = logging.getLogger(__name__)
 class JwtAuthNMiddleware(AuthNMiddleware):
     """ Middleware used to authenticate requests """
 
-    def __init__(self, app: ASGIApp, api: FastAPI, jwt_decoder: JwtDecoder) -> None:
-        super().__init__(app, api)
+    def __init__(self, app: ASGIApp, public_registry: PublicRoutesRegistry, jwt_decoder: JwtDecoder) -> None:
+        super().__init__(app, public_registry)
         self._jwt_decoder = jwt_decoder
 
     async def _dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:

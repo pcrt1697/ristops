@@ -2,6 +2,6 @@ from enum import StrEnum
 
 
 class ResourceEventType(StrEnum):
-    created = "created"
-    deleted = "deleted"
-    updated = "updated"
+    CREATED = "created"
+    DELETED = "deleted"
+    UPDATED = "updated"

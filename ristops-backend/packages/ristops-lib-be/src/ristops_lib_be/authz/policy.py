@@ -49,7 +49,7 @@ def policy(*policies: PolicyInterface) -> Callable:
     """ Attach a policy to the route. """
 
     def wrapper(route_func: Callable):
-        isinstance(policies, tuple)
+        assert isinstance(policies, tuple)
         setattr(route_func, POLICY, policies)
         return route_func
 

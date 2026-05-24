@@ -129,7 +129,6 @@ def _generate_refresh_token(user_id: str) -> str:
 
 def _generate_tokens(user_id: str) -> LoginResponse:
     access_token = _generate_access_token(user_id)
-    APP_CONTEXT.set(ContextKey.JWT, access_token)
     refresh_token = _generate_refresh_token(user_id)
     return LoginResponse(
         user_id=user_id,
@@ -139,9 +138,10 @@ def _generate_tokens(user_id: str) -> LoginResponse:
 
 
 async def perform_login(request: LoginRequest) -> LoginResponse:
-    user_id = await authenticate_user(request.email, request.password)
+    user_id = await authenticate_user(request.email, request.password.get_secret_value())
     response = _generate_tokens(user_id)
     APP_CONTEXT.set(ContextKey.USER_ID, user_id)
+    APP_CONTEXT.set(ContextKey.JWT, response.access_token)
     return response
 
 
@@ -158,4 +158,6 @@ async def refresh_access_token(refresh_token: str) -> LoginResponse:
         _logger.exception(f"Failed to decode refresh token: {exc.__class__}")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid token")
     await throw_if_user_not_exists(UUID(payload["sub"]))
-    return _generate_tokens(payload["sub"])
+    response = _generate_tokens(payload["sub"])
+    APP_CONTEXT.set(ContextKey.JWT, response.access_token)
+    return response

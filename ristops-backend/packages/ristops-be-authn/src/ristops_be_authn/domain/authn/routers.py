@@ -34,6 +34,11 @@ async def refresh(request: RefreshTokenRequest) -> LoginResponse:
 @auth_router.get(
     "/.well-known/jwks.json",
     response_model=JWKResponse,
+    description=(
+        "Returns the public key set used to verify JWT access tokens. "
+        "The response is cached in memory for the lifetime of the process. "
+        "Key rotation requires a service restart."
+    ),
 )
 @public
 async def jwks() -> JWKResponse:

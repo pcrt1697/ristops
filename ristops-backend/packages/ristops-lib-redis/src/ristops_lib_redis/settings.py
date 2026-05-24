@@ -1,5 +1,3 @@
-from uuid import uuid4
-
 from pydantic import Field
 from pydantic_settings import SettingsConfigDict
 
@@ -23,7 +21,7 @@ class BaseRedisConsumerSettings(BaseServiceSettings):
     )
     stream: str = Field(description="Redis stream name")
     group: str = Field(description="Redis stream consumer group name")
-    name: str = Field(default_factory=uuid4, description="Redis consumer name")
+    name: str = Field(description="Redis consumer name")
     wait_ms: int = Field(30_000, description="Time in milliseconds to wait for a message")
     retry_idle_ms: int = Field(30_000, description="For stale messages, amount of milliseconds to read backward")
     batch_size: int = Field(10, description="Batch size for reading messages")

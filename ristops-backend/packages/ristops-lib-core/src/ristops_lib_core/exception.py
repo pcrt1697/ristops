@@ -2,7 +2,7 @@ import abc
 import logging
 from abc import abstractmethod
 from http import HTTPStatus
-from typing import Awaitable, TypeVar
+from typing import Awaitable
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -13,7 +13,6 @@ from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 
 _logger = logging.getLogger(__name__)
-T = TypeVar("T")
 
 
 class ErrorResponse(BaseModel):

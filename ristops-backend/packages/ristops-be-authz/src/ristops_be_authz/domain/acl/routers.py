@@ -29,10 +29,10 @@ async def check(
 
 
 @acl_router.post(
-    "/check",
+    "",
     response_model=AuthorizationResponse
 )
-@policy(Policy(_user_body_resolver, "acl~get"))
+@policy(Policy(_user_body_resolver, "acl~add"))
 @neo4j_transactional
 async def create_acl(
         request: GrantAccessRequest,

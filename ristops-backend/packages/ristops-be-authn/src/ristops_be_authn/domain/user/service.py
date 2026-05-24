@@ -1,15 +1,17 @@
 import logging
+from functools import lru_cache
 from http import HTTPStatus
 from uuid import UUID, uuid5, uuid4
 
 from argon2 import PasswordHasher
 from fastapi import HTTPException
 from pydantic import SecretStr
-from sqlalchemy import select, ScalarResult, ColumnElement, or_
+from sqlalchemy import select, ScalarResult, ColumnElement
 
 from ristops_be_authn.domain.user.entities import UserEntity
 from ristops_be_authn.domain.user.schema import UserUpdateRequest
-from ristops_be_authn.services.authz import create_authz_user
+from ristops_be_authn.services.authz import create_authz_user, delete_authz_user
+from ristops_be_authn.settings import Argon2Settings
 from ristops_lib_core.auth.authn import RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
 from ristops_lib_core.schema.user import UserCreationRequest
@@ -17,18 +19,23 @@ from ristops_lib_sql.engine import get_sql_session
 
 _logger = logging.getLogger(__name__)
 _admin_id = uuid5(RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME)
-_password_hasher = PasswordHasher(
-    time_cost=2,  # number of iterations
-    memory_cost=65536,  # 64MB
-    parallelism=2,
-    hash_len=32,
-    salt_len=16,
-)
+
+
+@lru_cache(maxsize=1)
+def _get_password_hasher() -> PasswordHasher:
+    settings = Argon2Settings.get()
+    return PasswordHasher(
+        time_cost=settings.time_cost,
+        memory_cost=settings.memory_cost,
+        parallelism=settings.parallelism,
+        hash_len=settings.hash_len,
+        salt_len=settings.salt_len,
+    )
 
 
 def _hash_password(password: str) -> str:
     """ Hash password and return hashed password. """
-    return _password_hasher.hash(password)
+    return _get_password_hasher().hash(password)
 
 
 def _verify_password(password: str, hashed: str) -> None:
@@ -40,7 +47,7 @@ def _verify_password(password: str, hashed: str) -> None:
 def _do_verify_password(password: str, hashed: str) -> bool:
     """ Verify if password matches hashed password. """
     try:
-        return _password_hasher.verify(hashed, password)
+        return _get_password_hasher().verify(hashed, password)
     except Exception as e:
         _logger.exception(f"Password verification failed: {e}")
         return False
@@ -48,7 +55,7 @@ def _do_verify_password(password: str, hashed: str) -> bool:
 
 def _needs_rehash(hashed: str) -> bool:
     """ Check if params changed. """
-    return _password_hasher.check_needs_rehash(hashed)
+    return _get_password_hasher().check_needs_rehash(hashed)
 
 
 async def _create_user(user_id: UUID, request: UserCreationRequest) -> UserEntity:
@@ -72,31 +79,29 @@ async def _create_user(user_id: UUID, request: UserCreationRequest) -> UserEntit
 
 async def create_user(request: UserCreationRequest) -> UserEntity:
     """ Create new user. """
-    already_exists = await _exists_user_by(UserEntity.username == request.username)
-    if already_exists:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail="Username already taken"
-        )
-    already_exists = await _exists_user_by(UserEntity.email == request.email)
-    if already_exists:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail="Email already taken"
-        )
+    await throw_if_exists_by_username(request.username)
+    await throw_if_exists_by_email(request.email)
     user_id = uuid4()
     user = await _create_user(user_id, request)
     return user
 
 
-async def exists_by_email_or_username(username: str, email: str) -> bool:
-    """ Check if user exists by email or username. """
-    session = get_sql_session()
-    query = or_(UserEntity.username == username, UserEntity.email == email)
-    result: ScalarResult[UserEntity] = await session.scalars(
-        select(UserEntity).where(query).limit(1)
-    )
-    return result.one_or_none() is not None
+async def throw_if_exists_by_username(username: str):
+    already_exists = await _exists_user_by(UserEntity.username == username)
+    if already_exists:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail="Username already taken"
+        )
+
+
+async def throw_if_exists_by_email(email: str):
+    already_exists = await _exists_user_by(UserEntity.email == email.lower())
+    if already_exists:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail="Email already taken"
+        )
 
 
 async def update_user(user_id: UUID, request: UserUpdateRequest) -> UserEntity:
@@ -105,9 +110,13 @@ async def update_user(user_id: UUID, request: UserUpdateRequest) -> UserEntity:
     user = await find_user_or_throw(user_id)
 
     fields_to_update = request.model_fields_set
+    # TODO: use `field in fields_to_update` consistently for all fields instead of `is not None`,
+    #  so that explicitly sending null is handled correctly for every optional field.
     if request.username is not None:
+        await throw_if_exists_by_username(request.username)
         user.username = request.username.lower()
     if request.email is not None:
+        await throw_if_exists_by_email(request.email)
         user.email = request.email.lower()
     if request.password is not None:
         password = _hash_password(request.password.get_secret_value())
@@ -175,7 +184,7 @@ async def authenticate_user(email: str, password: str) -> str:
     _verify_password(password, user.password)
     if _needs_rehash(hashed=user.password):
         session = get_sql_session()
-        user.password = _hash_password(user.password)
+        user.password = _hash_password(password)
         await session.flush()
         await session.refresh(user)
     return str(user.id)
@@ -183,8 +192,8 @@ async def authenticate_user(email: str, password: str) -> str:
 
 async def throw_if_user_not_exists(user_id: UUID) -> None:
     """ Throw an error if user doesn't exist. """
-    user = await find_user_or_throw(user_id)
-    if user is None:
+    exists = await _exists_user_by(UserEntity.id == user_id)
+    if not exists:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail="User not found",
@@ -229,3 +238,4 @@ async def remove_user(user_id: UUID) -> None:
     user = await find_user_or_throw(user_id)
     session = get_sql_session()
     await session.delete(user)
+    await delete_authz_user(user_id)

@@ -1,4 +1,4 @@
-from typing import Any, TypeVar
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
@@ -18,9 +18,6 @@ def get_routes_with_attr(api: FastAPI, attr: str) -> dict[tuple[str, str], Any]:
         for method in route.methods:
             matching_routes[(method.lower(), root_path + route.path)] = value
     return matching_routes
-
-
-T = TypeVar("T")
 
 
 class RouteAttributeRegistry[T]:

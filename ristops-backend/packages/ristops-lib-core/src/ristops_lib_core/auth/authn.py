@@ -68,8 +68,23 @@ class ClientTokenDecoder:
 class AuthNMiddleware(BaseHTTPMiddleware, ABC):
     """ Middleware used to authenticate requests """
 
-    def __init__(self, app: ASGIApp, api: FastAPI, ) -> None:
+    def __init__(self, app: ASGIApp, public_registry: PublicRoutesRegistry) -> None:
         super().__init__(app)
+        self._public_registry = public_registry
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if self._public_registry.is_public(request):
+            return await call_next(request)
+        return await self._dispatch(request, call_next)
+
+    @abstractmethod
+    async def _dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        pass
+
+
+class PublicRoutesRegistry:
+
+    def __init__(self, api: FastAPI) -> None:
         self._public_routes = RouteAttributeRegistry[bool | None](api, IS_PUBLIC)
         self._public_paths: set[tuple[str, str]] = set()
         if api.openapi_url is not None:
@@ -77,16 +92,7 @@ class AuthNMiddleware(BaseHTTPMiddleware, ABC):
         if api.docs_url:
             self._public_paths.add((HTTPMethod.GET.lower(), api.docs_url))
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        if self._is_public(request):
-            return await call_next(request)
-        return await self._dispatch(request, call_next)
-
-    def _is_public(self, request: Request) -> bool:
+    def is_public(self, request: Request) -> bool:
         if (request.method.lower(), request.url.path) in self._public_paths:
             return True
         return self._public_routes.get(request.scope) or False
-
-    @abstractmethod
-    async def _dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        pass

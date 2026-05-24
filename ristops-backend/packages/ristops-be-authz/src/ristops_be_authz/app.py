@@ -1,21 +1,18 @@
 import logging
 from contextlib import asynccontextmanager
-from uuid import uuid4
 
 from fastapi import FastAPI, Depends
 
 from ristops_be_authz.database.engine import Neo4jTransactionMiddleware, neo4j_transaction_provider
 from ristops_be_authz.domain.acl.routers import acl_router
 from ristops_be_authz.domain.acl.service import check_acl_authorization
-from ristops_be_authz.domain.resource.routers import resource_router
 from ristops_be_authz.domain.resource.service import on_resource_event
-from ristops_be_authz.domain.user.routers import user_router
 from ristops_be_authz.domain.user.service import on_user_event
 from ristops_be_authz.settings import BackendServiceSettings, RedisUserConsumerSettings, RedisResourceConsumerSettings
 from ristops_lib_be.authn import JwtAuthNMiddleware
 from ristops_lib_be.authz.interceptor import AuthZInterceptor
 from ristops_lib_core.app.openapi import OpenAPIConfiguration
-from ristops_lib_core.auth.authn import ClientTokenDecoder
+from ristops_lib_core.auth.authn import ClientTokenDecoder, PublicRoutesRegistry
 from ristops_lib_core.context import RequestContextMiddleware
 from ristops_lib_core.exception import (
     GenericExceptionMiddleware, register_exception_handler,
@@ -34,18 +31,17 @@ async def lifespan(_: FastAPI):
     await redis_client.connect()
     consumer = RedisStreamConsumer.create_composite(
         redis_client,
-        (RedisUserConsumerSettings.get(name=str(uuid4())), on_user_event),
-        (RedisResourceConsumerSettings.get(name=str(uuid4())), on_resource_event)
+        (RedisUserConsumerSettings.get(), on_user_event),
+        (RedisResourceConsumerSettings.get(), on_resource_event)
     )
     await consumer.start()
 
     _logger.info("Startup complete")
     yield
 
-    await neo4j_transaction_provider.close()
-
     await consumer.stop()
     await redis_client.disconnect()
+    await neo4j_transaction_provider.close()
 
     _logger.info("Shutdown complete")
 
@@ -67,8 +63,8 @@ def create_app() -> FastAPI:
     app.router.dependencies.append(Depends(authz_dependency))
 
     app.include_router(acl_router)
-    app.include_router(user_router)
-    app.include_router(resource_router)
+
+    public_registry = PublicRoutesRegistry(app)
 
     # lazy register public routes
     authz_dependency.register(app)
@@ -83,7 +79,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestLoggingMiddleware)
     # sets user ID and JWT in context
     # noinspection PyTypeChecker
-    app.add_middleware(JwtAuthNMiddleware, api=app, jwt_decoder=jwt_decoder)
+    app.add_middleware(JwtAuthNMiddleware, public_registry=public_registry, jwt_decoder=jwt_decoder)
     # sets request/correlation ID
     app.add_middleware(RequestContextMiddleware)
     # wraps everything

@@ -14,10 +14,10 @@ async def demo(_: click.Context):
     help="Seed demo data."
 )
 @click.option(
-    "-d"
+    "-d",
     "--data",
     type=click.Path(exists=True),
     required=True,
 )
 def seed(data: Path) -> None:
-
+    pass

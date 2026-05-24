@@ -45,7 +45,8 @@ async def grant_access(request: GrantAccessRequest) -> AclNode:
         created_at=datetime.now(UTC).isoformat(),
     )
     record = await result.single()
-    assert record is not None, "Failed to create ACL entry"
+    if record is None:
+        raise RuntimeError("Failed to create ACL entry")
     node = AclNode.model_validate(record["acl"])
     _logger.info(f"Created ACL entry {node.id}")
     return node

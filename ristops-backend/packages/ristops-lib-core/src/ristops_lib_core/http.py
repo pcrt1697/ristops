@@ -2,14 +2,13 @@ import logging
 from contextlib import asynccontextmanager, AsyncExitStack
 from copy import deepcopy
 from enum import StrEnum
-from typing import TypeVar, Callable, Awaitable
+from typing import Callable, Awaitable
 
 from httpx import AsyncClient, Request, Response, Headers
 
 from ristops_lib_core.context import APP_CONTEXT, ContextHeader, ContextKey
 
 _logger = logging.getLogger(__name__)
-T = TypeVar("T", bound=StrEnum)
 
 
 def get_trace_headers(headers: Headers) -> dict[str, str | None]:
@@ -55,7 +54,7 @@ async def raise_for_status(response: Response) -> None:
     response.raise_for_status()
 
 
-class HttpClientService[T]:
+class HttpClientService[T: StrEnum]:
     """
     @asynccontextmanager
     async def lifespan(app: FastAPI):

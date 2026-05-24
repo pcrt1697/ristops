@@ -162,7 +162,8 @@ async def _save_migration(migration: MigrationInfo) -> None:
             prev_id=migration["id"] - 1,
         )
     record = await result.single()
-    assert record is not None, "Migration creation returned no record"
+    if record is None:
+        raise RuntimeError("Migration creation returned no record")
     _migration = MigrationNode.model_validate(record["m"])
     _logger.info("Created migration %s", _migration.id)
 

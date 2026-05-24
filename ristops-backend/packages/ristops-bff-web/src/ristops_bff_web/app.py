@@ -17,7 +17,7 @@ from ristops_bff_web.logging import ResolverLoggingExtension
 from ristops_bff_web.session import get_redis_client
 from ristops_bff_web.settings import BackendServiceSettings
 from ristops_lib_core.app.openapi import OpenAPIConfiguration
-from ristops_lib_core.auth.authn import ClientTokenDecoder
+from ristops_lib_core.auth.authn import ClientTokenDecoder, PublicRoutesRegistry
 from ristops_lib_core.context import RequestContextMiddleware
 from ristops_lib_core.exception import GenericExceptionMiddleware
 from ristops_lib_core.logging import RequestLoggingMiddleware
@@ -65,11 +65,13 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(graphql_router, prefix="/graphql")
 
+    public_registry = PublicRoutesRegistry(app)
+
     # logs ASAP (only authenticated request) and needs user/request/correlation ID
     app.add_middleware(RequestLoggingMiddleware)
     # sets user/session ID
     # noinspection PyTypeChecker
-    app.add_middleware(SessionAuthNMiddleware, api=app, jwt_decoder=jwt_decoder)
+    app.add_middleware(SessionAuthNMiddleware, public_registry=public_registry, jwt_decoder=jwt_decoder)
     # dump session to request object
     # noinspection PyTypeChecker
     app.add_middleware(

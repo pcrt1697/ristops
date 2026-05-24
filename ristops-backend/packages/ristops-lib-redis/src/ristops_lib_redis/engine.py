@@ -1,21 +1,16 @@
 import asyncio
 import logging
-from _contextvars import ContextVar
 from asyncio import Lock, Task
 from typing import Callable, Awaitable, Protocol
 
 from redis import ResponseError
 from redis.asyncio import Redis
 from redis.typing import EncodableT
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from ristops_lib_redis.exception import RedisClientError
 from ristops_lib_redis.settings import RedisSettings
 
 _logger = logging.getLogger(__name__)
-
-_SQL_SESSION_CONTEXT: ContextVar[AsyncSession | None] = ContextVar('sql_session', default=None)
-IS_SQL_TRANSACTIONAL = "_is_sql_transactional"
 
 RedisStream = tuple[str, EncodableT]
 MessageProcessor = Callable[[str, EncodableT], Awaitable[None]]
@@ -57,7 +52,7 @@ class RedisStreamConsumer:
     ):
         self._client = client
         self._config = config
-        self._do_process_message = consumer_func if consumer_func is not None else self._process_message
+        self._do_process_message = consumer_func
         self.__task: Task[None] | None = None
 
     @property
@@ -107,10 +102,6 @@ class RedisStreamConsumer:
         except ResponseError as e:
             if not e.args[0].startswith("BUSYGROUP"):
                 raise
-
-    async def _do_process_message(self, stream_id: str, data: EncodableT) -> None:
-        """ Consumer function. """
-        raise NotImplementedError
 
     async def _process_message(self, stream_id: str, data: EncodableT) -> None:
         _extra = {"redis_stream_id": stream_id}

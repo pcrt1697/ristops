@@ -12,6 +12,7 @@ from ristops_be_authn.services.http import http_service, get_http_clients
 from ristops_lib_be.authn import JwtAuthNMiddleware
 from ristops_lib_be.authz.interceptor import AuthZInterceptor
 from ristops_lib_core.app.openapi import OpenAPIConfiguration
+from ristops_lib_core.auth.authn import PublicRoutesRegistry
 from ristops_lib_core.context import RequestContextMiddleware
 from ristops_lib_core.exception import (
     GenericExceptionMiddleware, register_exception_handler,
@@ -52,6 +53,8 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(user_router)
 
+    public_registry = PublicRoutesRegistry(app)
+
     # lazy register public routes
     authz_dependency.register(app)
 
@@ -65,7 +68,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestLoggingMiddleware)
     # sets user ID and JWT in context
     # noinspection PyTypeChecker
-    app.add_middleware(JwtAuthNMiddleware, api=app, jwt_decoder=decode_access_token)
+    app.add_middleware(JwtAuthNMiddleware, public_registry=public_registry, jwt_decoder=decode_access_token)
     # sets request/correlation ID
     app.add_middleware(RequestContextMiddleware)
     # wraps everything

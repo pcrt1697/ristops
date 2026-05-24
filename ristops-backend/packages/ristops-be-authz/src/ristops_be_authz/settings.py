@@ -34,6 +34,7 @@ class RedisUserConsumerSettings(BaseRedisConsumerSettings):
     )
     stream: str = Field("auth:users", description="Redis stream name for user operations")
     group: str = Field("authz", description="Redis stream consumer group name for user operations")
+    name: str = Field("authz", description="Redis consumer name for user operations")
     log_payload: bool = True
 
 
@@ -43,4 +44,5 @@ class RedisResourceConsumerSettings(BaseRedisConsumerSettings):
     )
     stream: str = Field("auth:resources", description="Redis stream name for resources operations")
     group: str = Field("authz", description="Redis stream consumer group name for resource operations")
+    name: str = Field("authz", description="Redis consumer name for resource operations")
     log_payload: bool = True

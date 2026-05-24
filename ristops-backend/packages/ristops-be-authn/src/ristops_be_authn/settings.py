@@ -47,6 +47,18 @@ class BackendServiceSettings(BaseServiceSettings):
     authz_url: str
 
 
+class Argon2Settings(BaseServiceSettings):
+    model_config = SettingsConfigDict(
+        env_prefix=ENVVARS_PREFIX + "ARGON2_",
+    )
+
+    time_cost: int = Field(default=2, description="Number of iterations.", gt=0)
+    memory_cost: int = Field(default=65536, description="Memory in kibibytes (64 MiB).", gt=0)
+    parallelism: int = Field(default=2, description="Degree of parallelism.", gt=0)
+    hash_len: int = Field(default=32, description="Length of the raw hash in bytes.", gt=0)
+    salt_len: int = Field(default=16, description="Length of the random salt in bytes.", gt=0)
+
+
 class UserProducerSettings(BaseRedisProducerSettings):
     model_config = SettingsConfigDict(
         env_prefix=REDIS_STREAM_PREFIX + "USER_",
