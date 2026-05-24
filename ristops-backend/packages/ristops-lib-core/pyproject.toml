@@ -1,0 +1,14 @@
+[project]
+name = "ristops-lib-core"
+version = "0.1.0"
+dependencies = [
+    "fastapi>=0.135.3",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.1",
+    "starlette>=1.0.0",
+    "pyjwt>=2.12.1",
+    "email-validator>=2.3.0",
+    "httpx>=0.28.1",
+    "click>=8.3.2",
+    "uvicorn>=0.44.0",
+]

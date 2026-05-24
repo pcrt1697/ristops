@@ -1,0 +1,19 @@
+[project]
+name = "ristops-be-authz"
+version = "0.1.0"
+dependencies = [
+    "neo4j>=6.1.0",
+]
+
+[tool.uv.build-backend]
+source-include = ["database/migrations/**"]
+
+[project.scripts]
+ristops = "ristops_lib_core.cli.entrypoint:main"
+
+[project.entry-points."ristops.cli.commands"]
+start = "ristops_lib_core.cli.start:start"
+seed-authz = "ristops_be_authz.cli.seed:seed"
+
+[project.entry-points."ristops.cli.commands.start"]
+be-authz = "ristops_be_authz.app:create_app"

@@ -1,0 +1,16 @@
+[project]
+name = "ristops-bff-web"
+version = "0.1.0"
+dependencies = [
+    "strawberry-graphql[fastapi]>=0.314.3",
+    "starsessions[redis]>=2.2.1",
+]
+
+[project.scripts]
+ristops = "ristops_lib_core.cli.entrypoint:main"
+
+[project.entry-points."ristops.cli.commands"]
+start = "ristops_lib_core.cli.start:start"
+
+[project.entry-points."ristops.cli.commands.start"]
+bff-web = "ristops_bff_web.app:create_app"

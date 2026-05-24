@@ -1,0 +1,29 @@
+[project]
+name = "ristops-backend"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "ristops-bff-web",
+    "ristops-be-authn",
+    "ristops-be-authz",
+    "ristops-batch-demo",
+    "ristops-lib-core",
+    "ristops-lib-be",
+    "ristops-lib-sql",
+    "ristops-lib-redis",
+]
+
+[tool.uv.sources]
+ristops-bff-web = { workspace = true }
+ristops-be-authn = { workspace = true }
+ristops-be-authz = { workspace = true }
+ristops-batch-demo = { workspace = true }
+ristops-lib-core = { workspace = true }
+ristops-lib-be = { workspace = true }
+ristops-lib-sql = { workspace = true }
+ristops-lib-redis = { workspace = true }
+
+
+[tool.uv.workspace]
+members = ["packages/*"]
+exclude = []

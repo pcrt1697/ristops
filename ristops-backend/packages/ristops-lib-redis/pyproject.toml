@@ -1,0 +1,7 @@
+[project]
+name = "ristops-lib-redis"
+version = "0.1.0"
+dependencies = [
+    "ristops-lib-core",
+    "redis>=7.4.0"
+]

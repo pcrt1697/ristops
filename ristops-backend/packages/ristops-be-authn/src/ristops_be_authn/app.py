@@ -1,0 +1,77 @@
+import logging
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator, Any
+
+from fastapi import FastAPI, Depends
+
+from ristops_be_authn.domain.authn.routers import auth_router
+from ristops_be_authn.domain.authn.service import decode_access_token
+from ristops_be_authn.domain.user.routers import user_router
+from ristops_be_authn.services.authz import is_authorized
+from ristops_be_authn.services.http import http_service, get_http_clients
+from ristops_lib_be.authn import JwtAuthNMiddleware
+from ristops_lib_be.authz.interceptor import AuthZInterceptor
+from ristops_lib_core.app.openapi import OpenAPIConfiguration
+from ristops_lib_core.context import RequestContextMiddleware
+from ristops_lib_core.exception import (
+    GenericExceptionMiddleware, register_exception_handler,
+    RequestValidationExceptionHandler, GenericHttpExceptionHandler
+)
+from ristops_lib_core.logging import RequestLoggingMiddleware
+from ristops_lib_redis.engine import redis_client
+from ristops_lib_sql.engine import SqlSessionMiddleware, sql_session_provider
+
+_logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncGenerator[None, Any]:
+    await sql_session_provider.configure()
+    await redis_client.connect()
+    clients = get_http_clients()
+    async with http_service(clients):
+        _logger.info("Startup complete")
+        yield
+    await redis_client.disconnect()
+    _logger.info("Shutdown complete")
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="RistOps AuthN APIs",
+        version="1.0",
+        summary="REST APIs to interact with RistOps authentication backend",
+        root_path='/api',
+        lifespan=lifespan,
+    )
+
+    # needs user ID and a session in the context
+    authz_dependency = AuthZInterceptor(authorizer=is_authorized)
+    app.router.dependencies.append(Depends(authz_dependency))
+
+    app.include_router(auth_router)
+    app.include_router(user_router)
+
+    # lazy register public routes
+    authz_dependency.register(app)
+
+    register_exception_handler(app, RequestValidationExceptionHandler)
+    register_exception_handler(app, GenericHttpExceptionHandler)
+
+    # opens session as late as possible
+    # noinspection PyTypeChecker
+    app.add_middleware(SqlSessionMiddleware, api=app, session_provider=sql_session_provider)
+    # logs ASAP (only authenticated request) and needs user/request/correlation ID
+    app.add_middleware(RequestLoggingMiddleware)
+    # sets user ID and JWT in context
+    # noinspection PyTypeChecker
+    app.add_middleware(JwtAuthNMiddleware, api=app, jwt_decoder=decode_access_token)
+    # sets request/correlation ID
+    app.add_middleware(RequestContextMiddleware)
+    # wraps everything
+    app.add_middleware(GenericExceptionMiddleware)
+
+    openapi_configuration = OpenAPIConfiguration(app, True)
+    app.openapi = openapi_configuration
+
+    return app

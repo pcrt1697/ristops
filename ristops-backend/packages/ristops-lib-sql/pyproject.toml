@@ -1,0 +1,9 @@
+[project]
+name = "ristops-lib-sql"
+version = "0.1.0"
+dependencies = [
+    "asyncpg>=0.31.0",
+    "greenlet>=3.4.0",
+    "ristops-lib-core",
+    "sqlalchemy>=2.0.49",
+]

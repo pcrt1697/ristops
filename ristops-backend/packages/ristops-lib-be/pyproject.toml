@@ -1,0 +1,6 @@
+[project]
+name = "ristops-lib-be"
+version = "0.1.0"
+dependencies = [
+    "ristops-lib-core",
+]

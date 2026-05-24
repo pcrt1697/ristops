@@ -1,0 +1,12 @@
+[project]
+name = "ristops-batch-demo"
+version = "0.1.0"
+dependencies = [
+    "ristops-lib-core",
+]
+
+[project.scripts]
+ristops = "ristops_lib_core.cli.entrypoint:main"
+
+[project.entry-points."ristops.cli.commands"]
+demo = "ristops_batch_demo.cli:demo"
