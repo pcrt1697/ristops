@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends
 
-from ristops_be_authz.database.engine import Neo4jTransactionMiddleware, neo4j_transaction_provider
+from ristops_be_authz.database.engine import neo4j_transaction_provider
 from ristops_be_authz.domain.acl.routers import acl_router
 from ristops_be_authz.domain.acl.service import check_acl_authorization
 from ristops_be_authz.domain.resource.service import on_resource_event
@@ -72,9 +72,6 @@ def create_app() -> FastAPI:
     register_exception_handler(app, RequestValidationExceptionHandler)
     register_exception_handler(app, GenericHttpExceptionHandler)
 
-    # opens neo4j transaction as late as possible
-    # noinspection PyTypeChecker
-    app.add_middleware(Neo4jTransactionMiddleware, api=app, transaction_provider=neo4j_transaction_provider)
     # logs ASAP (only authenticated request) and needs user/request/correlation ID
     app.add_middleware(RequestLoggingMiddleware)
     # sets user ID and JWT in context

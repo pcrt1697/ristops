@@ -3,29 +3,68 @@ from _contextvars import ContextVar
 from asyncio import Lock
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from functools import wraps
 from typing import Callable, Any
 
-from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from starlette.middleware.base import RequestResponseEndpoint, BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
-from starlette.types import ASGIApp
 
-from ristops_lib_core.app.routes import RouteAttributeRegistry
 from ristops_lib_sql.exception import SqlSessionError
 from ristops_lib_sql.settings import DatabaseSettings
 
 _logger = logging.getLogger(__name__)
 
 _SQL_SESSION_CONTEXT: ContextVar[AsyncSession | None] = ContextVar('sql_session', default=None)
-IS_SQL_TRANSACTIONAL = "_is_sql_transactional"
 
 
-def sql_transactional(route_func: Callable) -> Callable:
-    """ Decorator to add a session variable to the route function. """
-    setattr(route_func, IS_SQL_TRANSACTIONAL, True)
-    return route_func
+def has_sql_session() -> bool:
+    """Return True if a SQL session is already open in the current context."""
+    return _SQL_SESSION_CONTEXT.get() is not None
+
+
+def with_sql_db(func: Callable = None, *, settings: DatabaseSettings = None) -> Callable:
+    """Configure the SQL provider before running the decorated function.
+
+    Intended for CLI commands. Must be the outermost decorator so the provider
+    is ready before ``@sql_transactional`` opens a session.
+
+    Can be used with or without arguments::
+
+        @with_sql_db
+        async def seed(): ...
+
+        @with_sql_db(settings=test_settings)
+        async def seed(): ...
+    """
+    def decorator(f: Callable) -> Callable:
+        @wraps(f)
+        async def wrapper(*args, **kwargs):
+            await sql_session_provider.configure(settings)
+            return await f(*args, **kwargs)
+        return wrapper
+
+    if func is not None:
+        # used as @with_sql_db without parentheses
+        return decorator(func)
+    # used as @with_sql_db(settings=...) — return the decorator
+    return decorator
+
+
+def sql_transactional(func: Callable) -> Callable:
+    """Open a SQL session for the duration of the decorated function.
+
+    If a session is already open in the current context it is reused, so the
+    outermost decorated call controls commit/rollback (join-if-exists semantics).
+
+    Works in any async context: FastAPI route handlers, CLI commands, background tasks.
+    Use ``get_sql_session()`` to access the session from within the call.
+    """
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        if has_sql_session():
+            return await func(*args, **kwargs)
+        async with sql_session_provider.context():
+            return await func(*args, **kwargs)
+    return wrapper
 
 
 class AsyncSqlSessionProvider:
@@ -78,24 +117,6 @@ class AsyncSqlSessionProvider:
         """ Use as an async context manager outside FastAPI dependency injection. """
         async with self._provide() as session:
             yield session
-
-
-class SqlSessionMiddleware(BaseHTTPMiddleware):
-    """ Middleware used to dump a SQLAlchemy session to context vars. """
-
-    def __init__(self, app: ASGIApp, api: FastAPI, session_provider: AsyncSqlSessionProvider) -> None:
-        super().__init__(app)
-        self._session_provider = session_provider
-        self._routes_registry = RouteAttributeRegistry[bool](api, IS_SQL_TRANSACTIONAL)
-
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        if not self._need_session(request):
-            return await call_next(request)
-        async with self._session_provider.context():
-            return await call_next(request)
-
-    def _need_session(self, request: Request):
-        return self._routes_registry.get(request.scope, False)
 
 
 def get_sql_session() -> AsyncSession:

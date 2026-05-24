@@ -7,7 +7,7 @@ from ristops_lib_core.auth.authn import DEFAULT_ADMIN_USERNAME
 from ristops_lib_core.cli.utils.command import async_command
 from ristops_lib_core.settings import ENVVARS_PREFIX
 from ristops_lib_redis.engine import redis_client
-from ristops_lib_sql.engine import sql_session_provider
+from ristops_lib_sql.engine import with_sql_db, sql_transactional
 
 _logger = logging.getLogger(__name__)
 
@@ -36,6 +36,8 @@ _logger = logging.getLogger(__name__)
 )
 @click.pass_context
 @async_command
+@with_sql_db
+@sql_transactional
 async def seed(_: click.Context, username: str, email: str, password: str):
     """ Seed app by creating the admin user. """
     from ristops_be_authn.services.http import get_http_clients, http_service
@@ -43,15 +45,13 @@ async def seed(_: click.Context, username: str, email: str, password: str):
     await redis_client.connect()
     try:
         async with http_service(clients):
-            await sql_session_provider.configure()
-            async with sql_session_provider.context():
-                _logger.info(f"Setting up admin user")
-                await create_or_update_admin(
-                    username=username,
-                    display_name=email,
-                    email=email,
-                    password=password,
-                )
+            _logger.info("Setting up admin user")
+            await create_or_update_admin(
+                username=username,
+                display_name=email,
+                email=email,
+                password=password,
+            )
     except Exception as exc:
         _logger.exception(exc)
     finally:

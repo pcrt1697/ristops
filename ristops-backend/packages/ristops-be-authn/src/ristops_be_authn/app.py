@@ -20,7 +20,7 @@ from ristops_lib_core.exception import (
 )
 from ristops_lib_core.logging import RequestLoggingMiddleware
 from ristops_lib_redis.engine import redis_client
-from ristops_lib_sql.engine import SqlSessionMiddleware, sql_session_provider
+from ristops_lib_sql.engine import sql_session_provider
 
 _logger = logging.getLogger(__name__)
 
@@ -61,9 +61,6 @@ def create_app() -> FastAPI:
     register_exception_handler(app, RequestValidationExceptionHandler)
     register_exception_handler(app, GenericHttpExceptionHandler)
 
-    # opens session as late as possible
-    # noinspection PyTypeChecker
-    app.add_middleware(SqlSessionMiddleware, api=app, session_provider=sql_session_provider)
     # logs ASAP (only authenticated request) and needs user/request/correlation ID
     app.add_middleware(RequestLoggingMiddleware)
     # sets user ID and JWT in context

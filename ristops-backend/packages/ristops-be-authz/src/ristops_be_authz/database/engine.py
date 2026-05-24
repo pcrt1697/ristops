@@ -1,26 +1,70 @@
 from _contextvars import ContextVar
 from asyncio import Lock
 from contextlib import asynccontextmanager
+from functools import wraps
 from typing import Callable, Optional, AsyncGenerator
 
-from fastapi import FastAPI
 from neo4j import AsyncTransaction, AsyncDriver, AsyncGraphDatabase
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
-from starlette.responses import Response
-from starlette.types import ASGIApp
 
 from ristops_be_authz.database.exception import Neo4TransactionError
 from ristops_be_authz.settings import Neo4jSettings
-from ristops_lib_core.app.routes import RouteAttributeRegistry
 
 _NEO4J_TRANSACTION_CONTEXT: ContextVar[Optional[AsyncTransaction]] = ContextVar("neo4j_transaction", default=None)
-IS_NEO4J_TRANSACTIONAL = "is_neo4j_transactional"
 
 
-def neo4j_transactional(route_func: Callable) -> Callable:
-    setattr(route_func, IS_NEO4J_TRANSACTIONAL, True)
-    return route_func
+def has_neo4j_transaction() -> bool:
+    """Return True if a Neo4j transaction is already open in the current context."""
+    return _NEO4J_TRANSACTION_CONTEXT.get() is not None
+
+
+def with_neo4j_db(func: Callable = None, *, settings: Neo4jSettings = None) -> Callable:
+    """Configure the Neo4j provider before running the decorated function.
+
+    Intended for CLI commands. Must be the outermost decorator so the provider
+    is ready before ``@neo4j_transactional`` opens a transaction.
+    Closes the driver on exit.
+
+    Can be used with or without arguments::
+
+        @with_neo4j_db
+        async def seed(): ...
+
+        @with_neo4j_db(settings=test_settings)
+        async def seed(): ...
+    """
+    def decorator(f: Callable) -> Callable:
+        @wraps(f)
+        async def wrapper(*args, **kwargs):
+            await neo4j_transaction_provider.configure(settings)
+            try:
+                return await f(*args, **kwargs)
+            finally:
+                await neo4j_transaction_provider.close()
+        return wrapper
+
+    if func is not None:
+        return decorator(func)
+    return decorator
+
+
+def neo4j_transactional(func: Callable) -> Callable:
+    """Open a Neo4j transaction for the duration of the decorated function.
+
+    If a transaction is already open in the current context it is reused, so the
+    outermost decorated call controls commit/rollback (join-if-exists semantics).
+
+    Works in any async context: FastAPI route handlers, CLI commands, background tasks.
+    Use ``get_neo4j_transaction()`` to access the transaction from within the call.
+    """
+
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        if has_neo4j_transaction():
+            return await func(*args, **kwargs)
+        async with neo4j_transaction_provider.context():
+            return await func(*args, **kwargs)
+
+    return wrapper
 
 
 def get_neo4j_transaction() -> AsyncTransaction:
@@ -83,20 +127,6 @@ class AsyncNeo4jTransactionProvider:
         """Call on app shutdown to release all connections."""
         async with self._lock:
             await self.driver.close()
-
-
-class Neo4jTransactionMiddleware(BaseHTTPMiddleware):
-
-    def __init__(self, app: ASGIApp, api: FastAPI, transaction_provider: AsyncNeo4jTransactionProvider) -> None:
-        super().__init__(app)
-        self._transaction_provider = transaction_provider
-        self._routes_registry = RouteAttributeRegistry[bool](api, IS_NEO4J_TRANSACTIONAL)
-
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        if not self._routes_registry.get(request.scope, False):
-            return await call_next(request)
-        async with self._transaction_provider.context():
-            return await call_next(request)
 
 
 neo4j_transaction_provider = AsyncNeo4jTransactionProvider()

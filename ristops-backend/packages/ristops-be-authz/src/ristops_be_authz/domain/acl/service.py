@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, UTC
 from uuid import uuid5, uuid4
 
-from ristops_be_authz.database.engine import get_neo4j_transaction
+from ristops_be_authz.database.engine import get_neo4j_transaction, neo4j_transactional
 from ristops_be_authz.domain.models import AclNode
 from ristops_be_authz.domain.resource.service import (
     make_resource_id, find_or_create_root, throw_if_resource_not_exists
@@ -75,6 +75,7 @@ async def delete_user_acl(user_id: str) -> None:
     _logger.info(f"Deleted ACL for user {user_id}")
 
 
+@neo4j_transactional
 async def setup_admin_acl() -> None:
     """ Create ACL for admin user. """
 
