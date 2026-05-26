@@ -1,10 +1,9 @@
-# RistOps lib-be
+# ristops-lib-be
 
+Backend-only helpers: authentication middleware, deny-by-default authorization interceptor, and stream event base types.
 
-## CLI
+[Full documentation](https://pcrt1697.github.io/ristops/#/libraries/lib-be)
 
-### Database
+## Dependencies
 
-```bash
-uv run ristops database generate-ddl -e "ristops_be_auth.database:MODELS"
-```
+`ristops-lib-core`

@@ -1,9 +1,10 @@
-# RistOps lib-core
+# ristops-lib-core
 
-## CLI
+Foundation library shared by all backend packages. Provides request context, settings, HTTP
+client, authentication primitives, and the plugin-based CLI.
 
-### Start App
+[Full documentation](https://pcrt1697.github.io/ristops/#/libraries/lib-core)
 
-```bash
-uv run --package ristops-lib-core ristops --help
-```
+## Dependencies
+
+No internal dependencies.

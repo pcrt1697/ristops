@@ -2,7 +2,6 @@ import json
 import logging
 import time
 from copy import deepcopy
-from io import TextIOBase
 from typing import Any
 
 from pydantic import Field, field_validator
@@ -168,21 +167,3 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             response.status_code,
         )
         return response
-
-
-class LoggerStream(TextIOBase):
-
-    def __init__(self, logger: logging.Logger, level: int = logging.INFO):
-        self._logger = logger
-        self._level = level
-
-    def write(self, message: str) -> None:
-        message = message.strip()
-        if message:
-            self._logger.log(self._level, message)
-
-    def flush(self) -> None:
-        pass
-
-    def writable(self) -> bool:
-        return True
