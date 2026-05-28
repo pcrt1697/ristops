@@ -54,6 +54,14 @@ via `AuthZInterceptor`.
 | Settings | pydantic-settings |
 | Package manager | uv workspace |
 
+## Package naming conventions
+
+| Prefix | Used for |
+|--------|----------|
+| `lib-` | Shared libraries with reusable components |
+| `be-`  | Backend services (business logic or technical services) |
+| `bff-` | Backend-for-frontend services |
+
 ## Setup
 
 ```bash
