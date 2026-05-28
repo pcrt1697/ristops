@@ -283,7 +283,111 @@ will be handled by the OTel SDK and the `AsyncContext` mechanism can be retired.
 
 ---
 
+## Domain services
+
+### `be-reservation` is a single deployable with a single database
+
+**Context:** Venue configuration (opening times, services, slot duration, reservable seats,
+closures, exceptions), tables, and reservations are all required to answer "is this slot
+available?". That check must be atomic — it is the foundation of the double-booking
+prevention strategy.
+
+**Decision:** Single service, single DB (`be-reservation`). Module boundaries in code,
+not service boundaries.
+
+**Why:** Splitting config, tables, and reservations across services would turn a DB
+transaction into a distributed coordination problem. The atomic `INSERT WHERE` that
+prevents double-booking is impossible across service boundaries.
+
+**Status:** Accepted
+
+---
+
+### Reservation config is a separate concern within `be-reservation`
+
+**Context:** The restaurant needs to configure opening times, services (lunch/dinner),
+slot duration, reservable seats, closures, and per-date exceptions. This config is required
+to compute availability, so it must live in the same DB as reservations. However, it serves
+a fundamentally different purpose — it is the rule set, not the operational data.
+
+**Decision:** Config is split into two layers:
+
+- `ServiceConfig` — base rules (opening times, slot duration, weekdays)
+- `DayOverride` — per-date exceptions (closures, modified hours, special events)
+
+Slots are never stored; they are computed from these two layers at query time.
+
+**Why:** Separating config from reservations means operational data never needs to change
+when rules change. The override model keeps exceptions from polluting the base config.
+Extracting config to a separate service would reintroduce the distributed coordination
+problem that the previous decision explicitly avoids.
+
+**Status:** Accepted
+
+---
+
+### Menu and orders are separate services from reservation
+
+**Context:** `be-menu` and `be-order` were candidates for co-location with `be-reservation`.
+Their relationship to reservation is fundamentally different from the relationship between
+reservation and its config.
+
+**Decision:** `be-menu` and `be-order` are separate deployables with separate databases.
+Integration is event-driven.
+
+**Why:** After an order line is created (with a snapshotted price and product name), the
+menu service is no longer needed to serve that order. The coupling is transient, not
+operational. Eventual consistency is acceptable here — which is the opposite of the
+reasoning that keeps reservation and its config co-located.
+
+**Status:** Accepted
+
+---
+
+### `be-venue` is a standalone service acting as the location registry
+
+**Context:** Every domain service (`be-reservation`, `be-menu`, `be-order`) needs a root
+reference to identify which venue it is operating on. Without a central owner, venue IDs
+would be unvalidated magic UUIDs with no lifecycle management — making it impossible to
+later enable/disable venues, enforce existence, or add venue-level metadata.
+Staff assignment is not a venue concern; it is handled by `be-authz` via ACL rules on
+venue resources.
+
+**Decision:** `be-venue` is a dedicated deployable that owns the venue registry. Other
+services reference venue IDs issued by `be-venue` but do not call it on hot paths.
+
+**Why not encapsulate it inside `be-reservation`:** Venues are a cross-cutting concern
+shared by reservation, menu, and order. Co-locating the registry inside one domain service
+would create an implicit dependency from the others on that service for a concern unrelated
+to their core responsibility.
+
+**Trade-off:** Adds a fifth service to operate. Acceptable because `be-venue` is expected
+to be thin and low-traffic; establishing a canonical venue identity from the start avoids
+a retro-fit across all other services later.
+
+**Status:** Accepted
+
+---
+
+### Kitchen display is part of `be-order`, not a separate service
+
+**Context:** The kitchen display was considered as a separate read service for showing
+and updating order statuses.
+
+**Decision:** Kitchen is a role-scoped interface within `be-order`, not a separate
+deployable.
+
+**Why:** A service that is operationally useless when its dependency is down provides
+false resilience. The kitchen and orders are in the same failure domain regardless of
+whether they are split. Splitting adds operational complexity without any resilience benefit.
+
+**Status:** Accepted
+
+---
+
 ## Frontend
+
+> This section will be expanded when frontend development begins.
 
 ### React
 
@@ -293,7 +397,5 @@ will be handled by the OTel SDK and the `AsyncContext` mechanism can be retired.
 
 **Why:** Widely adopted, integrates naturally with GraphQL clients (Apollo, urql),
 and familiar to the team.
-
-**Note:** This section will be expanded when frontend development begins.
 
 **Status:** Accepted
