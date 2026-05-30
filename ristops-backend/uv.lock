@@ -575,6 +575,7 @@ source = { editable = "packages/ristops-be-authn" }
 dependencies = [
     { name = "argon2-cffi" },
     { name = "cryptography" },
+    { name = "fastapi" },
     { name = "ristops-lib-be" },
     { name = "ristops-lib-core" },
     { name = "ristops-lib-redis" },
@@ -585,6 +586,7 @@ dependencies = [
 requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
     { name = "cryptography", specifier = ">=46.0.7" },
+    { name = "fastapi" },
     { name = "ristops-lib-be", editable = "packages/ristops-lib-be" },
     { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
     { name = "ristops-lib-redis", editable = "packages/ristops-lib-redis" },
@@ -596,6 +598,7 @@ name = "ristops-be-authz"
 version = "0.1.0"
 source = { editable = "packages/ristops-be-authz" }
 dependencies = [
+    { name = "fastapi" },
     { name = "ristops-lib-be" },
     { name = "ristops-lib-core" },
     { name = "ristops-lib-neo4j" },
@@ -604,6 +607,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fastapi" },
     { name = "ristops-lib-be", editable = "packages/ristops-lib-be" },
     { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
     { name = "ristops-lib-neo4j", editable = "packages/ristops-lib-neo4j" },
@@ -615,6 +619,7 @@ name = "ristops-be-venue"
 version = "0.1.0"
 source = { editable = "packages/ristops-be-venue" }
 dependencies = [
+    { name = "fastapi" },
     { name = "ristops-lib-be" },
     { name = "ristops-lib-core" },
     { name = "ristops-lib-redis" },
@@ -623,6 +628,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fastapi" },
     { name = "ristops-lib-be", editable = "packages/ristops-lib-be" },
     { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
     { name = "ristops-lib-redis", editable = "packages/ristops-lib-redis" },
@@ -634,12 +640,16 @@ name = "ristops-bff-web"
 version = "0.1.0"
 source = { editable = "packages/ristops-bff-web" }
 dependencies = [
+    { name = "fastapi" },
+    { name = "ristops-lib-core" },
     { name = "starsessions", extra = ["redis"] },
     { name = "strawberry-graphql", extra = ["fastapi"] },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "fastapi" },
+    { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
     { name = "starsessions", extras = ["redis"], specifier = ">=2.2.1" },
     { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.314.3" },
 ]

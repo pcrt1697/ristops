@@ -33,3 +33,18 @@ Three schema extensions run on every operation:
 | `ResolverLoggingExtension` | Logs resolver execution with timing |
 | `ErrorHandlingExtension` | Maps internal exceptions to GraphQL errors |
 | `ContextExtension` | Populates `APP_CONTEXT` with the GraphQL operation name |
+
+## Frontend type generation
+
+The merged schema is exposed at module level in `ristops_bff_web.graphql.schema` so it can be
+exported as SDL without starting the application. The `graphql-bff export-schema` CLI command
+prints the schema or writes it directly to a file.
+
+Whenever resolvers or models change, export the updated schema from `ristops-backend/`:
+
+```bash
+ristops graphql-bff export-schema -f <output-path> --overwrite
+```
+
+See the frontend documentation for how to consume the generated SDL and regenerate TypeScript
+types.

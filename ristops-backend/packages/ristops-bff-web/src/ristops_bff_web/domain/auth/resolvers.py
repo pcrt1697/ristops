@@ -4,7 +4,8 @@ import strawberry
 
 from ristops_bff_web.domain.auth.models import User, UpdateUserInput
 from ristops_bff_web.domain.auth.service import find_user, find_me, update_user
-from ristops_bff_web.types import EntityId
+from ristops_bff_web.graphql.types import EntityId
+from ristops_lib_core.context import APP_CONTEXT, ContextKey
 
 
 async def _get_user(
@@ -30,6 +31,18 @@ async def _update_user(
     return User.from_dict(user)
 
 
+async def _update_me(
+        _input: Annotated[
+            UpdateUserInput,
+            strawberry.argument(description="User information to update.", name="input")
+        ]
+) -> User:
+    """Update the currently authenticated user."""
+    user_id = APP_CONTEXT.get_or_throw(ContextKey.USER_ID)
+    user = await update_user(user_id, _input)
+    return User.from_dict(user)
+
+
 @strawberry.type
 class AuthQuery:
     user: User = strawberry.field(
@@ -46,5 +59,9 @@ class AuthQuery:
 class AuthMutation:
     update_user = strawberry.mutation(
         resolver=_update_user,
-        description="Update user data",
+        description="Update user data by ID",
+    )
+    update_me = strawberry.mutation(
+        resolver=_update_me,
+        description="Update current user data",
     )

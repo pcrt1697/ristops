@@ -5,13 +5,12 @@ from starsessions import SessionMiddleware
 from starsessions.stores.redis import RedisStore
 from strawberry import Schema
 from strawberry.fastapi import GraphQLRouter
-from strawberry.tools import merge_types
 
 from ristops_bff_web.authn import SessionAuthNMiddleware
 from ristops_bff_web.context import ContextExtension
-from ristops_bff_web.domain.auth.resolvers import AuthQuery, AuthMutation
 from ristops_bff_web.domain.auth.routers import auth_router
 from ristops_bff_web.exception import ErrorHandlingExtension
+from ristops_bff_web.graphql.schema import QUERY, MUTATION
 from ristops_bff_web.http import http_service, HttpClient
 from ristops_bff_web.logging import ResolverLoggingExtension
 from ristops_bff_web.session import get_redis_client
@@ -25,7 +24,7 @@ from ristops_lib_core.logging import RequestLoggingMiddleware
 
 def create_app() -> FastAPI:
     be_settings = BackendServiceSettings.get()
-    jwt_decoder = ClientTokenDecoder(be_settings.auth_url)
+    jwt_decoder = ClientTokenDecoder(be_settings.authn_url)
 
     redis_client = get_redis_client()
     session_store = RedisStore(connection=redis_client)
@@ -41,12 +40,9 @@ def create_app() -> FastAPI:
             finally:
                 await redis_client.aclose()
 
-    query = merge_types("Query", (AuthQuery,))
-    mutation = merge_types("Mutation", (AuthMutation,))
-
     schema = Schema(
-        query=query,
-        mutation=mutation,
+        query=QUERY,
+        mutation=MUTATION,
         extensions=[
             ResolverLoggingExtension,
             ErrorHandlingExtension,

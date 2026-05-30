@@ -15,6 +15,13 @@ RISTOPS_REDIS_URL=redis://ristops:ristops@localhost:6379 \
   ristops start bff-web --port 8000
 ```
 
+Export the GraphQL schema as SDL (used to regenerate frontend TypeScript types):
+
+```bash
+ristops graphql-bff export-schema                  # print to stdout
+ristops graphql-bff export-schema -f schema.gql    # write to file
+```
+
 ## Dependencies
 
 `ristops-lib-core`, `ristops-lib-be`, `strawberry-graphql`, `starsessions`

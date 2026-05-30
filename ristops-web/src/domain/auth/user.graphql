@@ -1,0 +1,21 @@
+query GetMe {
+    me {
+        id
+        username
+        displayName
+        email
+        createdAt
+        updatedAt
+    }
+}
+
+mutation UpdateMe($input: UpdateUserInput!) {
+    updateMe(input: $input) {
+        id
+        username
+        displayName
+        email
+        createdAt
+        updatedAt
+    }
+}
