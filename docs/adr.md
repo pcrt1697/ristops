@@ -361,7 +361,7 @@ shared by reservation, menu, and order. Co-locating the registry inside one doma
 would create an implicit dependency from the others on that service for a concern unrelated
 to their core responsibility.
 
-**Trade-off:** Adds a fifth service to operate. Acceptable because `be-venue` is expected
+**Trade-off:** Adds an additional service to operate. Acceptable because `be-venue` is expected
 to be thin and low-traffic; establishing a canonical venue identity from the start avoids
 a retro-fit across all other services later.
 

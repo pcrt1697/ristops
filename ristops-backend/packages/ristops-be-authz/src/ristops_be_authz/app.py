@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends
 
-from ristops_lib_neo4j.engine import neo4j_transaction_provider
 from ristops_be_authz.domain.acl.routers import acl_router
 from ristops_be_authz.domain.acl.service import check_acl_authorization
 from ristops_be_authz.domain.resource.service import on_resource_event
@@ -19,6 +18,7 @@ from ristops_lib_core.exception import (
     RequestValidationExceptionHandler, GenericHttpExceptionHandler
 )
 from ristops_lib_core.logging import RequestLoggingMiddleware
+from ristops_lib_neo4j.engine import neo4j_transaction_provider
 from ristops_lib_redis.engine import redis_client, RedisStreamConsumer
 
 _logger = logging.getLogger(__name__)

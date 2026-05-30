@@ -2,8 +2,13 @@
 name = "ristops-be-authn"
 version = "0.1.0"
 dependencies = [
+    "fastapi",
     "argon2-cffi>=25.1.0",
     "cryptography>=46.0.7",
+    "ristops-lib-core",
+    "ristops-lib-be",
+    "ristops-lib-sql",
+    "ristops-lib-redis",
 ]
 
 [project.scripts]

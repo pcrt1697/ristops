@@ -20,6 +20,8 @@
       <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-redis/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-sql" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-sql/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/ristops-be-venue" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/ristops-be-venue/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-neo4j" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-neo4j/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />

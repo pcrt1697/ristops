@@ -3,9 +3,7 @@ from http import HTTPStatus
 
 from fastapi import HTTPException
 from neo4j import Record
-from ristops_lib_redis.engine import StreamPayload
 
-from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
 from ristops_be_authz.domain.models import ResourceNode
 from ristops_lib_be.authz.events import (
     authz_resource_event_adapter, AuthZResourceCreatedEvent,
@@ -13,6 +11,8 @@ from ristops_lib_be.authz.events import (
 )
 from ristops_lib_be.events import ResourceEventType
 from ristops_lib_core.schema.authz import ResourceType, AuthorizationResource
+from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
+from ristops_lib_redis.engine import StreamPayload
 
 _logger = logging.getLogger(__name__)
 

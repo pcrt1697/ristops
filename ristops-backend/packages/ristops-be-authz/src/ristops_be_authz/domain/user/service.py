@@ -2,15 +2,15 @@ import logging
 from http import HTTPStatus
 
 from fastapi import HTTPException
-from ristops_lib_redis.engine import StreamPayload
 
-from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
 from ristops_be_authz.domain.acl.service import create_member_acl
 from ristops_be_authz.domain.models import UserNode
 from ristops_be_authz.domain.resource.service import find_or_create_user_resource, delete_resource
 from ristops_lib_be.authz.events import AuthZUserEvent
 from ristops_lib_be.events import ResourceEventType
 from ristops_lib_core.schema.authz import ResourceType
+from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
+from ristops_lib_redis.engine import StreamPayload
 
 _logger = logging.getLogger(__name__)
 

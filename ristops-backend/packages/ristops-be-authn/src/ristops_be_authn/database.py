@@ -1,6 +1,6 @@
 from sqlalchemy.orm import DeclarativeBase as _DeclarativeBase
 
-SCHEMA_NAME = "ristops_auth"
+SCHEMA_NAME = "ristops_authn"
 
 
 def make_table_args(*args):

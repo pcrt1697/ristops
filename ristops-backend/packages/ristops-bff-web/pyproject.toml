@@ -2,8 +2,10 @@
 name = "ristops-bff-web"
 version = "0.1.0"
 dependencies = [
+    "fastapi",
     "strawberry-graphql[fastapi]>=0.314.3",
     "starsessions[redis]>=2.2.1",
+    "ristops-lib-core",
 ]
 
 [project.scripts]

@@ -2,7 +2,6 @@ import logging
 from datetime import datetime, UTC
 from uuid import uuid5, uuid4
 
-from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transactional
 from ristops_be_authz.domain.models import AclNode
 from ristops_be_authz.domain.resource.service import (
     make_resource_id, find_or_create_root, throw_if_resource_not_exists
@@ -10,6 +9,7 @@ from ristops_be_authz.domain.resource.service import (
 from ristops_be_authz.domain.role.service import get_role_by_id_or_throw
 from ristops_lib_core.auth.authn import RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME
 from ristops_lib_core.schema.authz import GrantAccessRequest, CheckAuthorizationRequest, ResourceType
+from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transactional
 
 _logger = logging.getLogger(__name__)
 _SYSTEM_ADMIN_ROLE = "admin"

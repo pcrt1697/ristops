@@ -8,6 +8,7 @@ members = [
     "ristops-batch-demo",
     "ristops-be-authn",
     "ristops-be-authz",
+    "ristops-be-venue",
     "ristops-bff-web",
     "ristops-lib-be",
     "ristops-lib-core",
@@ -533,6 +534,7 @@ dependencies = [
     { name = "ristops-batch-demo" },
     { name = "ristops-be-authn" },
     { name = "ristops-be-authz" },
+    { name = "ristops-be-venue" },
     { name = "ristops-bff-web" },
     { name = "ristops-lib-be" },
     { name = "ristops-lib-core" },
@@ -546,6 +548,7 @@ requires-dist = [
     { name = "ristops-batch-demo", editable = "packages/ristops-batch-demo" },
     { name = "ristops-be-authn", editable = "packages/ristops-be-authn" },
     { name = "ristops-be-authz", editable = "packages/ristops-be-authz" },
+    { name = "ristops-be-venue", editable = "packages/ristops-be-venue" },
     { name = "ristops-bff-web", editable = "packages/ristops-bff-web" },
     { name = "ristops-lib-be", editable = "packages/ristops-lib-be" },
     { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
@@ -572,12 +575,20 @@ source = { editable = "packages/ristops-be-authn" }
 dependencies = [
     { name = "argon2-cffi" },
     { name = "cryptography" },
+    { name = "ristops-lib-be" },
+    { name = "ristops-lib-core" },
+    { name = "ristops-lib-redis" },
+    { name = "ristops-lib-sql" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
     { name = "cryptography", specifier = ">=46.0.7" },
+    { name = "ristops-lib-be", editable = "packages/ristops-lib-be" },
+    { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
+    { name = "ristops-lib-redis", editable = "packages/ristops-lib-redis" },
+    { name = "ristops-lib-sql", editable = "packages/ristops-lib-sql" },
 ]
 
 [[package]]
@@ -585,11 +596,38 @@ name = "ristops-be-authz"
 version = "0.1.0"
 source = { editable = "packages/ristops-be-authz" }
 dependencies = [
+    { name = "ristops-lib-be" },
+    { name = "ristops-lib-core" },
     { name = "ristops-lib-neo4j" },
+    { name = "ristops-lib-redis" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "ristops-lib-neo4j", editable = "packages/ristops-lib-neo4j" }]
+requires-dist = [
+    { name = "ristops-lib-be", editable = "packages/ristops-lib-be" },
+    { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
+    { name = "ristops-lib-neo4j", editable = "packages/ristops-lib-neo4j" },
+    { name = "ristops-lib-redis", editable = "packages/ristops-lib-redis" },
+]
+
+[[package]]
+name = "ristops-be-venue"
+version = "0.1.0"
+source = { editable = "packages/ristops-be-venue" }
+dependencies = [
+    { name = "ristops-lib-be" },
+    { name = "ristops-lib-core" },
+    { name = "ristops-lib-redis" },
+    { name = "ristops-lib-sql" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ristops-lib-be", editable = "packages/ristops-lib-be" },
+    { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
+    { name = "ristops-lib-redis", editable = "packages/ristops-lib-redis" },
+    { name = "ristops-lib-sql", editable = "packages/ristops-lib-sql" },
+]
 
 [[package]]
 name = "ristops-bff-web"

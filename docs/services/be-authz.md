@@ -12,11 +12,7 @@ access to a resource not because of a direct ACL entry, but because they have ac
 resource. Expressing and querying this in a relational model would require recursive CTEs; in a
 graph it is a natural path traversal.
 
-```text
-(User)-[:HAS_ACCESS]->(Acl)-[:ON]->(Resource)
-                           └-[:WITH_ROLE]->(Role)-[:GRANTS]->(Permission)
-(Resource)-[:BELONGS_TO]->(Resource)
-```
+![Authorization data model](../assets/dm-ristops-authr.arrow.png "Authorization data model")
 
 Resources are typed (`app`, `location`, `user`, `role`, `acl`, `permission`) and form a hierarchy
 via `BELONGS_TO`. Permission actions: `get`, `list`, `add`, `edit`, `remove`, `*` (manage).

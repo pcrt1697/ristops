@@ -9,6 +9,10 @@ access control across multiple services that communicate via HTTP and Redis Stre
 |---------|-------------|
 | [be-authn](services/be-authn.md) | User management and JWT issuance |
 | [be-authz](services/be-authz.md) | ACL, role and permission management |
+| [be-venue](services/be-venue.md) | Venue registry |
+| be-reservation | Venue configuration, tables and reservations |
+| be-menu | Menus, sections and products |
+| be-order | Orders, order items, states and courses |
 | [bff-web](services/bff-web.md) | GraphQL BFF for the web frontend |
 
 ## Libraries

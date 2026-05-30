@@ -8,7 +8,7 @@ stack, while I'm improving my skills with others.
 
 * Do not modify project files without prior approval;
 * Explain the reasoning behind all proposed changes;
-* Prefer discussing implementation options before writing code;
+* Prefer discussing implementation options before writing/proposing code;
 * Do not execute Git commands, install dependencies, or run migrations unless explicitly requested;
 * Markdown files must follow markdownlint rules;
 * Python code must follow PEP 8, include type hints on all function signatures, and include
@@ -28,12 +28,23 @@ ristops/
       ristops-lib-neo4j/   # Neo4j async driver, transactions, migration engine
       ristops-be-authn/    # Auth backend (users, JWT issuance, PostgreSQL)
       ristops-be-authz/    # AuthZ backend (ACL/roles/resources in Neo4j, Redis stream consumer)
+      ristops-be-venue/    # Venue registry (PostgreSQL)
       ristops-bff-web/     # BFF for web (Strawberry GraphQL, Redis sessions)
       ristops-batch-demo/  # Batch processing demo
   ristops-web/             # Frontend (not yet scaffolded)
 ```
 
 Each package has a `README.md` with its purpose and a link to the full documentation.
+
+When a new service is added, the following files must be updated:
+
+* `CLAUDE.md` — repository layout and service topology
+* `ristops-backend/README.md` — Services table
+* `ristops-backend/packages/<package>/README.md` — create with description, start command,
+  dependencies
+* `docs/README.md` — Services table (with link)
+* `docs/_sidebar.md` — Services navigation list
+* `docs/services/<service>.md` — create the service documentation page
 
 ## Infrastructure (local)
 
@@ -101,8 +112,9 @@ Sub-prefixes used by each concern:
 ```text
 browser
   └─► bff-web  (GraphQL + REST, Redis session)
-        ├─► be-authn  (login, token refresh, user CRUD — PostgreSQL)
-        └─► be-authz  (ACL checks, resource/role management — Neo4j)
+        ├─► be-authn   (login, token refresh, user CRUD — PostgreSQL)
+        ├─► be-authz   (ACL checks, resource/role management — Neo4j)
+        └─► be-venue   (venue registry — PostgreSQL)
 
 be-authn ──Redis stream──► be-authz  (user events)
 any svc  ──Redis stream──► be-authz  (resource events)

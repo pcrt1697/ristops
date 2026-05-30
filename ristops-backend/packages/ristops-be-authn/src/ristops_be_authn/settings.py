@@ -44,7 +44,9 @@ class BackendServiceSettings(BaseServiceSettings):
         env_prefix=ENVVARS_PREFIX + "BE_",
     )
 
-    authz_url: str
+    authz_url: str = Field(
+        description="The authorization service url.",
+    )
 
 
 class Argon2Settings(BaseServiceSettings):

@@ -2,7 +2,11 @@
 name = "ristops-be-authz"
 version = "0.1.0"
 dependencies = [
+    "fastapi",
     "ristops-lib-neo4j",
+    "ristops-lib-core",
+    "ristops-lib-be",
+    "ristops-lib-redis",
 ]
 
 [tool.uv.build-backend]

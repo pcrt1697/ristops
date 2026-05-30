@@ -15,6 +15,7 @@
         <option value="$PROJECT_DIR$/packages/ristops-lib-core" />
         <option value="$PROJECT_DIR$/packages/ristops-lib-be/src" />
         <option value="$PROJECT_DIR$/packages/ristops-lib-be" />
+        <option value="$PROJECT_DIR$/packages/ristops-lib-neo4j" />
       </set>
     </option>
   </component>
