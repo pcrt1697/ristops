@@ -16,21 +16,21 @@ class BackendServiceSettings(BaseServiceSettings):
     )
 
 
-class RedisUserConsumerSettings(BaseRedisConsumerSettings):
+class UserLifecycleConsumerSettings(BaseRedisConsumerSettings):
     model_config = SettingsConfigDict(
-        env_prefix=REDIS_STREAM_PREFIX + "USER_",
+        env_prefix=REDIS_STREAM_PREFIX + "USER_LC_",
     )
-    stream: str = Field("auth:users", description="Redis stream name for user operations")
+    stream: str = Field("user:lifecycle", description="Redis stream name for user lifecycle events")
     group: str = Field("authz", description="Redis stream consumer group name for user operations")
     name: str = Field("authz", description="Redis consumer name for user operations")
     log_payload: bool = True
 
 
-class RedisResourceConsumerSettings(BaseRedisConsumerSettings):
+class ResourceLifecycleConsumerSettings(BaseRedisConsumerSettings):
     model_config = SettingsConfigDict(
-        env_prefix=REDIS_STREAM_PREFIX + "RESOURCE_",
+        env_prefix=REDIS_STREAM_PREFIX + "RESOURCE_LC_",
     )
-    stream: str = Field("auth:resources", description="Redis stream name for resources operations")
+    stream: str = Field("resource:lifecycle", description="Redis stream name for resource lifecycle events")
     group: str = Field("authz", description="Redis stream consumer group name for resource operations")
     name: str = Field("authz", description="Redis consumer name for resource operations")
     log_payload: bool = True

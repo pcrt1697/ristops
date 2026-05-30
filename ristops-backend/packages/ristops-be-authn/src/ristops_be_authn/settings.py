@@ -61,8 +61,8 @@ class Argon2Settings(BaseServiceSettings):
     salt_len: int = Field(default=16, description="Length of the random salt in bytes.", gt=0)
 
 
-class UserProducerSettings(BaseRedisProducerSettings):
+class UserLifecycleProducerSettings(BaseRedisProducerSettings):
     model_config = SettingsConfigDict(
-        env_prefix=REDIS_STREAM_PREFIX + "USER_",
+        env_prefix=REDIS_STREAM_PREFIX + "USER_LC_",
     )
-    stream: str = Field("auth:users", description="Redis stream name for users operations")
+    stream: str = Field("user:lifecycle", description="Redis stream name for user lifecycle events")

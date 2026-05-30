@@ -7,6 +7,8 @@ from sqlalchemy import select, ScalarResult, ColumnElement
 
 from ristops_be_venue.domain.venue.entities import VenueEntity
 from ristops_be_venue.domain.venue.schema import VenueCreationRequest, VenueUpdateRequest
+from ristops_be_venue.services.resource import publish_resource_created_event, publish_resource_deleted_event
+from ristops_lib_core.schema.authz import ResourceType
 from ristops_lib_sql.engine import get_sql_session
 
 _logger = logging.getLogger(__name__)
@@ -24,8 +26,12 @@ async def create_venue(request: VenueCreationRequest) -> VenueEntity:
     session.add(venue)
     await session.flush()
     await session.refresh(venue)
-    # todo:
-    #  direct call to authz here? for user api consumer UX, we should directly assign a venue manager
+    await publish_resource_created_event(
+        str(venue.id),
+        ResourceType.VENUE,
+        "*",
+        ResourceType.APP,
+    )
     _logger.info("Created venue: %s", venue.id)
     return venue
 
@@ -59,8 +65,7 @@ async def remove_venue(venue_id: UUID) -> None:
     venue = await find_venue_or_throw(venue_id)
     session = get_sql_session()
     await session.delete(venue)
-    # todo:
-    #  send event to authz
+    await publish_resource_deleted_event(str(venue_id), ResourceType.VENUE)
     _logger.info("Deleted venue: %s", venue_id)
 
 

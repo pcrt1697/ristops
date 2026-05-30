@@ -15,4 +15,6 @@
   - [lib-redis](libraries/lib-redis.md)
   - [lib-neo4j](libraries/lib-neo4j.md)
 
+- [Event-Driven Architecture](events.md)
+
 - [ADRs](adr.md)

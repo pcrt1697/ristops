@@ -10,7 +10,7 @@ from sqlalchemy import select, ScalarResult, ColumnElement
 
 from ristops_be_authn.domain.user.entities import UserEntity
 from ristops_be_authn.domain.user.schema import UserUpdateRequest
-from ristops_be_authn.services.authz import create_authz_user, delete_authz_user
+from ristops_be_authn.services.user import publish_user_created_event, publish_user_deleted_event
 from ristops_be_authn.settings import Argon2Settings
 from ristops_lib_core.auth.authn import RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
@@ -72,7 +72,7 @@ async def _create_user(user_id: UUID, request: UserCreationRequest) -> UserEntit
     session.add(user)
     await session.flush()
     await session.refresh(user)
-    await create_authz_user(user_id)
+    await publish_user_created_event(user_id)
     _logger.info(f"Created user: {user.id}")
     return user
 
@@ -238,4 +238,4 @@ async def remove_user(user_id: UUID) -> None:
     user = await find_user_or_throw(user_id)
     session = get_sql_session()
     await session.delete(user)
-    await delete_authz_user(user_id)
+    await publish_user_deleted_event(user_id)

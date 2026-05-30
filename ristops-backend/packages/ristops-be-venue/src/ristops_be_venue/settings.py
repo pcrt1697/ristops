@@ -18,8 +18,10 @@ class BackendServiceSettings(BaseServiceSettings):
     )
 
 
-class VenueProducerSettings(BaseRedisProducerSettings):
+class ResourceLifecycleProducerSettings(BaseRedisProducerSettings):
+    """Redis stream producer settings for resource lifecycle events."""
+
     model_config = SettingsConfigDict(
-        env_prefix=REDIS_STREAM_PREFIX + "VENUE_",
+        env_prefix=REDIS_STREAM_PREFIX + "RESOURCE_LC_",
     )
-    stream: str = Field("venue:venue", description="Redis stream name for venue operations")
+    stream: str = Field("resource:lifecycle", description="Redis stream name for resource lifecycle events")

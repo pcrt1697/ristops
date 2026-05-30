@@ -7,7 +7,10 @@ from ristops_be_authz.domain.acl.routers import acl_router
 from ristops_be_authz.domain.acl.service import check_acl_authorization
 from ristops_be_authz.domain.resource.service import on_resource_event
 from ristops_be_authz.domain.user.service import on_user_event
-from ristops_be_authz.settings import BackendServiceSettings, RedisUserConsumerSettings, RedisResourceConsumerSettings
+from ristops_be_authz.settings import (
+    BackendServiceSettings, UserLifecycleConsumerSettings,
+    ResourceLifecycleConsumerSettings
+)
 from ristops_lib_be.authn import JwtAuthNMiddleware
 from ristops_lib_be.authz.interceptor import AuthZInterceptor
 from ristops_lib_core.app.openapi import OpenAPIConfiguration
@@ -31,8 +34,8 @@ async def lifespan(_: FastAPI):
     await redis_client.connect()
     consumer = RedisStreamConsumer.create_composite(
         redis_client,
-        (RedisUserConsumerSettings.get(), on_user_event),
-        (RedisResourceConsumerSettings.get(), on_resource_event)
+        (UserLifecycleConsumerSettings.get(), on_user_event),
+        (ResourceLifecycleConsumerSettings.get(), on_resource_event)
     )
     await consumer.start()
 

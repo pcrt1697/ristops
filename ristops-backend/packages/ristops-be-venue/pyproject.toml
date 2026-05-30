@@ -17,7 +17,7 @@ start = "ristops_lib_core.cli.start:start"
 sql-database = "ristops_lib_sql.cli:sql_database"
 
 [project.entry-points."ristops.cli.commands.start"]
-be-authn = "ristops_be_venue.app:create_app"
+be-venue = "ristops_be_venue.app:create_app"
 
 [project.entry-points."ristops.cli.commands.sql_database.generate_ddl"]
-be-authn = "ristops_be_venue.domain:MODELS"
+be-venue = "ristops_be_venue.domain:MODELS"

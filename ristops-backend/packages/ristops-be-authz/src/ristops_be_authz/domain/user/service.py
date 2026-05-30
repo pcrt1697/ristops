@@ -6,8 +6,8 @@ from fastapi import HTTPException
 from ristops_be_authz.domain.acl.service import create_member_acl
 from ristops_be_authz.domain.models import UserNode
 from ristops_be_authz.domain.resource.service import find_or_create_user_resource, delete_resource
-from ristops_lib_be.authz.events import AuthZUserEvent
-from ristops_lib_be.events import ResourceEventType
+from ristops_lib_be.authz.events import UserLifecycleEvent
+from ristops_lib_be.events import LifecycleOperationType
 from ristops_lib_core.schema.authz import ResourceType
 from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
 from ristops_lib_redis.engine import StreamPayload
@@ -50,9 +50,9 @@ async def remove_user(user_id: str) -> None:
 
 
 async def on_user_event(_: str, payload: StreamPayload) -> None:
-    event = AuthZUserEvent.model_validate(payload)
+    event = UserLifecycleEvent.model_validate(payload)
     async with neo4j_transaction_provider.context():
-        if event.operation == ResourceEventType.CREATED:
+        if event.operation == LifecycleOperationType.CREATED:
             await create_user(event.user_id)
-        elif event.operation == ResourceEventType.DELETED:
+        elif event.operation == LifecycleOperationType.DELETED:
             await remove_user(event.user_id)

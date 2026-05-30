@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
 
 
-class ResourceEventType(StrEnum):
+class LifecycleOperationType(StrEnum):
     CREATED = "created"
     DELETED = "deleted"
     UPDATED = "updated"

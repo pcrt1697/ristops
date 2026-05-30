@@ -6,10 +6,10 @@ from neo4j import Record
 
 from ristops_be_authz.domain.models import ResourceNode
 from ristops_lib_be.authz.events import (
-    authz_resource_event_adapter, AuthZResourceCreatedEvent,
-    AuthZResourceDeletedEvent
+    resource_lifecycle_event_adapter, ResourceCreatedLifecycleEvent,
+    ResourceDeletedLifecycleEvent
 )
-from ristops_lib_be.events import ResourceEventType
+from ristops_lib_be.events import LifecycleOperationType
 from ristops_lib_core.schema.authz import ResourceType, AuthorizationResource
 from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
 from ristops_lib_redis.engine import StreamPayload
@@ -149,11 +149,11 @@ async def delete_resource(resource_type: ResourceType, resource_id: str) -> None
 
 
 async def on_resource_event(_: str, payload: StreamPayload) -> None:
-    event = authz_resource_event_adapter.validate_json(payload)
+    event = resource_lifecycle_event_adapter.validate_json(payload)
     async with neo4j_transaction_provider.context():
-        if event.operation == ResourceEventType.CREATED:
-            _event: AuthZResourceCreatedEvent = event
+        if event.operation == LifecycleOperationType.CREATED:
+            _event: ResourceCreatedLifecycleEvent = event
             await find_or_create_resources(_event.parent_type, _event.parent_id, _event.resources)
-        elif event.operation == ResourceEventType.DELETED:
-            _event: AuthZResourceDeletedEvent = event
+        elif event.operation == LifecycleOperationType.DELETED:
+            _event: ResourceDeletedLifecycleEvent = event
             await delete_resource(_event.resource_type, _event.resource_id)
