@@ -14,26 +14,24 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
-  /** A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format. */
+  /** Date with time (isoformat) */
   DateTime: { input: string; output: string; }
-};
-
-export type UpdateUserInput = {
-  username?: InputMaybe<Scalars['String']['input']>;
-  displayName?: InputMaybe<Scalars['String']['input']>;
-  email?: InputMaybe<Scalars['String']['input']>;
-  password?: InputMaybe<Scalars['String']['input']>;
+  UUID: { input: any; output: any; }
 };
 
 export type Mutation = {
   __typename?: 'Mutation';
-  updateMe: UserProfileModel;
-  updateUser: UserProfileModel;
+  /** Update current user data */
+  updateMe: User;
+  /** Update user data by ID */
+  updateUser: User;
 };
+
 
 export type MutationUpdateMeArgs = {
   input: UpdateUserInput;
 };
+
 
 export type MutationUpdateUserArgs = {
   id: Scalars['ID']['input'];
@@ -42,40 +40,57 @@ export type MutationUpdateUserArgs = {
 
 export type Query = {
   __typename?: 'Query';
-  me: UserProfileModel;
-  user: UserModel;
+  /** Fetch authenticated user */
+  me: User;
+  /** Fetch user by ID */
+  user: User;
 };
+
 
 export type QueryUserArgs = {
-  id: Scalars['String']['input'];
+  id: Scalars['ID']['input'];
 };
 
-export type UserModel = {
-  __typename?: 'UserModel';
-  displayName: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  username: Scalars['String']['output'];
+/** User information to update. */
+export type UpdateUserInput = {
+  /** New display name of the user. */
+  displayName?: InputMaybe<Scalars['String']['input']>;
+  /** New email address of the user. */
+  email?: InputMaybe<Scalars['String']['input']>;
+  /** New password of the user. */
+  password?: InputMaybe<Scalars['String']['input']>;
+  /** New username of the user. */
+  username?: InputMaybe<Scalars['String']['input']>;
 };
 
-export type UserProfileModel = {
-  __typename?: 'UserProfileModel';
+/** User entity information. */
+export type User = {
+  __typename?: 'User';
+  /** Registration date. */
   createdAt: Scalars['DateTime']['output'];
-  displayName: Scalars['String']['output'];
+  /** Display name of the user. */
+  displayName?: Maybe<Scalars['String']['output']>;
+  /** Email address of the user. */
   email: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
+  /** User identifier. */
+  id: Scalars['UUID']['output'];
+  /** Last update date. */
   updatedAt: Scalars['DateTime']['output'];
+  /** Username of the user. */
   username: Scalars['String']['output'];
 };
 
 export type GetMeQueryVariables = Exact<{ [key: string]: never; }>;
 
-export type GetMeQuery = { __typename?: 'Query', me: { __typename?: 'UserProfileModel', id: string, username: string, displayName: string, email: string, createdAt: string, updatedAt: string } };
+
+export type GetMeQuery = { __typename?: 'Query', me: { __typename?: 'User', id: any, username: string, displayName?: string | null, email: string, createdAt: string, updatedAt: string } };
 
 export type UpdateMeMutationVariables = Exact<{
   input: UpdateUserInput;
 }>;
 
-export type UpdateMeMutation = { __typename?: 'Mutation', updateMe: { __typename?: 'UserProfileModel', id: string, username: string, displayName: string, email: string, createdAt: string, updatedAt: string } };
+
+export type UpdateMeMutation = { __typename?: 'Mutation', updateMe: { __typename?: 'User', id: any, username: string, displayName?: string | null, email: string, createdAt: string, updatedAt: string } };
 
 
 export const GetMeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetMe"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"username"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<GetMeQuery, GetMeQueryVariables>;

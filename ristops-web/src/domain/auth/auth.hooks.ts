@@ -8,10 +8,11 @@ export function useAuth(): AuthState {
     queryKey: ['auth.getMe'],
     queryFn: userApi.getMe,
     retry: false,
+    staleTime: Infinity,
   });
 
   return {
-    isAuthenticated: !!data,
+    isAuthenticated: !!data?.me,
     isLoading,
     user: data?.me,
   };
@@ -37,8 +38,8 @@ export function useLogout() {
   return useMutation({
     mutationFn: authnApi.logout,
     onSuccess: () => {
+      queryClient.setQueryData(['auth.getMe'], null);
       void navigate('/login');
-      void queryClient.invalidateQueries({ queryKey: ['auth.getMe'] });
     },
     onError: (error) => {
       console.log('logout error', error);

@@ -95,6 +95,7 @@ async def setup_admin_acl() -> None:
     _logger.info(f"ACL setup completed for admin, created entry {acl.id}")
 
 
+@neo4j_transactional
 async def check_acl_authorization(request: CheckAuthorizationRequest) -> bool:
     """ Returns true if the user is allowed to perform the requested actions. """
 

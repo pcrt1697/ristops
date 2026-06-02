@@ -11,7 +11,7 @@ from ristops_be_venue.domain.venue.schema import (
 from ristops_be_venue.domain.venue.service import (
     create_venue, find_venue_or_throw, update_venue, remove_venue,
 )
-from ristops_lib_be.authz.policy import policy, BaseResourceResolver, Policy
+from ristops_lib_be.authz.policy import policy, BaseResourceResolver, Policy, resolve_static_resource
 from ristops_lib_core.exception import ErrorResponse
 from ristops_lib_core.schema.authz import ResourceType
 from ristops_lib_sql.engine import sql_transactional
@@ -28,7 +28,7 @@ venue_router = APIRouter(
     response_model=VenueResponse,
     status_code=HTTPStatus.CREATED,
 )
-@policy()
+@policy(Policy(resolve_static_resource("*", ResourceType.APP), "venue~add"))
 @sql_transactional
 async def create(request: VenueCreationRequest) -> VenueResponse:
     """Create a new venue."""

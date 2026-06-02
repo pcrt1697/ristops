@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Any
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, APIRouter, Depends
 
 from ristops_be_venue.domain.venue.routers import venue_router
 from ristops_be_venue.services.authz import is_authorized
@@ -44,7 +44,6 @@ def create_app() -> FastAPI:
         title="RistOps Venue APIs",
         version="1.0",
         summary="REST APIs to interact with RistOps venue backend",
-        root_path='/api',
         lifespan=lifespan,
     )
 
@@ -52,7 +51,9 @@ def create_app() -> FastAPI:
     authz_dependency = AuthZInterceptor(authorizer=is_authorized)
     app.router.dependencies.append(Depends(authz_dependency))
 
-    app.include_router(venue_router)
+    api_router = APIRouter(prefix="/api")
+    api_router.include_router(venue_router)
+    app.include_router(api_router)
 
     public_registry = PublicRoutesRegistry(app)
 

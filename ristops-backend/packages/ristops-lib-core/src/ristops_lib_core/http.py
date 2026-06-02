@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager, AsyncExitStack
 from copy import deepcopy
 from enum import StrEnum
-from typing import Callable, Awaitable
+from typing import Callable, Awaitable, Any
 
 from httpx import AsyncClient, Request, Response, Headers
 
@@ -98,3 +98,16 @@ class HttpClientService[T: StrEnum]:
             yield
 
         self._clients.clear()
+
+
+class ResponseTransformer:
+
+    def __init__(self, **field_parsers: Callable):
+        self._field_parsers = field_parsers
+
+    def get_json(self, response: Response) -> dict[str, Any]:
+        obj = response.json()
+        for field_name, parse_func in self._field_parsers.items():
+            if (value := obj.get(field_name)) is not None:
+                obj[field_name] = parse_func(value)
+        return obj

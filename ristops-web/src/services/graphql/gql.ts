@@ -14,10 +14,10 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
-    "query GetMe {\n  getMe {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($username: String, $displayName: String, $email: String, $password: String) {\n  updateMe(\n    username: $username\n    displayName: $displayName\n    email: $email\n    password: $password\n  ) {\n    id\n    username\n    displayName\n  }\n}": typeof types.GetMeDocument,
+    "query GetMe {\n  me {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($input: UpdateUserInput!) {\n  updateMe(input: $input) {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}": typeof types.GetMeDocument,
 };
 const documents: Documents = {
-    "query GetMe {\n  getMe {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($username: String, $displayName: String, $email: String, $password: String) {\n  updateMe(\n    username: $username\n    displayName: $displayName\n    email: $email\n    password: $password\n  ) {\n    id\n    username\n    displayName\n  }\n}": types.GetMeDocument,
+    "query GetMe {\n  me {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($input: UpdateUserInput!) {\n  updateMe(input: $input) {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}": types.GetMeDocument,
 };
 
 /**
@@ -37,7 +37,7 @@ export function graphql(source: string): unknown;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "query GetMe {\n  getMe {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($username: String, $displayName: String, $email: String, $password: String) {\n  updateMe(\n    username: $username\n    displayName: $displayName\n    email: $email\n    password: $password\n  ) {\n    id\n    username\n    displayName\n  }\n}"): (typeof documents)["query GetMe {\n  getMe {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($username: String, $displayName: String, $email: String, $password: String) {\n  updateMe(\n    username: $username\n    displayName: $displayName\n    email: $email\n    password: $password\n  ) {\n    id\n    username\n    displayName\n  }\n}"];
+export function graphql(source: "query GetMe {\n  me {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($input: UpdateUserInput!) {\n  updateMe(input: $input) {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}"): (typeof documents)["query GetMe {\n  me {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($input: UpdateUserInput!) {\n  updateMe(input: $input) {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

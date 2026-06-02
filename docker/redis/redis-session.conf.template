@@ -11,7 +11,7 @@ protected-mode yes
 ##################################
 
 user default off
-user ristops on >${RISTOPS_REDIS_STREAM_PWD} ~* &* +@all
+user ristops on >${RISTOPS_REDIS_SESSION_PWD} ~* &* +@all
 
 ##################################
 # Persistence

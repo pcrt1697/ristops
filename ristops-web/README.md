@@ -6,8 +6,8 @@ endpoints) and GraphQL (data queries and mutations).
 ## Setup
 
 ```bash
-pnpm install
-pnpm dev
+npm install
+npm dev
 ```
 
 The dev server runs on `http://localhost:5173`. The BFF is expected at the URL configured in
@@ -25,7 +25,7 @@ ristops graphql-bff export-schema -f ../ristops-web/graphql/schema.gql --overwri
 Then regenerate the types:
 
 ```bash
-pnpm graphql:gen
+npm run graphql:gen
 ```
 
 `graphql-codegen` reads `graphql/schema.gql` and all `src/**/*.graphql` operation documents and

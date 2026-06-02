@@ -93,3 +93,13 @@ async def resolve_body_attribute(request: Request, field_name: str) -> str:
     for field in field_name.split("."):
         _json = _json[field]
     return _json
+
+
+def resolve_static_resource(resource_id: str, resource_type: ResourceType) -> ResourceResolver:
+    async def _resolver(_: Request) -> AuthorizationResource:
+        return AuthorizationResource(
+            resource_id=resource_id,
+            resource_type=resource_type,
+        )
+
+    return _resolver

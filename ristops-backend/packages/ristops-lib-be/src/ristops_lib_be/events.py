@@ -1,4 +1,5 @@
 from enum import StrEnum
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -15,10 +16,11 @@ class BaseEvent(BaseModel):
     """Base class for all Redis stream events.
 
     ``correlation_id`` is captured automatically from the current request
-    context at instantiation time, so producers do not need to set it manually.
+    context at instantiation time. Falls back to a generated UUID when no
+    request context is present (e.g. CLI commands, seeding scripts).
     """
 
-    correlation_id: str | None = Field(
-        default_factory=lambda: APP_CONTEXT.get(ContextKey.CORRELATION_ID),
+    correlation_id: str = Field(
+        default_factory=lambda: APP_CONTEXT.get(ContextKey.CORRELATION_ID) or str(uuid4()),
         description="Trace correlation ID",
     )

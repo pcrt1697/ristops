@@ -28,7 +28,6 @@ async def login(login_request: LoginRequest, http_request: Request) -> UserRespo
     "/logout",
     status_code=HTTPStatus.NO_CONTENT,
 )
-@public
 async def logout(http_request: Request) -> None:
     http_request.session.clear()
     return None

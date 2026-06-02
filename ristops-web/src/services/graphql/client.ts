@@ -10,7 +10,10 @@ const client = new GraphQLClient(`${RISTOPS_BFF_URL}/api/graphql`, {
       const error = new Error(
         gqlError?.message ?? 'GraphQL error',
       ) as ServiceError;
-      error.status = (gqlError?.extensions?.['code'] as number) ?? 500;
+      error.status =
+        (gqlError?.extensions?.['code'] as number) ??
+        response.response.status ??
+        500;
       error.traceId =
         (gqlError?.extensions?.['traceId'] as string) ?? undefined;
       throw error;

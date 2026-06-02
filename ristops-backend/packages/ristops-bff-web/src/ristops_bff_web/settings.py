@@ -17,3 +17,4 @@ class BffSettings(BaseServiceSettings):
     )
 
     redis_url: str
+    cors_origins: list[str] = []

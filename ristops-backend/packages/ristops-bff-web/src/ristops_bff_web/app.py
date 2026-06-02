@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
 from starsessions import SessionMiddleware
 from starsessions.stores.redis import RedisStore
 from strawberry import Schema
@@ -14,7 +15,7 @@ from ristops_bff_web.graphql.schema import QUERY, MUTATION
 from ristops_bff_web.http import http_service, HttpClient
 from ristops_bff_web.logging import ResolverLoggingExtension
 from ristops_bff_web.session import get_redis_client
-from ristops_bff_web.settings import BackendServiceSettings
+from ristops_bff_web.settings import BackendServiceSettings, BffSettings
 from ristops_lib_core.app.openapi import OpenAPIConfiguration
 from ristops_lib_core.auth.authn import ClientTokenDecoder, PublicRoutesRegistry
 from ristops_lib_core.context import RequestContextMiddleware
@@ -24,6 +25,7 @@ from ristops_lib_core.logging import RequestLoggingMiddleware
 
 def create_app() -> FastAPI:
     be_settings = BackendServiceSettings.get()
+    bff_settings = BffSettings.get()
     jwt_decoder = ClientTokenDecoder(be_settings.authn_url)
 
     redis_client = get_redis_client()
@@ -55,11 +57,12 @@ def create_app() -> FastAPI:
         title="RistOps BFF APIs",
         version="1.0",
         summary="APIs to interact with RistOps BFF",
-        root_path='/api',
         lifespan=lifespan,
     )
-    app.include_router(auth_router)
-    app.include_router(graphql_router, prefix="/graphql")
+    api_router = APIRouter(prefix="/api")
+    api_router.include_router(auth_router)
+    api_router.include_router(graphql_router, prefix="/graphql")
+    app.include_router(api_router)
 
     public_registry = PublicRoutesRegistry(app)
 
@@ -84,6 +87,14 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
     # wraps everything
     app.add_middleware(GenericExceptionMiddleware)
+    # outermost: handles CORS preflight before any auth check
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=bff_settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     openapi_configuration = OpenAPIConfiguration(app)
     app.openapi = openapi_configuration

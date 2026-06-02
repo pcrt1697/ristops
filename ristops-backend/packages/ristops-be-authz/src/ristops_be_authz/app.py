@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, APIRouter, Depends
 
 from ristops_be_authz.domain.acl.routers import acl_router
 from ristops_be_authz.domain.acl.service import check_acl_authorization
@@ -57,7 +57,6 @@ def create_app() -> FastAPI:
         title="RistOps auth APIs",
         version="1.0",
         summary="REST APIs to interact with RistOps auth backend",
-        root_path='/api',
         lifespan=lifespan,
     )
 
@@ -65,7 +64,9 @@ def create_app() -> FastAPI:
     authz_dependency = AuthZInterceptor(authorizer=check_acl_authorization)
     app.router.dependencies.append(Depends(authz_dependency))
 
-    app.include_router(acl_router)
+    api_router = APIRouter(prefix="/api")
+    api_router.include_router(acl_router)
+    app.include_router(api_router)
 
     public_registry = PublicRoutesRegistry(app)
 
