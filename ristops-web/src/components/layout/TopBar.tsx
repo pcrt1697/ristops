@@ -1,38 +1,99 @@
-import { Button, Dropdown, Layout } from 'antd';
 import {
-  HomeOutlined,
+  Button,
+  Dropdown,
+  Layout,
+  type MenuProps,
+  Modal,
+  Spin,
+  theme,
+} from 'antd';
+import {
   LogoutOutlined,
-  SettingOutlined,
+  MenuOutlined,
+  SafetyCertificateOutlined,
+  ShopOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth, useLogout } from '../../domain/auth/auth.hooks.ts';
+import { useNavigate } from 'react-router-dom';
+import { useCan, useLogout } from '../../domain/auth/auth.hooks.ts';
+import { ResourceType } from '../../services/graphql/graphql.ts';
 
 const { Header } = Layout;
 
 export default function TopBar() {
+  const {
+    token: { colorBgContainer, borderRadiusLG },
+  } = theme.useToken();
+
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { mutate: logout } = useLogout();
 
-  const isAdmin = false; // todo: derive from user roles
+  const { isAllowed: canManageApp, isLoading: isLoading } = useCan(
+    {
+      type: ResourceType.App,
+      id: '*',
+    },
+    'app~*',
+  );
+  if (isLoading) return <Spin fullscreen />;
 
-  const userMenuItems = [
-    {
-      key: 'profile',
-      icon: <UserOutlined />,
-      label: 'Profile',
-      onClick: () => void navigate('/profile'),
-    },
-    { type: 'divider' as const },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: 'Logout',
-      // todo: test this
-      onClick: () => logout(),
-    },
-  ];
+  const adminItems: MenuProps['items'] = [];
+  if (canManageApp) {
+    adminItems.push({
+      key: '/admin/venues',
+      icon: <ShopOutlined />,
+      label: 'Venues',
+      onClick: () => void navigate('/admin/venues'),
+    });
+    adminItems.push({
+      key: '/admin/access-control',
+      icon: <SafetyCertificateOutlined />,
+      label: 'Access Control',
+      onClick: () => void navigate('/admin/access-control'),
+    });
+  }
+
+  const items: MenuProps['items'] = [];
+  if (adminItems.length > 0) {
+    items.push(
+      {
+        key: 'administration',
+        label: 'Administration',
+        type: 'group',
+        children: adminItems,
+      },
+      { type: 'divider' },
+    );
+  }
+  items.push({
+    key: 'account',
+    label: 'Account',
+    type: 'group',
+    children: [
+      {
+        key: '/profile',
+        icon: <UserOutlined />,
+        label: 'Profile',
+        onClick: () => void navigate('/profile'),
+      },
+      {
+        key: 'logout',
+        icon: <LogoutOutlined />,
+        label: 'Logout',
+        danger: true,
+        onClick: () => {
+          Modal.confirm({
+            title: 'Log out',
+            content: 'Are you sure you want to log out?',
+            okText: 'Log out',
+            okType: 'danger',
+            cancelText: 'Cancel',
+            onOk: () => logout(),
+          });
+        },
+      },
+    ],
+  });
 
   return (
     <Header
@@ -41,30 +102,14 @@ export default function TopBar() {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 24px',
+        background: colorBgContainer,
+        borderRadius: borderRadiusLG,
       }}
     >
-      <Link to="/">
-        <HomeOutlined style={{ fontSize: 20, color: 'white' }} />
-      </Link>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {isAdmin && (
-          <Button
-            type="text"
-            icon={<SettingOutlined style={{ color: 'white' }} />}
-            onClick={() => void navigate('/admin')}
-          />
-        )}
-        <Dropdown
-          menu={{ items: userMenuItems }}
-          trigger={['click']}
-          placement="bottomRight"
-        >
-          <Button
-            type="text"
-            icon={<UserOutlined style={{ color: 'white' }} />}
-          />
-        </Dropdown>
-      </div>
+      <div>Current page name</div>
+      <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight">
+        <Button icon={<MenuOutlined />} />
+      </Dropdown>
     </Header>
   );
 }

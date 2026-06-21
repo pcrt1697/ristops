@@ -1,0 +1,16 @@
+query ListMyRoles($input: ListRolesInput!) {
+    myRoles(input: $input) {
+        grants {
+            resource {
+                resourceId
+                resourceType
+            }
+            role {
+                id
+                name
+                description
+                permissions
+            }
+        }
+    }
+}

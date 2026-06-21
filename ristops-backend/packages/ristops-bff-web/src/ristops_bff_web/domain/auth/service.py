@@ -2,20 +2,20 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-import strawberry
 from starlette.requests import Request
 
-from ristops_bff_web.domain.auth.models import UpdateUserInput
+from ristops_bff_web.domain.auth.schema import UserCreationRequest
 from ristops_bff_web.http import http_service, HttpClient
 from ristops_bff_web.session import save_session
 from ristops_lib_core.http import ResponseTransformer
 from ristops_lib_core.schema.authn import LoginRequest, LoginResponse, RefreshTokenRequest
-from ristops_lib_core.schema.user import UserCreationRequest
 
 user_transformer = ResponseTransformer(
     created_at=datetime.fromisoformat,
     updated_at=datetime.fromisoformat,
 )
+
+role_transformer = ResponseTransformer()
 
 
 async def login_user(login_request: LoginRequest, http_request: Request) -> dict[str, Any]:
@@ -36,17 +36,17 @@ async def _login(login_request: LoginRequest, http_request: Request) -> LoginRes
 
 
 async def find_user(user_id: str | UUID) -> dict[str, Any]:
-    user_response = await http_service.get(HttpClient.AUTHN).get(
+    response = await http_service.get(HttpClient.AUTHN).get(
         url=f"users/{user_id}",
     )
-    return user_transformer.get_json(user_response)
+    return user_transformer.get_json(response)
 
 
 async def find_me() -> dict[str, Any]:
-    user_response = await http_service.get(HttpClient.AUTHN).get(
+    response = await http_service.get(HttpClient.AUTHN).get(
         url=f"users/me",
     )
-    return user_transformer.get_json(user_response)
+    return user_transformer.get_json(response)
 
 
 async def register_user(creation_request: UserCreationRequest, http_request: Request) -> dict[str, Any]:
@@ -77,10 +77,24 @@ async def refresh_access_token(refresh_token: str, http_request: Request) -> Log
     return refresh_response
 
 
-async def update_user(user_id: str | UUID, _input: UpdateUserInput) -> dict[str, Any]:
-    payload = strawberry.asdict(_input)
+async def update_user(user_id: str | UUID, update_user_input: dict[str, Any]) -> dict[str, Any]:
     response = await http_service.get(HttpClient.AUTHN).patch(
         url=f"users/{user_id}",
-        json=payload,
+        json=update_user_input,
     )
     return user_transformer.get_json(response)
+
+
+async def find_role(role_id: str) -> dict[str, Any]:
+    response = await http_service.get(HttpClient.AUTHZ).get(
+        url=f"roles/{role_id}",
+    )
+    return role_transformer.get_json(response)
+
+
+async def find_user_roles(user_id: str | UUID, list_roles_input: dict[str, Any]) -> dict[str, Any]:
+    response = await http_service.get(HttpClient.AUTHZ).get(
+        url=f"users/{user_id}/roles",
+        params=list_roles_input,
+    )
+    return response.json()

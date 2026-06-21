@@ -9,6 +9,8 @@ class BackendServiceSettings(BaseServiceSettings):
     )
 
     authn_url: str
+    authz_url: str
+    venue_url: str
 
 
 class BffSettings(BaseServiceSettings):

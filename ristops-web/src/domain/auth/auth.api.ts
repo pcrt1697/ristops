@@ -3,13 +3,15 @@ import type { LoginInput, LoginResponse, RegisterInput } from './auth.types.ts';
 import { gqlRequest } from '../../services/graphql/client.ts';
 import {
   GetMeDocument,
+  ListMyRolesDocument,
+  type ResourceType,
   UpdateMeDocument,
-  type UpdateMeMutationVariables,
+  type UpdateUserInput,
 } from '../../services/graphql/graphql.ts';
 
 const BASE_PATH = '/auth';
 
-export const authnApi = {
+export const authNApi = {
   login: (input: LoginInput) =>
     restClient<LoginResponse>(BASE_PATH + '/login', {
       method: 'POST',
@@ -27,6 +29,10 @@ export const authnApi = {
 
 export const userApi = {
   getMe: () => gqlRequest(GetMeDocument),
-  updateMe: (variables: UpdateMeMutationVariables) =>
-    gqlRequest(UpdateMeDocument, variables),
+  updateMe: (input: UpdateUserInput) => gqlRequest(UpdateMeDocument, { input }),
+};
+
+export const authZApi = {
+  myRoles: (resourceType: ResourceType, resourceId: string) =>
+    gqlRequest(ListMyRolesDocument, { input: { resourceType, resourceId } }),
 };

@@ -1,12 +1,12 @@
 from fastapi import APIRouter
 
-from ristops_lib_neo4j.engine import neo4j_transactional
 from ristops_be_authz.domain.acl.service import check_acl_authorization, grant_access
 from ristops_lib_be.authz.policy import policy, Policy, BaseResourceResolver, resolve_body_attribute
 from ristops_lib_core.schema.authz import (
     AuthorizationResponse, CheckAuthorizationRequest, ResourceType,
     GrantAccessRequest, AclResponse
 )
+from ristops_lib_neo4j.engine import neo4j_transactional
 
 _user_body_resolver = BaseResourceResolver(ResourceType.USER, resolver=resolve_body_attribute)
 acl_router = APIRouter(

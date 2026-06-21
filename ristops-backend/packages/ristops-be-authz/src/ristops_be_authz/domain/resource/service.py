@@ -17,12 +17,8 @@ from ristops_lib_redis.engine import StreamPayload
 _logger = logging.getLogger(__name__)
 
 
-def make_resource_id(resource_type: str, resource_id: str) -> str:
-    """ Creates a unique resource id for the given resource type and resource id. """
-    return f"{resource_type}~{resource_id}"
-
-
 async def find_resource_or_throw(resource_type: str, resource_id: str) -> ResourceNode:
+    """Fetch a resource node or raise 404."""
     record = await _find_resource(resource_type, resource_id)
     if record is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Resource not found")
@@ -50,31 +46,27 @@ async def find_or_create_resources(
         resources: list[AuthorizationResource],
 ) -> list[ResourceNode]:
     _logger.info("Creating %s resources", len(resources))
-    parent = await find_resource_or_throw(parent_type, parent_id)
+    await find_resource_or_throw(parent_type, parent_id)
     transaction = get_neo4j_transaction()
     nodes = []
-    # todo: maybe optimize this with a single query
     for resource in resources:
-        _id = make_resource_id(resource.resource_type, resource.resource_id)
         result = await transaction.run(
             """
-            MATCH (p:Resource {id: $parent_id})
-            MERGE (c:Resource {id: $child_id})
-            ON CREATE SET c.resource_id = $resource_id, c.resource_type = $resource_type
+            MATCH (p:Resource {resource_type: $parent_type, resource_id: $parent_id})
+            MERGE (c:Resource {resource_type: $resource_type, resource_id: $resource_id})
             MERGE (c)-[:BELONGS_TO]->(p)
             RETURN c
-            ;
             """,
-            parent_id=parent.id,
-            child_id=_id,
+            parent_type=parent_type.value,
+            parent_id=parent_id,
+            resource_type=resource.resource_type.value,
             resource_id=resource.resource_id,
-            resource_type=resource.resource_type,
         )
         record = await result.single()
         if record is None:
             raise RuntimeError("Failed to create resource")
         node = ResourceNode.model_validate(record["c"])
-        _logger.info("Created resource %s", node.id)
+        _logger.info("Created resource %s/%s", node.resource_type, node.resource_id)
         nodes.append(node)
     return nodes
 
@@ -87,23 +79,20 @@ async def _find_or_create_resource(
         resource_type: str,
         resource_id: str,
 ) -> ResourceNode:
-    _id = make_resource_id(resource_type, resource_id)
     transaction = get_neo4j_transaction()
     result = await transaction.run(
         """
-        MERGE (r:Resource {id: $id})
-        ON CREATE SET r.resource_id = $resource_id, r.resource_type = $resource_type
+        MERGE (r:Resource {resource_type: $resource_type, resource_id: $resource_id})
         RETURN r
         """,
-        id=_id,
-        resource_id=resource_id,
         resource_type=resource_type,
+        resource_id=resource_id,
     )
     record = await result.single()
     if record is None:
         raise RuntimeError("Failed to get or create resource")
     node = ResourceNode.model_validate(record["r"])
-    _logger.info("Created resource %s", node.id)
+    _logger.info("Created resource %s/%s", node.resource_type, node.resource_id)
     return node
 
 
@@ -111,15 +100,15 @@ async def _find_resource(
         resource_type: str,
         resource_id: str,
 ) -> Record | None:
-    _id = make_resource_id(resource_type, resource_id)
     transaction = get_neo4j_transaction()
     result = await transaction.run(
         """
-        MATCH (r:Resource {id: $id})
+        MATCH (r:Resource {resource_type: $resource_type, resource_id: $resource_id})
         RETURN r
         LIMIT 1
         """,
-        id=_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
     )
     return await result.single()
 
@@ -130,22 +119,21 @@ async def resource_exists(resource_type: str, resource_id: str) -> bool:
 
 
 async def throw_if_resource_not_exists(resource_type: str, resource_id: str) -> None:
-    _resource_exists = await resource_exists(resource_type, resource_id)
-    if not _resource_exists:
+    if not await resource_exists(resource_type, resource_id):
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Resource not found")
 
 
 async def delete_resource(resource_type: ResourceType, resource_id: str) -> None:
     transaction = get_neo4j_transaction()
-    _id = make_resource_id(resource_type, resource_id)
     await transaction.run(
         """
-        MATCH (r:Resource {id: $id})
+        MATCH (r:Resource {resource_type: $resource_type, resource_id: $resource_id})
         DETACH DELETE r
         """,
-        id=_id,
+        resource_type=resource_type.value,
+        resource_id=resource_id,
     )
-    _logger.info(f"Deleted resource {_id}")
+    _logger.info("Deleted resource %s/%s", resource_type.value, resource_id)
 
 
 async def on_resource_event(_: str, payload: StreamPayload) -> None:

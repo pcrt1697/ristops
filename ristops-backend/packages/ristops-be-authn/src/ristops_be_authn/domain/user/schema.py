@@ -1,6 +1,25 @@
 from pydantic import BaseModel, Field, EmailStr, SecretStr
 
 
+class UserCreationRequest(BaseModel):
+    """Request body for creating a new user."""
+
+    username: str = Field(
+        description="Username of the user to register.",
+    )
+    display_name: str | None = Field(
+        default=None,
+        description="Display name of the user to register.",
+    )
+    email: EmailStr = Field(
+        description="Email address of the user to register.",
+    )
+    password: SecretStr = Field(
+        description="Password of the user to register.",
+        min_length=8,
+    )
+
+
 class UserUpdateRequest(BaseModel):
     username: str | None = Field(
         default=None,

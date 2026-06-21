@@ -21,7 +21,10 @@ def process_errors(errors: list[GraphQLError], _: ExecutionContext) -> None:
 def http_exception_to_message(exc: HTTPException) -> str:
     if exc.detail:
         try:
-            error_message = ErrorResponse.model_validate_json(exc.detail)
+            if isinstance(exc.detail, dict):
+                error_message = ErrorResponse.model_validate(exc.detail)
+            else:
+                error_message = ErrorResponse.model_validate_json(exc.detail)
             return f"{error_message.title}. {error_message.detail}"
         except Exception as exc:
             _logger.error(f"Failed to parse HTTP exception", exc_info=exc)

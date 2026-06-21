@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 Authorizer = Callable[[CheckAuthorizationRequest], Awaitable[bool]]
 
 
-async def _policy_to_grant(request: Request, policies: tuple[Policy, ...]) -> list[AuthorizationGrant]:
+async def policy_to_grant(request: Request, policies: tuple[Policy, ...]) -> list[AuthorizationGrant]:
     return [
         await _policy(request)
         for _policy in policies
@@ -94,7 +94,7 @@ class AuthZInterceptor:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Invalid user",
             )
-        grants = await _policy_to_grant(request, policies)
+        grants = await policy_to_grant(request, policies)
         authz_request = CheckAuthorizationRequest(
             user_id=user_id,
             grants=grants,

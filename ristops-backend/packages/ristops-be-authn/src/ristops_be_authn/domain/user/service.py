@@ -9,12 +9,11 @@ from pydantic import SecretStr
 from sqlalchemy import select, ScalarResult, ColumnElement
 
 from ristops_be_authn.domain.user.entities import UserEntity
-from ristops_be_authn.domain.user.schema import UserUpdateRequest
-from ristops_be_authn.services.user import publish_user_created_event, publish_user_deleted_event
+from ristops_be_authn.domain.user.schema import UserCreationRequest, UserUpdateRequest
+from ristops_be_authn.services.authz import publish_user_created_event, publish_user_deleted_event
 from ristops_be_authn.settings import Argon2Settings
 from ristops_lib_core.auth.authn import RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
-from ristops_lib_core.schema.user import UserCreationRequest
 from ristops_lib_sql.engine import get_sql_session
 
 _logger = logging.getLogger(__name__)
@@ -112,10 +111,10 @@ async def update_user(user_id: UUID, request: UserUpdateRequest) -> UserEntity:
     fields_to_update = request.model_fields_set
     # TODO: use `field in fields_to_update` consistently for all fields instead of `is not None`,
     #  so that explicitly sending null is handled correctly for every optional field.
-    if request.username is not None:
+    if request.username is not None and request.username.lower() != user.username.lower():
         await throw_if_exists_by_username(request.username)
         user.username = request.username.lower()
-    if request.email is not None:
+    if request.email is not None and request.email.lower() != user.email.lower():
         await throw_if_exists_by_email(request.email)
         user.email = request.email.lower()
     if request.password is not None:

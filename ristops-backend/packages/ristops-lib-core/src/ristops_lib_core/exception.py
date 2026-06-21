@@ -97,6 +97,8 @@ class GenericHttpExceptionHandler(BaseHttpExceptionHandler[HTTPException]):
 
     def _do_handle(self, request: Request, exception: HTTPException) -> tuple[int, ErrorResponse]:
         http_status = HTTPStatus(exception.status_code)
+        if isinstance(exception.detail, dict):
+            return http_status, ErrorResponse.model_validate(exception.detail)
         return http_status, ErrorResponse(
             title=http_status.phrase,
             detail=exception.detail,

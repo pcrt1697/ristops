@@ -1,5 +1,17 @@
+"""Authorization resource definition."""
+type AuthorizationResource {
+  resourceId: String!
+  resourceType: ResourceType!
+}
+
 """Date with time (isoformat)"""
 scalar DateTime
+
+"""User information to update."""
+input ListRolesInput {
+  resourceId: String!
+  resourceType: ResourceType!
+}
 
 type Mutation {
   """Update user data by ID"""
@@ -27,42 +39,62 @@ type Query {
 
   """Fetch authenticated user"""
   me: User!
+
+  """Fetch role by ID"""
+  role(
+    """Entity identifier."""
+    id: ID!
+  ): Role!
+
+  """Fetch roles assigned to the authenticated user on a resource"""
+  myRoles(
+    """User information to update."""
+    input: ListRolesInput!
+  ): UserRoleGrants!
 }
 
-scalar UUID
+enum ResourceType {
+  APP
+  VENUE
+  PERMISSION
+  ROLE
+  ACL
+  USER
+}
+
+"""Role entity information."""
+type Role {
+  id: String!
+  name: String!
+  description: String!
+  permissions: [String!]!
+}
 
 """User information to update."""
 input UpdateUserInput {
-  """New username of the user."""
   username: String = null
-
-  """New display name of the user."""
   displayName: String = null
-
-  """New email address of the user."""
   email: String = null
-
-  """New password of the user."""
   password: String = null
 }
 
 """User entity information."""
 type User {
-  """User identifier."""
-  id: UUID!
-
-  """Username of the user."""
+  id: String!
   username: String!
-
-  """Display name of the user."""
   displayName: String
-
-  """Email address of the user."""
   email: String!
-
-  """Registration date."""
   createdAt: DateTime!
-
-  """Last update date."""
   updatedAt: DateTime!
+}
+
+"""Resource the user has access to, given a specific set of permissions."""
+type UserRoleGrant {
+  resource: AuthorizationResource!
+  role: Role!
+}
+
+"""Resources the user has access to, given a specific set of permissions."""
+type UserRoleGrants {
+  grants: [UserRoleGrant!]!
 }

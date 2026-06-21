@@ -1,7 +1,7 @@
 import { Button, Card, Form, Input, Typography } from 'antd';
 import { Link } from 'react-router-dom';
-import { useRegister } from '../domain/auth/auth.hooks.ts';
-import type { RegisterInput } from '../domain/auth/auth.types.ts';
+import { useRegister } from '../../domain/auth/auth.hooks.ts';
+import type { RegisterInput } from '../../domain/auth/auth.types.ts';
 
 const { Title } = Typography;
 
@@ -9,7 +9,7 @@ interface RegisterFormValues extends RegisterInput {
   confirmPassword: string;
 }
 
-export default function RegisterPage() {
+export default function UserRegisterPage() {
   const { mutate: register, isPending } = useRegister();
 
   const onFinish = (values: RegisterFormValues) => {

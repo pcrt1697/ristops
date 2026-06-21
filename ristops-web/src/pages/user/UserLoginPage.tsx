@@ -1,11 +1,11 @@
 import { Button, Card, Divider, Form, Input, Typography } from 'antd';
-import { useLogin } from '../domain/auth/auth.hooks.ts';
-import type { LoginInput } from '../domain/auth/auth.types.ts';
+import { useLogin } from '../../domain/auth/auth.hooks.ts';
+import type { LoginInput } from '../../domain/auth/auth.types.ts';
 import { Link } from 'react-router-dom';
 
 const { Title } = Typography;
 
-export default function LoginPage() {
+export default function UserLoginPage() {
   const { mutate: login, isPending } = useLogin();
 
   const onFinish = (values: LoginInput) => {

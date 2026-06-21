@@ -103,6 +103,45 @@ REST is more standard for auth flows and maps naturally to HTTP semantics
 
 ---
 
+### Shared Pydantic models for cross-cutting service contracts
+
+**Context:** This is a training project in a monorepo. Inter-service communication requires
+a shared understanding of data shapes. Three approaches were evaluated:
+
+- **Shared Pydantic models** — single source of truth, consumer-side validation included,
+  coupling across services.
+- **Autonomous models per service** — each service defines its own request/response types;
+  consumer models are intentionally narrow (tolerant reader). No shared code, but contracts
+  can drift silently.
+- **TypedDict contracts shared, Pydantic models in the owning service** — type safety via
+  static analysis without runtime validation on the consumer. Discarded because TypedDict
+  is structurally invisible at runtime: a mismatched response produces a generic error deep
+  in business logic rather than a clear failure at the HTTP boundary.
+
+**Decision:** Shared Pydantic models in `lib-core` are used only for contracts that are
+genuinely cross-cutting — infrastructure services that every other service depends on
+(authentication, authorisation). Business domain service contracts stay inside their owning
+service.
+
+**Why:** The monorepo makes sharing straightforward, removing the usual distribution
+overhead (no registry, atomic refactoring). In a monorepo, shared models are a pragmatic
+default — the coupling in the code reflects the coupling that already exists in the
+architecture.
+
+The scope limit to infrastructure services is intentional: their contracts are inherently
+cross-cutting and change rarely and deliberately. A change to an infrastructure contract
+affects all consumers by definition, so tight coupling is a correct reflection of reality.
+Business domain contracts do not share this property — they should be free to evolve
+independently, so autonomous models are the right choice there.
+
+**Trade-off:** Consumers re-validate data already validated by the producer. Accepted
+because infrastructure contracts are stable and the validation provides a clear failure
+mode at the boundary.
+
+**Status:** Accepted
+
+---
+
 ### Session authentication for the BFF, JWT for backend services
 
 **Context:** Frontend users need a convenient auth mechanism; backend services must

@@ -1,6 +1,10 @@
+from enum import StrEnum
+from typing import ClassVar
+
 from pydantic import BaseModel, Field
 
-from ristops_lib_core.schema.types import ObjectUUID, CreatedAt, UpdatedAt
+from ristops_lib_core.pydantic.types import ObjectUUID, CreatedAt, UpdatedAt
+from ristops_lib_core.schema.pagination import SearchQuery
 
 
 class VenueCreationRequest(BaseModel):
@@ -50,3 +54,26 @@ class VenueResponse(BaseModel):
     description: str | None = Field(default=None, description="Description of the venue.")
     created_at: CreatedAt
     updated_at: UpdatedAt
+
+
+class VenueSortField(StrEnum):
+    """Fields a venue search may be sorted by."""
+
+    ID = "id"
+    NAME = "name"
+    CREATED_AT = "created_at"
+
+
+class VenueSearchFilter(BaseModel):
+    """Filter parameters for venue search, exposed as `filter.<field>` query params."""
+
+    name: str | None = Field(
+        default=None,
+        description="Filter by name of the venue using a like operator.",
+    )
+
+
+class VenueSearchQuery(SearchQuery, VenueSearchFilter):
+    """Full venue search query: pagination, sort, and filter combined."""
+
+    sort_field_enum: ClassVar[type[StrEnum]] = VenueSortField

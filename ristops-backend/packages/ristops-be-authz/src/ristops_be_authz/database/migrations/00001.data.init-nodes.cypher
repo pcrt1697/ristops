@@ -1,5 +1,5 @@
 // -- Root resource --
-MERGE (:Resource {id: "app~*", resource_id: "*", resource_type: "app"});
+MERGE (:Resource {resource_type: "app", resource_id: "*"});
 
 // -- Create permissions --
 // wildcard permission to do everything on the resource

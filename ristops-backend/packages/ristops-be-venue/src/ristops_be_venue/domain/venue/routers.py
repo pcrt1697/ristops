@@ -2,18 +2,21 @@ from http import HTTPStatus
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter
-from fastapi.params import Path
+from fastapi import APIRouter, Query
+from fastapi.params import Path, Depends
 
 from ristops_be_venue.domain.venue.schema import (
-    VenueCreationRequest, VenueUpdateRequest, VenueResponse,
+    VenueCreationRequest, VenueUpdateRequest, VenueResponse, VenueSearchQuery,
 )
 from ristops_be_venue.domain.venue.service import (
-    create_venue, find_venue_or_throw, update_venue, remove_venue,
+    create_venue, find_venue_or_throw, update_venue, remove_venue, search_venue, VenueSearchScope,
 )
+from ristops_be_venue.services.authz import authz_client_factory
+from ristops_lib_be.authz.client import AuthorizationResourceGrantsFetcher
 from ristops_lib_be.authz.policy import policy, BaseResourceResolver, Policy, resolve_static_resource
 from ristops_lib_core.exception import ErrorResponse
-from ristops_lib_core.schema.authz import ResourceType
+from ristops_lib_core.schema.authz import ResourceType, ListUserResourceGrantsResponse
+from ristops_lib_core.schema.pagination import Page
 from ristops_lib_sql.engine import sql_transactional
 
 _venue_path_resolver = BaseResourceResolver(ResourceType.VENUE)
@@ -21,6 +24,34 @@ venue_router = APIRouter(
     prefix="/venue",
     tags=["venue"],
 )
+
+
+@venue_router.get(
+    "",
+    response_model=Page[VenueResponse],
+)
+@policy()
+@sql_transactional
+async def list_venues(
+        query: Annotated[VenueSearchQuery, Query()],
+        venue_grants: Annotated[
+            ListUserResourceGrantsResponse,
+            Depends(
+                AuthorizationResourceGrantsFetcher(
+                    authz_client_factory,
+                    ResourceType.VENUE,
+                    "venue~get",
+                    override_policies=(Policy(resolve_static_resource("*", ResourceType.APP), "venue~list"),)
+                )
+            )
+        ]
+) -> Page[VenueResponse]:
+    """
+    Return a paginated, filtered, sorted list of venues.
+    Results are filtered base on venues the user has access to.
+    """
+    scope = VenueSearchScope.from_grants(venue_grants)
+    return await search_venue(query, scope)
 
 
 @venue_router.post(

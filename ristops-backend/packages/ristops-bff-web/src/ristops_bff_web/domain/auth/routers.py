@@ -6,7 +6,8 @@ from starlette.requests import Request
 from ristops_bff_web.domain.auth.service import login_user, register_user
 from ristops_lib_core.auth.authn import public
 from ristops_lib_core.schema.authn import LoginRequest
-from ristops_lib_core.schema.user import UserResponse, UserCreationRequest
+from ristops_bff_web.domain.auth.schema import UserCreationRequest
+from ristops_lib_core.schema.user import UserResponse
 
 auth_router = APIRouter(
     prefix="/auth",

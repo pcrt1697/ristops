@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { authnApi, userApi } from './auth.api.ts';
+import { authNApi, authZApi, userApi } from './auth.api.ts';
 import { useNavigate } from 'react-router-dom';
 import type { AuthState } from './auth.types.ts';
+import type { ServiceError } from '../../services/common.ts';
+import { message } from 'antd';
+import type { ResourceType } from '../../services/graphql/graphql.ts';
+import { hasPermission } from './authz.utils.ts';
 
 export function useAuth(): AuthState {
   const { data, isLoading } = useQuery({
@@ -23,10 +27,17 @@ export function useLogin() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: authnApi.login,
+    mutationFn: authNApi.login,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['auth.getMe'] });
       void navigate('/');
+    },
+    onError(error: ServiceError) {
+      const errorMessage =
+        error?.status == 401 || error?.status == 403
+          ? 'Invalid username or password'
+          : 'Oops! Something went wrong';
+      void message.error(errorMessage);
     },
   });
 }
@@ -36,7 +47,7 @@ export function useLogout() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: authnApi.logout,
+    mutationFn: authNApi.logout,
     onSuccess: () => {
       queryClient.setQueryData(['auth.getMe'], null);
       void navigate('/login');
@@ -63,10 +74,26 @@ export function useRegister() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: authnApi.register,
+    mutationFn: authNApi.register,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['auth.getMe'] });
       void navigate('/');
     },
   });
+}
+
+export function useCan(
+  resource: { type: ResourceType; id: string },
+  ...permissions: string[]
+) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['auth.myRoles', resource.type, resource.id],
+    queryFn: () => authZApi.myRoles(resource.type, resource.id),
+    staleTime: Infinity,
+  });
+
+  const isAllowed =
+    !!data && permissions.some((p) => hasPermission(data.myRoles.grants, p));
+
+  return { isAllowed, isLoading };
 }

@@ -14,9 +14,11 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
+    "query ListMyRoles($input: ListRolesInput!) {\n  myRoles(input: $input) {\n    grants {\n      resource {\n        resourceId\n        resourceType\n      }\n      role {\n        id\n        name\n        description\n        permissions\n      }\n    }\n  }\n}": typeof types.ListMyRolesDocument,
     "query GetMe {\n  me {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($input: UpdateUserInput!) {\n  updateMe(input: $input) {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}": typeof types.GetMeDocument,
 };
 const documents: Documents = {
+    "query ListMyRoles($input: ListRolesInput!) {\n  myRoles(input: $input) {\n    grants {\n      resource {\n        resourceId\n        resourceType\n      }\n      role {\n        id\n        name\n        description\n        permissions\n      }\n    }\n  }\n}": types.ListMyRolesDocument,
     "query GetMe {\n  me {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}\n\nmutation UpdateMe($input: UpdateUserInput!) {\n  updateMe(input: $input) {\n    id\n    username\n    displayName\n    email\n    createdAt\n    updatedAt\n  }\n}": types.GetMeDocument,
 };
 
@@ -34,6 +36,10 @@ const documents: Documents = {
  */
 export function graphql(source: string): unknown;
 
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "query ListMyRoles($input: ListRolesInput!) {\n  myRoles(input: $input) {\n    grants {\n      resource {\n        resourceId\n        resourceType\n      }\n      role {\n        id\n        name\n        description\n        permissions\n      }\n    }\n  }\n}"): (typeof documents)["query ListMyRoles($input: ListRolesInput!) {\n  myRoles(input: $input) {\n    grants {\n      resource {\n        resourceId\n        resourceType\n      }\n      role {\n        id\n        name\n        description\n        permissions\n      }\n    }\n  }\n}"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

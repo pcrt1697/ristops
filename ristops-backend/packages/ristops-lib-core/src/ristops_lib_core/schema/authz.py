@@ -55,15 +55,6 @@ class CreateAuthorizationResourceRequest(BaseModel):
     resources: list[AuthorizationResource] = Field(description="List of resources to create")
 
 
-class AuthorizationResourceResponse(BaseModel):
-    resource_type: str = Field(description="Resource type")
-    resource_id: str = Field(description="Resource identifier")
-
-
-class AuthorizationResourcesResponse(BaseModel):
-    resources: list[AuthorizationResourceResponse] = Field(description="List of resources")
-
-
 class AuthorizationUserResponse(BaseModel):
     user_id: str = Field(description="User identifier")
 
@@ -71,3 +62,34 @@ class AuthorizationUserResponse(BaseModel):
 class AclResponse(BaseModel):
     id: str = Field(description="Acl ID")
     created_at: datetime = Field(description="Acl creation time")
+
+
+class RoleResponse(BaseModel):
+    id: str = Field(description="Role identifier")
+    name: str = Field(description="Role name")
+    description: str = Field(description="Role description")
+    permissions: list[str] = Field(description="Permissions granted by the role")
+
+
+class RolePermissions(BaseModel):
+    role_id: str = Field(description="Role that grants the permissions")
+    permissions: list[str] = Field(description="Permissions granted by the role")
+
+
+class PermissionGrant(BaseModel):
+    """A set of permissions derived from a single role granted on a specific resource."""
+    resource: AuthorizationResource = Field(description="Resource on which the role is assigned")
+    role_id: str = Field(description="Role that grants the permissions")
+
+
+class ListUserRolesResponse(BaseModel):
+    grants: list[PermissionGrant] = Field(description="Permission grants, grouped by role and source resource")
+
+
+class ResourceGrant(BaseModel):
+    resource: AuthorizationResource
+    roles: list[RolePermissions] = Field(description="Roles granted by the resource")
+
+
+class ListUserResourceGrantsResponse(BaseModel):
+    grants: list[ResourceGrant] = Field(description="Permission grants, grouped by role and source resource")

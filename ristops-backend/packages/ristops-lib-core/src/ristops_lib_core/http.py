@@ -4,6 +4,7 @@ from copy import deepcopy
 from enum import StrEnum
 from typing import Callable, Awaitable, Any
 
+from fastapi import HTTPException
 from httpx import AsyncClient, Request, Response, Headers
 
 from ristops_lib_core.context import APP_CONTEXT, ContextHeader, ContextKey
@@ -51,7 +52,10 @@ async def raise_for_status(response: Response) -> None:
         response_trace,
         response.content,
     )
-    response.raise_for_status()
+    raise HTTPException(
+        status_code=response.status_code,
+        detail=response.json()
+    )
 
 
 class HttpClientService[T: StrEnum]:

@@ -1,9 +1,9 @@
-import { RISTOPS_BFF_URL } from './common.ts';
+import { RISTOPS_BFF_URL, type ServiceError } from './common.ts';
 
 export async function restClient<T>(
   endpoint: string,
   options?: RequestInit,
-): Promise<T> {
+): Promise<T | ServiceError> {
   const response = await fetch(`${RISTOPS_BFF_URL}/api${endpoint}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },

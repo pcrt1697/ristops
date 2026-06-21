@@ -3,15 +3,67 @@ from http import HTTPStatus
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import select, ScalarResult, ColumnElement
 
 from ristops_be_venue.domain.venue.entities import VenueEntity
-from ristops_be_venue.domain.venue.schema import VenueCreationRequest, VenueUpdateRequest
+from ristops_be_venue.domain.venue.schema import (
+    VenueCreationRequest, VenueUpdateRequest, VenueResponse,
+    VenueSearchFilter, VenueSearchQuery,
+)
 from ristops_be_venue.services.resource import publish_resource_created_event, publish_resource_deleted_event
-from ristops_lib_core.schema.authz import ResourceType
+from ristops_lib_core.schema.authz import ResourceType, ListUserResourceGrantsResponse
+from ristops_lib_core.schema.pagination import Page
 from ristops_lib_sql.engine import get_sql_session
+from ristops_lib_sql.search import SearchQueryExecutor
 
 _logger = logging.getLogger(__name__)
+
+
+class VenueSearchScope(BaseModel):
+    """Visibility scope ANDed into a venue search to limit results to the user's venues."""
+
+    venue_ids: list[str] | None = Field(
+        description="Venues the user may see. `None` is unrestricted; an empty list is no access.",
+    )
+
+    @classmethod
+    def from_grants(cls, venue_grants: ListUserResourceGrantsResponse | None) -> "VenueSearchScope":
+        """Build a scope from authz grants; `None` grants mean unrestricted access."""
+        if venue_grants is None:
+            return VenueSearchScope(venue_ids=None)
+        venue_ids = [grant.resource.resource_id for grant in venue_grants.grants]
+        return VenueSearchScope(venue_ids=venue_ids)
+
+
+def _build_venue_conditions(
+        venue_filter: VenueSearchFilter,
+        venue_scope: VenueSearchScope,
+) -> list[ColumnElement[bool]]:
+    """Build the WHERE conditions from the user filter and the visibility scope."""
+    where_conditions = []
+
+    if venue_scope.venue_ids is not None:
+        where_conditions.append(VenueEntity.id.in_(venue_scope.venue_ids))
+
+    if venue_filter.name is not None:
+        where_conditions.append(
+            VenueEntity.name.ilike(f"%{venue_filter.name}%")
+        )
+
+    return where_conditions
+
+
+search_query_executor = SearchQueryExecutor[
+    VenueSearchQuery,
+    VenueSearchScope,
+    VenueEntity,
+    VenueResponse
+](
+    entity_class=VenueEntity,
+    response_class=VenueResponse,
+    condition_builder=_build_venue_conditions,
+)
 
 
 async def create_venue(request: VenueCreationRequest) -> VenueEntity:
@@ -87,3 +139,11 @@ async def _find_venue_by_or_throw(query: ColumnElement[bool]) -> VenueEntity:
             detail="Venue not found",
         )
     return venue
+
+
+async def search_venue(
+        query: VenueSearchQuery,
+        scope: VenueSearchScope
+) -> Page[VenueResponse]:
+    """Return a page of venues matching the given query."""
+    return await search_query_executor.execute(query, scope)

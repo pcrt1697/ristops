@@ -1,7 +1,7 @@
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 from pydantic import EmailStr
 
-from ristops_lib_core.schema.types import ObjectUUID, CreatedAt, UpdatedAt
+from ristops_lib_core.pydantic.types import ObjectUUID, CreatedAt, UpdatedAt
 
 
 class UserResponse(BaseModel):
@@ -18,20 +18,3 @@ class UserResponse(BaseModel):
     )
     created_at: CreatedAt
     updated_at: UpdatedAt
-
-
-class UserCreationRequest(BaseModel):
-    username: str = Field(
-        description="Username of the user to register.",
-    )
-    display_name: str | None = Field(
-        default=None,
-        description="Display name of the user to register.",
-    )
-    email: EmailStr = Field(
-        description="Email address of the user to register.",
-    )
-    password: SecretStr = Field(
-        description="Password of the user to register.",
-        min_length=8,
-    )

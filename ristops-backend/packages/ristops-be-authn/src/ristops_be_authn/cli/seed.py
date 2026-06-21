@@ -48,7 +48,7 @@ async def seed(_: click.Context, username: str, email: str, password: str):
             _logger.info("Setting up admin user")
             await create_or_update_admin(
                 username=username,
-                display_name=email,
+                display_name=username,
                 email=email,
                 password=password,
             )

@@ -6,6 +6,8 @@ from fastapi import FastAPI, APIRouter, Depends
 from ristops_be_authz.domain.acl.routers import acl_router
 from ristops_be_authz.domain.acl.service import check_acl_authorization
 from ristops_be_authz.domain.resource.service import on_resource_event
+from ristops_be_authz.domain.role.routers import roles_router
+from ristops_be_authz.domain.user.routers import user_router
 from ristops_be_authz.domain.user.service import on_user_event
 from ristops_be_authz.settings import (
     BackendServiceSettings, UserLifecycleConsumerSettings,
@@ -66,6 +68,8 @@ def create_app() -> FastAPI:
 
     api_router = APIRouter(prefix="/api")
     api_router.include_router(acl_router)
+    api_router.include_router(user_router)
+    api_router.include_router(roles_router)
     app.include_router(api_router)
 
     public_registry = PublicRoutesRegistry(app)

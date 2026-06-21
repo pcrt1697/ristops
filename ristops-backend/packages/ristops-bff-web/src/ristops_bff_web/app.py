@@ -19,7 +19,10 @@ from ristops_bff_web.settings import BackendServiceSettings, BffSettings
 from ristops_lib_core.app.openapi import OpenAPIConfiguration
 from ristops_lib_core.auth.authn import ClientTokenDecoder, PublicRoutesRegistry
 from ristops_lib_core.context import RequestContextMiddleware
-from ristops_lib_core.exception import GenericExceptionMiddleware
+from ristops_lib_core.exception import (
+    GenericExceptionMiddleware, register_exception_handler,
+    GenericHttpExceptionHandler, RequestValidationExceptionHandler
+)
 from ristops_lib_core.logging import RequestLoggingMiddleware
 
 
@@ -35,6 +38,8 @@ def create_app() -> FastAPI:
     async def lifespan(_: FastAPI):
         clients = {
             HttpClient.AUTHN: be_settings.authn_url,
+            HttpClient.AUTHZ: be_settings.authz_url,
+            HttpClient.VENUE: be_settings.venue_url,
         }
         async with http_service(clients):
             try:
@@ -59,6 +64,10 @@ def create_app() -> FastAPI:
         summary="APIs to interact with RistOps BFF",
         lifespan=lifespan,
     )
+
+    register_exception_handler(app, RequestValidationExceptionHandler)
+    register_exception_handler(app, GenericHttpExceptionHandler)
+
     api_router = APIRouter(prefix="/api")
     api_router.include_router(auth_router)
     api_router.include_router(graphql_router, prefix="/graphql")

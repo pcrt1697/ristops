@@ -41,7 +41,6 @@ class UserNode(BaseModel):
 class ResourceNode(BaseModel):
     __label__ = "Resource"
 
-    id: str = Field(description="Resource node ID")
     resource_id: str = Field(description="Resource ID")
     resource_type: str = Field(description="Resource type")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Acl creation time")

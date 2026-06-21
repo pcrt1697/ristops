@@ -11,6 +11,7 @@ const config: CodegenConfig = {
           DateTime: 'string',
         },
         useTypeImports: true,
+        enumsAsConst: true,
       },
     },
   },
