@@ -5,7 +5,7 @@ from uuid import UUID
 from starlette.requests import Request
 
 from ristops_bff_web.domain.auth.schema import UserCreationRequest
-from ristops_bff_web.http import http_service, HttpClient
+from ristops_bff_web.http import authn_client, authz_client
 from ristops_bff_web.session import save_session
 from ristops_lib_core.http import ResponseTransformer
 from ristops_lib_core.schema.authn import LoginRequest, LoginResponse, RefreshTokenRequest
@@ -26,7 +26,7 @@ async def login_user(login_request: LoginRequest, http_request: Request) -> dict
 async def _login(login_request: LoginRequest, http_request: Request) -> LoginResponse:
     payload = login_request.model_dump(mode="json")
     payload["password"] = login_request.password.get_secret_value()
-    _login_response = await http_service.get(HttpClient.AUTHN).post(
+    _login_response = await authn_client.client.post(
         url="auth/login",
         json=payload,
     )
@@ -36,14 +36,14 @@ async def _login(login_request: LoginRequest, http_request: Request) -> LoginRes
 
 
 async def find_user(user_id: str | UUID) -> dict[str, Any]:
-    response = await http_service.get(HttpClient.AUTHN).get(
+    response = await authn_client.client.get(
         url=f"users/{user_id}",
     )
     return user_transformer.get_json(response)
 
 
 async def find_me() -> dict[str, Any]:
-    response = await http_service.get(HttpClient.AUTHN).get(
+    response = await authn_client.client.get(
         url=f"users/me",
     )
     return user_transformer.get_json(response)
@@ -52,7 +52,7 @@ async def find_me() -> dict[str, Any]:
 async def register_user(creation_request: UserCreationRequest, http_request: Request) -> dict[str, Any]:
     payload = creation_request.model_dump(mode="json")
     payload["password"] = creation_request.password.get_secret_value()
-    user_response = await http_service.get(HttpClient.AUTHN).post(
+    user_response = await authn_client.client.post(
         url="users",
         json=payload,
     )
@@ -68,7 +68,7 @@ async def refresh_access_token(refresh_token: str, http_request: Request) -> Log
     refresh_request = RefreshTokenRequest(
         refresh_token=refresh_token,
     )
-    _refresh_response = await http_service.get(HttpClient.AUTHN).post(
+    _refresh_response = await authn_client.client.post(
         url="auth/refresh",
         json=refresh_request.model_dump(mode="json"),
     )
@@ -78,7 +78,7 @@ async def refresh_access_token(refresh_token: str, http_request: Request) -> Log
 
 
 async def update_user(user_id: str | UUID, update_user_input: dict[str, Any]) -> dict[str, Any]:
-    response = await http_service.get(HttpClient.AUTHN).patch(
+    response = await authn_client.client.patch(
         url=f"users/{user_id}",
         json=update_user_input,
     )
@@ -86,14 +86,14 @@ async def update_user(user_id: str | UUID, update_user_input: dict[str, Any]) ->
 
 
 async def find_role(role_id: str) -> dict[str, Any]:
-    response = await http_service.get(HttpClient.AUTHZ).get(
+    response = await authz_client.client.get(
         url=f"roles/{role_id}",
     )
     return role_transformer.get_json(response)
 
 
 async def find_user_roles(user_id: str | UUID, list_roles_input: dict[str, Any]) -> dict[str, Any]:
-    response = await http_service.get(HttpClient.AUTHZ).get(
+    response = await authz_client.client.get(
         url=f"users/{user_id}/roles",
         params=list_roles_input,
     )

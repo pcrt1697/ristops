@@ -12,7 +12,7 @@ from ristops_bff_web.context import ContextExtension
 from ristops_bff_web.domain.auth.routers import auth_router
 from ristops_bff_web.exception import ErrorHandlingExtension
 from ristops_bff_web.graphql.schema import QUERY, MUTATION
-from ristops_bff_web.http import http_service, HttpClient
+from ristops_bff_web.http import authn_client, authz_client, venue_client
 from ristops_bff_web.logging import ResolverLoggingExtension
 from ristops_bff_web.session import get_redis_client
 from ristops_bff_web.settings import BackendServiceSettings, BffSettings
@@ -23,6 +23,7 @@ from ristops_lib_core.exception import (
     GenericExceptionMiddleware, register_exception_handler,
     GenericHttpExceptionHandler, RequestValidationExceptionHandler
 )
+from ristops_lib_core.http import with_clients
 from ristops_lib_core.logging import RequestLoggingMiddleware
 
 
@@ -36,12 +37,11 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        clients = {
-            HttpClient.AUTHN: be_settings.authn_url,
-            HttpClient.AUTHZ: be_settings.authz_url,
-            HttpClient.VENUE: be_settings.venue_url,
-        }
-        async with http_service(clients):
+        async with with_clients(
+                (authn_client, be_settings.authn_url),
+                (authz_client, be_settings.authz_url),
+                (venue_client, be_settings.venue_url),
+        ):
             try:
                 yield
             finally:

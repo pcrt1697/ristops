@@ -8,7 +8,8 @@ from ristops_be_authn.domain.authn.routers import auth_router
 from ristops_be_authn.domain.authn.service import decode_access_token
 from ristops_be_authn.domain.user.routers import user_router
 from ristops_be_authn.services.authz import is_authorized
-from ristops_be_authn.services.http import http_service, get_http_clients
+from ristops_be_authn.services.http import authz_client
+from ristops_be_authn.settings import BackendServiceSettings
 from ristops_lib_be.authn import JwtAuthNMiddleware
 from ristops_lib_be.authz.interceptor import AuthZInterceptor
 from ristops_lib_core.app.openapi import OpenAPIConfiguration
@@ -18,6 +19,7 @@ from ristops_lib_core.exception import (
     GenericExceptionMiddleware, register_exception_handler,
     RequestValidationExceptionHandler, GenericHttpExceptionHandler
 )
+from ristops_lib_core.http import with_clients
 from ristops_lib_core.logging import RequestLoggingMiddleware
 from ristops_lib_redis.engine import redis_client
 from ristops_lib_sql.engine import sql_session_provider
@@ -29,8 +31,8 @@ _logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, Any]:
     await sql_session_provider.configure()
     await redis_client.connect()
-    clients = get_http_clients()
-    async with http_service(clients):
+    be_settings = BackendServiceSettings.get()
+    async with with_clients((authz_client, be_settings.authz_url)):
         _logger.info("Startup complete")
         yield
     await redis_client.disconnect()

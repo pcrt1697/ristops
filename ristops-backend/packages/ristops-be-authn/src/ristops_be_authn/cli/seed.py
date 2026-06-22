@@ -40,11 +40,13 @@ _logger = logging.getLogger(__name__)
 @sql_transactional
 async def seed(_: click.Context, username: str, email: str, password: str):
     """ Seed app by creating the admin user. """
-    from ristops_be_authn.services.http import get_http_clients, http_service
-    clients = get_http_clients()
+    from ristops_be_authn.services.http import authz_client
+    from ristops_be_authn.settings import BackendServiceSettings
+    from ristops_lib_core.http import with_clients
+    be_settings = BackendServiceSettings.get()
     await redis_client.connect()
     try:
-        async with http_service(clients):
+        async with with_clients((authz_client, be_settings.authz_url)):
             _logger.info("Setting up admin user")
             await create_or_update_admin(
                 username=username,

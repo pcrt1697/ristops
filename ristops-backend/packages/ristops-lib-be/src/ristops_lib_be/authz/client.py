@@ -62,7 +62,6 @@ class AuthorizationResourceGrantsFetcher:
                 "permissions": self._permissions,
             },
         )
-        _response.raise_for_status()
         return ListUserResourceGrantsResponse.model_validate_json(_response.content)
 
     async def _should_override(self, request: Request) -> bool:

@@ -3,7 +3,7 @@ from uuid import UUID
 
 from httpx import AsyncClient
 
-from ristops_be_authn.services.http import http_service, HttpClient
+from ristops_be_authn.services.http import authz_client
 from ristops_be_authn.settings import UserLifecycleProducerSettings
 from ristops_lib_be.authz.client import CheckAuthorizationPolicy
 from ristops_lib_be.authz.events import UserLifecycleEvent
@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 
 def authz_client_factory() -> AsyncClient:
-    return http_service.get(HttpClient.AUTHZ)
+    return authz_client.client
 
 
 is_authorized = CheckAuthorizationPolicy(authz_client_factory)
