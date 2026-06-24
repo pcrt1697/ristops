@@ -41,3 +41,30 @@ async def create_user(data: UserCreate) -> User:
     session = get_sql_session()
     ...
 ```
+
+## Search execution
+
+This module addresses the need to build paginated, filtered, and sorted list endpoints without
+re-writing the same `SELECT … WHERE … ORDER BY … LIMIT/OFFSET` plumbing for every entity.
+`SearchQueryExecutor` takes an entity class, a response model, and a condition builder, and turns
+a query object into a `Page` of response models (running a matching `COUNT` so the page carries the
+correct total).
+
+| Constructor argument | Responsibility |
+|----------------------|----------------|
+| `condition_builder` | Maps the query (and an optional scope) to a list of SQLAlchemy `WHERE` conditions |
+| `sort_parser` | Maps `SortClause`s to `ORDER BY` expressions — defaults to `BaseSortParser` (entity columns) |
+| `model_mapper` | Maps an ORM entity to its response model — defaults to Pydantic `model_validate` |
+
+Filtering is deliberately generic: the executor only ANDs together whatever conditions the builder
+returns. Authorization scoping — "only the venues the user may access" — is therefore just another
+condition the caller injects, never something the executor knows about. See the pagination/search
+base types in [lib-core](libraries/lib-core.md#pagination--search).
+
+```python
+search_query_executor = SearchQueryExecutor[VenueSearchQuery, VenueSearchScope, VenueEntity, VenueResponse](
+    entity_class=VenueEntity,
+    response_class=VenueResponse,
+    condition_builder=_build_venue_conditions,
+)
+```

@@ -1,0 +1,49 @@
+query SearchVenues($input: VenueSearchInput!) {
+    searchVenues(input: $input) {
+        items {
+            id
+            name
+            address
+            description
+            createdAt
+            updatedAt
+        }
+        total
+        page
+        pageSize
+        totalPages
+    }
+}
+
+query GetVenue($id: ID!) {
+    venue(id: $id) {
+        id
+        name
+        address
+        description
+        createdAt
+        updatedAt
+    }
+}
+
+mutation CreateVenue($input: CreateVenueInput!) {
+    createVenue(input: $input) {
+        id
+        name
+        address
+        description
+        createdAt
+        updatedAt
+    }
+}
+
+mutation UpdateVenue($id: ID!, $input: UpdateVenueInput!) {
+    updateVenue(id: $id, input: $input) {
+        id
+        name
+        address
+        description
+        createdAt
+        updatedAt
+    }
+}

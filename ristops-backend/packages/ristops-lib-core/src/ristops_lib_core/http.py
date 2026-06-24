@@ -117,13 +117,18 @@ async def with_clients(*clients: tuple[HttpClient, str]) -> AsyncGenerator[None]
 
 
 class ResponseTransformer:
+    """Parses configured fields of a JSON object with the given per-field parser functions."""
 
     def __init__(self, **field_parsers: Callable):
         self._field_parsers = field_parsers
 
-    def get_json(self, response: Response) -> dict[str, Any]:
-        obj = response.json()
+    def transform(self, obj: dict[str, Any]) -> dict[str, Any]:
+        """Apply the configured parsers to the matching fields of `obj`, in place."""
         for field_name, parse_func in self._field_parsers.items():
             if (value := obj.get(field_name)) is not None:
                 obj[field_name] = parse_func(value)
         return obj
+
+    def get_json(self, response: Response) -> dict[str, Any]:
+        """Parse the response body and apply the configured field parsers."""
+        return self.transform(response.json())

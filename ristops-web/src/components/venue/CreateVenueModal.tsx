@@ -1,4 +1,5 @@
 import { Form, Input, Modal } from 'antd';
+import { useCreateVenue } from '../../domain/venue/venue.hooks.ts';
 
 interface CreateVenueFormValues {
   name: string;
@@ -13,17 +14,26 @@ interface CreateVenueModalProps {
 
 export default function CreateVenueModal({ open, onClose }: CreateVenueModalProps) {
   const [form] = Form.useForm<CreateVenueFormValues>();
+  const createVenue = useCreateVenue();
 
   function handleCancel() {
     form.resetFields();
     onClose();
   }
 
-  async function handleSubmit() {
-    const values = await form.validateFields();
-    console.log(values); // TODO: call venue creation API
-    form.resetFields();
-    onClose();
+  function handleSubmit() {
+    form
+      .validateFields()
+      .then(async (values) => {
+        // The mutation rejects on error, so the modal stays open and the
+        // hook surfaces the failure; we only reset/close on success.
+        await createVenue.mutateAsync(values);
+        form.resetFields();
+        onClose();
+      })
+      .catch(() => {
+        // validation and mutation errors are handled inline / by the hook
+      });
   }
 
   return (
@@ -32,11 +42,12 @@ export default function CreateVenueModal({ open, onClose }: CreateVenueModalProp
       open={open}
       onOk={handleSubmit}
       onCancel={handleCancel}
+      confirmLoading={createVenue.isPending}
       okText="Create"
       style={{ maxWidth: '90vw' }}
       styles={{
         mask: { backdropFilter: 'blur(4px)' },
-        content: { maxHeight: '90vh', display: 'flex', flexDirection: 'column' },
+        container: { maxHeight: '90vh', display: 'flex', flexDirection: 'column' },
         header: { textAlign: 'center' },
         body: { flex: 1, overflowY: 'auto', paddingTop: 24 },
       }}

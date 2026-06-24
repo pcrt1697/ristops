@@ -33,6 +33,6 @@ export const userApi = {
 };
 
 export const authZApi = {
-  myRoles: (resourceType: ResourceType, resourceId: string) =>
+  listMyRoles: (resourceType: ResourceType, resourceId: string) =>
     gqlRequest(ListMyRolesDocument, { input: { resourceType, resourceId } }),
 };

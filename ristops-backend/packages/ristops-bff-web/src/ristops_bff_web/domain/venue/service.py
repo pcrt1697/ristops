@@ -13,6 +13,16 @@ venue_transformer = ResponseTransformer(
 role_transformer = ResponseTransformer()
 
 
+async def search_venues(params: dict[str, Any]) -> dict[str, Any]:
+    response = await venue_client.client.get(
+        url="venues",
+        params=params,
+    )
+    page = response.json()
+    page["items"] = [venue_transformer.transform(item) for item in page["items"]]
+    return page
+
+
 async def find_venue(venue_id: str | UUID) -> dict[str, Any]:
     response = await venue_client.client.get(
         url=f"venues/{venue_id}",

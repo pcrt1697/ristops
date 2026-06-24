@@ -88,7 +88,7 @@ export function useCan(
 ) {
   const { data, isLoading } = useQuery({
     queryKey: ['auth.myRoles', resource.type, resource.id],
-    queryFn: () => authZApi.myRoles(resource.type, resource.id),
+    queryFn: () => authZApi.listMyRoles(resource.type, resource.id),
     staleTime: Infinity,
   });
 

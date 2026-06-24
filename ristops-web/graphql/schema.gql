@@ -1,7 +1,22 @@
 """Authorization resource definition."""
 type AuthorizationResource {
+  """ACL resource identifier"""
   resourceId: String!
+
+  """ACL resource type"""
   resourceType: ResourceType!
+}
+
+"""Venue information."""
+input CreateVenueInput {
+  """Name of the venue."""
+  name: String!
+
+  """Address of the venue."""
+  address: String!
+
+  """Description of the venue."""
+  description: String
 }
 
 """Date with time (isoformat)"""
@@ -9,7 +24,10 @@ scalar DateTime
 
 """User information to update."""
 input ListRolesInput {
+  """Resource identifier."""
   resourceId: String!
+
+  """Resource type."""
   resourceType: ResourceType!
 }
 
@@ -28,6 +46,30 @@ type Mutation {
     """User information to update."""
     input: UpdateUserInput!
   ): User!
+
+  """Create a new venue."""
+  createVenue(
+    """Venue information."""
+    input: CreateVenueInput!
+  ): Venue!
+
+  """Update venue data"""
+  updateVenue(
+    """Entity identifier."""
+    id: ID!
+
+    """Venue information to update."""
+    input: UpdateVenueInput!
+  ): Venue!
+}
+
+"""Pagination parameters."""
+input PaginationInput {
+  """0-indexed page number."""
+  page: Int! = 0
+
+  """Items per page."""
+  pageSize: Int! = 20
 }
 
 type Query {
@@ -41,16 +83,25 @@ type Query {
   me: User!
 
   """Fetch role by ID"""
-  role(
-    """Entity identifier."""
-    id: ID!
-  ): Role!
+  role(roleId: String!): Role!
 
   """Fetch roles assigned to the authenticated user on a resource"""
   myRoles(
     """User information to update."""
     input: ListRolesInput!
   ): UserRoleGrants!
+
+  """Fetch venue by ID"""
+  venue(
+    """Entity identifier."""
+    id: ID!
+  ): Venue!
+
+  """Search venues the user has access to."""
+  searchVenues(
+    """Venue search query."""
+    input: VenueSearchInput!
+  ): VenuePage!
 }
 
 enum ResourceType {
@@ -64,37 +115,159 @@ enum ResourceType {
 
 """Role entity information."""
 type Role {
+  """Role identifier."""
   id: String!
+
+  """Name of the role."""
   name: String!
+
+  """Description of the role."""
   description: String!
+
+  """List of permissions granted by the role."""
   permissions: [String!]!
+}
+
+"""Direction of a sort clause."""
+enum SortDirection {
+  ASC
+  DESC
 }
 
 """User information to update."""
 input UpdateUserInput {
+  """New username of the user."""
   username: String = null
+
+  """New display name of the user."""
   displayName: String = null
+
+  """New email address of the user."""
   email: String = null
+
+  """New password of the user."""
   password: String = null
+}
+
+"""Venue information to update."""
+input UpdateVenueInput {
+  """New name of the venue."""
+  name: String = null
+
+  """New address of the venue."""
+  address: String = null
+
+  """New description of the venue."""
+  description: String = null
 }
 
 """User entity information."""
 type User {
+  """User identifier."""
   id: String!
+
+  """Username of the user."""
   username: String!
+
+  """Display name of the user."""
   displayName: String
+
+  """Email address of the user."""
   email: String!
+
+  """Registration date."""
   createdAt: DateTime!
+
+  """Last update date."""
   updatedAt: DateTime!
 }
 
 """Resource the user has access to, given a specific set of permissions."""
 type UserRoleGrant {
+  """Resource identifier."""
   resource: AuthorizationResource!
+
+  """Role assigned on the resource."""
   role: Role!
 }
 
 """Resources the user has access to, given a specific set of permissions."""
 type UserRoleGrants {
+  """
+  List of resources the user has access to, given a specific set of permissions.
+  """
   grants: [UserRoleGrant!]!
+}
+
+"""Venue entity information."""
+type Venue {
+  """Venue identifier."""
+  id: String!
+
+  """Name of the venue."""
+  name: String!
+
+  """Address of the venue."""
+  address: String!
+
+  """Description of the venue."""
+  description: String
+
+  """Creation date."""
+  createdAt: DateTime!
+
+  """Last update date."""
+  updatedAt: DateTime!
+}
+
+"""Venue search filter."""
+input VenueFilterInput {
+  """Filter by venue name using `like` operator."""
+  name: String = null
+}
+
+"""A single page of results with pagination metadata."""
+type VenuePage {
+  """Items in the current page."""
+  items: [Venue!]!
+
+  """Total number of items across all pages."""
+  total: Int!
+
+  """0-indexed page number."""
+  page: Int!
+
+  """Number of items per page."""
+  pageSize: Int!
+
+  """Total number of pages."""
+  totalPages: Int!
+}
+
+"""Venue search query."""
+input VenueSearchInput {
+  """Pagination parameters."""
+  pagination: PaginationInput! = {page: 0}
+
+  """Sort instructions."""
+  sort: [VenueSortFieldSortInput!]! = []
+
+  """Filter parameters."""
+  filter: VenueFilterInput = null
+}
+
+"""Fields a venue search may be sorted by."""
+enum VenueSortField {
+  ID
+  NAME
+  CREATED_AT
+}
+
+"""A single sort instruction."""
+input VenueSortFieldSortInput {
+  """Field to sort by."""
+  field: VenueSortField!
+
+  """Sort direction."""
+  direction: SortDirection! = ASC
 }

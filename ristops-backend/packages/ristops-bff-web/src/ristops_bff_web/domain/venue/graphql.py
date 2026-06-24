@@ -1,10 +1,12 @@
 from datetime import datetime
+from enum import Enum
 from typing import Annotated
 from typing import Any
 
 import strawberry
 
-from ristops_bff_web.domain.venue.service import find_venue, create_venue, update_venue
+from ristops_bff_web.domain.venue.service import find_venue, create_venue, update_venue, search_venues
+from ristops_bff_web.graphql.pagination import Page, PaginationInput, SearchQueryParams, SortInput
 from ristops_bff_web.graphql.types import EntityId
 
 
@@ -34,6 +36,17 @@ async def resolve_update_venue(
 ) -> Venue:
     venue = await update_venue(venue_id, strawberry.asdict(_input))
     return Venue.from_dict(venue)
+
+
+async def resolve_search_venues(
+        _input: Annotated[
+            "VenueSearchInput",
+            strawberry.argument(description="Venue search query.", name="input")
+        ]
+) -> Page["Venue"]:
+    params = VenueQueryParams(_input).build()
+    page = await search_venues(params)
+    return Page.from_dict(page, Venue.from_dict)
 
 
 @strawberry.type(
@@ -96,12 +109,57 @@ class UpdateVenueInput:
     )
     address: str | None = strawberry.field(
         default=None,
-        description="New address of the user.",
+        description="New address of the venue.",
     )
     description: str | None = strawberry.field(
         default=None,
         description="New description of the venue.",
     )
+
+
+@strawberry.input(
+    description="Venue search filter.",
+)
+class VenueFilterInput:
+    name: str | None = strawberry.field(
+        default=None,
+        description="Filter by venue name using `like` operator.",
+    )
+
+
+@strawberry.enum(description="Fields a venue search may be sorted by.")
+class VenueSortField(Enum):
+    ID = "id"
+    NAME = "name"
+    CREATED_AT = "created_at"
+
+
+@strawberry.input(description="Venue search query.")
+class VenueSearchInput:
+    pagination: PaginationInput = strawberry.field(
+        default_factory=PaginationInput,
+        description="Pagination parameters.",
+    )
+    sort: list[SortInput[VenueSortField]] = strawberry.field(
+        default_factory=list,
+        description="Sort instructions.",
+    )
+    filter: VenueFilterInput | None = strawberry.field(
+        default=None,
+        description="Filter parameters.",
+    )
+
+
+class VenueQueryParams(SearchQueryParams):
+    """Builds the backend venue-search query params from a VenueSearchInput."""
+
+    def __init__(self, search: VenueSearchInput) -> None:
+        super().__init__(search.pagination, search.sort)
+        self._filter = search.filter
+
+    def _finalize(self) -> None:
+        if self._filter is not None:
+            self._set_filter("name", self._filter.name)
 
 
 @strawberry.type
@@ -110,7 +168,10 @@ class VenueQuery:
         resolver=resolve_get_venue,
         description="Fetch venue by ID",
     )
-    # todo: add my venues
+    searchVenues: Page[Venue] = strawberry.field(
+        resolver=resolve_search_venues,
+        description="Search venues the user has access to.",
+    )
 
 
 @strawberry.type

@@ -34,6 +34,23 @@ Three schema extensions run on every operation:
 | `ErrorHandlingExtension` | Maps internal exceptions to GraphQL errors |
 | `ContextExtension` | Populates `APP_CONTEXT` with the GraphQL operation name |
 
+## Pagination
+
+`graphql/pagination.py` mirrors the backend's pagination contract as reusable GraphQL types, so
+every searchable domain shares one shape:
+
+| Type | Purpose |
+|------|---------|
+| `PaginationInput` / `SortDirection` | Pagination and sort-direction inputs |
+| `SortInput[F]` | A sort instruction, generic over a per-resource sort-field enum |
+| `Page[T]` | Generic result type — `Page[Venue]` materialises as `VenuePage` in the schema |
+| `SearchQueryParams` | Base helper that builds the backend query-param dict from pagination + sort; subclasses add their `filter.` params |
+
+A domain composes these into a search input and translates it to backend query parameters
+(`page`, `page_size`, `sort`, `filter.*`) through a `SearchQueryParams` subclass before calling the
+downstream service — for example `searchVenues(input: VenueSearchInput): VenuePage`, which forwards
+to `be-venue`'s scoped list endpoint.
+
 ## Frontend type generation
 
 The merged schema is exposed at module level in `ristops_bff_web.graphql.schema` so it can be

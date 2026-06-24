@@ -21,8 +21,8 @@ from ristops_lib_sql.engine import sql_transactional
 
 _venue_path_resolver = BaseResourceResolver(ResourceType.VENUE)
 venue_router = APIRouter(
-    prefix="/venue",
-    tags=["venue"],
+    prefix="/venues",
+    tags=["venues"],
 )
 
 

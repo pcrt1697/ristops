@@ -45,6 +45,33 @@ accessed.
 async def get_location(location_id: str): ...
 ```
 
+## Authorization client
+
+Two helpers let a service talk to `be-authz` over HTTP, separate from the interceptor's own check.
+
+`CheckAuthorizationPolicy` is a thin client over `be-authz`'s `/acl/check` endpoint — it answers
+"does this user satisfy these grants?" and is the authorizer the `AuthZInterceptor` delegates to.
+
+`AuthorizationResourceGrantsFetcher` is a FastAPI dependency that **scopes** a query rather than
+gating it. Given a resource type and a set of permissions, it fetches the resources of that type
+the user may access, so a list endpoint can filter results down to the user's own resources. It
+never raises on missing access — that decision stays with `@policy` — and when the user satisfies
+an optional `override_policies` (e.g. an admin who can list everything), it returns `None` to
+signal unrestricted access.
+
+```python
+venue_grants: Annotated[
+    ListUserResourceGrantsResponse | None,
+    Depends(AuthorizationResourceGrantsFetcher(
+        authz_client_factory, ResourceType.VENUE, "venue~get",
+        override_policies=(Policy(resolve_static_resource("*", ResourceType.APP), "venue~list"),),
+    )),
+]
+```
+
+Because the interceptor runs before any endpoint dependency, authorization is always enforced
+before the fetcher executes — the fetcher only ever shapes results, never grants access.
+
 ## Stream event base types
 
 This module provides the base class and event type enum shared by all Redis stream producers

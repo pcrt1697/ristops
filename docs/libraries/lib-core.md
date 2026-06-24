@@ -13,7 +13,7 @@ the call chain reads them by key. Standard keys are defined in `ContextKey`: `US
 `REQUEST_ID`, `CORRELATION_ID`.
 
 It is also the mechanism that ties distributed tracing together: `RequestContextMiddleware` sets
-the correlation ID from the incoming request header, `HttpClientService` forwards it to downstream
+the correlation ID from the incoming request header, `HttpClient` forwards it to downstream
 HTTP calls, and `BaseEvent` carries it into Redis stream messages — all automatically, without any
 code in the business layer needing to know about it.
 
@@ -82,9 +82,57 @@ Sub-prefixes by concern:
 
 ## HTTP client
 
-`HttpClientService` wraps `httpx.AsyncClient`. On every outgoing request it automatically
-injects `x-correlation-id`, `x-request-id`, and `Authorization: Bearer <jwt>` from
-`APP_CONTEXT`, so distributed traces are propagated without any manual wiring.
+`HttpClient` wraps a single `httpx.AsyncClient` bound to one downstream service. On every outgoing
+request it automatically injects `x-correlation-id`, `x-request-id`, and
+`Authorization: Bearer <jwt>` from `APP_CONTEXT`, so distributed traces are propagated without any
+manual wiring.
+
+A service declares one client per downstream dependency and binds them all for the application
+lifetime with `with_clients`:
+
+```python
+authn_client = HttpClient()
+authz_client = HttpClient()
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    async with with_clients(
+        (authn_client, settings.authn_url),
+        (authz_client, settings.authz_url),
+    ):
+        yield
+```
+
+Each client exposes its bound `httpx.AsyncClient` via `.client`; using it outside the
+`with_clients` context raises. Clients are independent objects, so each domain imports only the
+ones it needs rather than reaching into a shared registry.
+
+## Pagination & search
+
+`schema/pagination.py` provides the shared building blocks for list endpoints:
+
+| Type | Purpose |
+|------|---------|
+| `PaginationParams` | `page` / `page_size` query parameters |
+| `SortClause` / `SortDirection` | A parsed sort instruction |
+| `SearchQuery` | Base query model — pagination + sort, with filter fields mixed in by a subclass |
+| `Page[T]` | A page of results plus `total` / `total_pages` metadata |
+
+A concrete query composes a filter model and declares its sortable fields via a `StrEnum`:
+
+```python
+class VenueSearchQuery(SearchQuery, VenueSearchFilter):
+    sort_field_enum: ClassVar[type[StrEnum]] = VenueSortField
+```
+
+Two conventions make these usable directly as FastAPI query parameters:
+
+- Filter fields are exposed under a `filter.` prefix (`?filter.name=…`) while pagination and sort
+  stay bare, via a scoped Pydantic alias generator. This keeps a single combined model (FastAPI
+  expands only one query model per endpoint) while preserving the filter grouping.
+- `sort_field_enum` is the single source of truth for sortable fields: it both validates the
+  submitted `sort` values and feeds the OpenAPI description. Clients pass a repeatable `sort`
+  param, prefixing a field with `-` for descending (`?sort=name&sort=-created_at`).
 
 ## CLI plugin system
 
