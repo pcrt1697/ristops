@@ -82,7 +82,7 @@ class PermissionGrant(BaseModel):
     role_id: str = Field(description="Role that grants the permissions")
 
 
-class ListUserRolesResponse(BaseModel):
+class ListUserGrantsResponse(BaseModel):
     grants: list[PermissionGrant] = Field(description="Permission grants, grouped by role and source resource")
 
 
@@ -93,3 +93,13 @@ class ResourceGrant(BaseModel):
 
 class ListUserResourceGrantsResponse(BaseModel):
     grants: list[ResourceGrant] = Field(description="Permission grants, grouped by role and source resource")
+
+
+class ListRolesQuery(BaseModel):
+    role_id: str | None = Field(default=None, description="Filter by role id using `contains` operator")
+    role_name: str | None = Field(default=None, description="Filter by role name using `contains` operator")
+    permission: str | None = Field(default=None, description="Filter by permission name using `contains` operator")
+
+
+class ListRolesResponse(BaseModel):
+    roles: list[RoleResponse] = Field(description="List of roles")

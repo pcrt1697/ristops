@@ -92,9 +92,17 @@ async def find_role(role_id: str) -> dict[str, Any]:
     return role_transformer.get_json(response)
 
 
-async def find_user_roles(user_id: str | UUID, list_roles_input: dict[str, Any]) -> dict[str, Any]:
+async def find_user_roles(user_id: str | UUID, list_grants_input: dict[str, Any]) -> dict[str, Any]:
     response = await authz_client.client.get(
         url=f"users/{user_id}/roles",
-        params=list_roles_input,
+        params=list_grants_input,
     )
     return response.json()
+
+
+async def list_roles(params: dict[str, Any]) -> list[dict[str, Any]]:
+    response = await authz_client.client.get(
+        url="roles",
+        params=params,
+    )
+    return response.json()["roles"]

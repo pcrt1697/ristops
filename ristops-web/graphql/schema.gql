@@ -22,13 +22,25 @@ input CreateVenueInput {
 """Date with time (isoformat)"""
 scalar DateTime
 
-"""User information to update."""
-input ListRolesInput {
+"""Input query to list grants."""
+input ListGrantsInput {
   """Resource identifier."""
   resourceId: String!
 
   """Resource type."""
   resourceType: ResourceType!
+}
+
+"""Input query to list roles."""
+input ListRolesInput {
+  """Filter by role id using `contains` operator."""
+  roleId: String = null
+
+  """Filter by role name using `contains` operator."""
+  roleName: String = null
+
+  """Filter by permission using `contains` operator."""
+  permission: String = null
 }
 
 type Mutation {
@@ -86,10 +98,16 @@ type Query {
   role(roleId: String!): Role!
 
   """Fetch roles assigned to the authenticated user on a resource"""
-  myRoles(
-    """User information to update."""
-    input: ListRolesInput!
+  myGrants(
+    """Query for user grants."""
+    input: ListGrantsInput!
   ): UserRoleGrants!
+
+  """List app roles, optionally filtered by id, name or permission"""
+  listRoles(
+    """Query for roles."""
+    input: ListRolesInput!
+  ): RolesList!
 
   """Fetch venue by ID"""
   venue(
@@ -126,6 +144,12 @@ type Role {
 
   """List of permissions granted by the role."""
   permissions: [String!]!
+}
+
+"""List of app roles."""
+type RolesList {
+  """List of roles."""
+  roles: [Role!]!
 }
 
 """Direction of a sort clause."""

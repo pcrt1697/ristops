@@ -1,5 +1,5 @@
-query ListMyRoles($input: ListRolesInput!) {
-    myRoles(input: $input) {
+query ListMyGrants($input: ListGrantsInput!) {
+    myGrants(input: $input) {
         grants {
             resource {
                 resourceId

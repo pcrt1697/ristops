@@ -4,7 +4,7 @@ from typing import Any
 
 import strawberry
 
-from ristops_bff_web.domain.auth.service import find_user, find_me, update_user, find_role, find_user_roles
+from ristops_bff_web.domain.auth.service import find_user, find_me, update_user, find_role, find_user_roles, list_roles
 from ristops_bff_web.graphql.types import EntityId
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
 from ristops_lib_core.schema.authz import ResourceType as _ResourceType
@@ -51,10 +51,10 @@ async def resolve_get_role(
     return Role.from_dict(role)
 
 
-async def resolve_get_my_roles(
+async def resolve_get_my_grants(
         _input: Annotated[
-            ListRolesInput,
-            strawberry.argument(description="User information to update.", name="input")
+            ListGrantsInput,
+            strawberry.argument(description="Query for user grants.", name="input")
         ]
 ) -> UserRoleGrants:
     user_id = APP_CONTEXT.get_or_throw(ContextKey.USER_ID)
@@ -77,6 +77,15 @@ class RoleIdAware(Protocol):
 
 async def _resolve_role(root: RoleIdAware, _: strawberry.Info) -> Role:
     return await resolve_get_role(root.role_id)
+
+
+async def _resolve_list_roles(
+        _input: Annotated[
+            ListRolesInput,
+            strawberry.argument(description="Query for roles.", name="input")
+        ]) -> RolesList:
+    roles = await list_roles(strawberry.asdict(_input))
+    return RolesList.from_dict(roles)
 
 
 ResourceType = strawberry.enum(_ResourceType)
@@ -190,9 +199,45 @@ class UserRoleGrants:
 
 
 @strawberry.input(
-    description="User information to update.",
+    description="Input query to list roles.",
 )
 class ListRolesInput:
+    role_id: str | None = strawberry.field(
+        default=None,
+        description="Filter by role id using `contains` operator.",
+    )
+    role_name: str | None = strawberry.field(
+        default=None,
+        description="Filter by role name using `contains` operator.",
+    )
+    permission: str | None = strawberry.field(
+        default=None,
+        description="Filter by permission using `contains` operator.",
+    )
+
+
+@strawberry.type(
+    description="List of app roles.",
+)
+class RolesList:
+    roles: list[Role] = strawberry.field(
+        description="List of roles.",
+    )
+
+    @classmethod
+    def from_dict(cls, items: list[dict[str, Any]]) -> "RolesList":
+        return RolesList(
+            roles=[
+                Role.from_dict(role)
+                for role in items
+            ]
+        )
+
+
+@strawberry.input(
+    description="Input query to list grants.",
+)
+class ListGrantsInput:
     resource_id: str = strawberry.field(
         description="Resource identifier.",
     )
@@ -215,9 +260,13 @@ class AuthQuery:
         resolver=resolve_get_role,
         description="Fetch role by ID",
     )
-    my_roles: UserRoleGrants = strawberry.field(
-        resolver=resolve_get_my_roles,
+    my_grants: UserRoleGrants = strawberry.field(
+        resolver=resolve_get_my_grants,
         description="Fetch roles assigned to the authenticated user on a resource",
+    )
+    list_roles: RolesList = strawberry.field(
+        resolver=_resolve_list_roles,
+        description="List app roles, optionally filtered by id, name or permission",
     )
 
 

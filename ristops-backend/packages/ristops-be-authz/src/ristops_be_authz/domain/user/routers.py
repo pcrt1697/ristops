@@ -8,7 +8,7 @@ from ristops_lib_be.authz.policy import (
 )
 from ristops_lib_core.schema.authz import (
     ResourceType,
-    ListUserRolesResponse, ListUserResourceGrantsResponse,
+    ListUserGrantsResponse, ListUserResourceGrantsResponse,
 )
 from ristops_lib_neo4j.engine import neo4j_transactional
 
@@ -21,7 +21,7 @@ user_router = APIRouter(
 
 @user_router.get(
     "/{user_id}/roles",
-    response_model=ListUserRolesResponse,
+    response_model=ListUserGrantsResponse,
 )
 @policy(Policy(_user_path_resolver, "role~list"))
 @neo4j_transactional
@@ -29,10 +29,10 @@ async def list_roles(
         user_id: Annotated[str, Path(description="User ID")],
         resource_id: Annotated[str, Query(description="Resource ID")],
         resource_type: Annotated[str, Query(description="Resource type")],
-) -> ListUserRolesResponse:
+) -> ListUserGrantsResponse:
     """List unique permissions a user holds on a resource, including permissions inherited from ancestor resources."""
     grants = await list_user_roles(user_id, resource_type, resource_id)
-    return ListUserRolesResponse(grants=grants)
+    return ListUserGrantsResponse(grants=grants)
 
 
 @user_router.get(
