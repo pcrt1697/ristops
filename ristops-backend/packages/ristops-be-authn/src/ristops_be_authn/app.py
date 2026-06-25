@@ -6,7 +6,7 @@ from fastapi import FastAPI, APIRouter, Depends
 
 from ristops_be_authn.domain.authn.routers import auth_router
 from ristops_be_authn.domain.authn.service import decode_access_token
-from ristops_be_authn.domain.user.routers import user_router
+from ristops_be_authn.domain.user.routers import user_router, member_router
 from ristops_be_authn.services.authz import is_authorized
 from ristops_be_authn.services.http import authz_client
 from ristops_be_authn.settings import BackendServiceSettings
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
     api_router = APIRouter(prefix="/api")
     api_router.include_router(auth_router)
     api_router.include_router(user_router)
+    api_router.include_router(member_router)
     app.include_router(api_router)
 
     public_registry = PublicRoutesRegistry(app)

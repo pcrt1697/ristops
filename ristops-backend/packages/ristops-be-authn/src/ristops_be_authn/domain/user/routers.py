@@ -2,17 +2,20 @@ from http import HTTPStatus
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.params import Path
 
-from ristops_be_authn.domain.user.schema import UserCreationRequest, UserUpdateRequest
+from ristops_be_authn.domain.user.schema import (
+    UserCreationRequest, UserUpdateRequest, MemberResponse, MemberSearchQuery,
+)
 from ristops_be_authn.domain.user.service import (
-    create_user, update_user, find_user_or_throw, find_me, remove_user, remove_me
+    create_user, update_user, find_user_or_throw, find_me, remove_user, remove_me, search_members
 )
 from ristops_lib_be.authz.policy import policy, Policy, BaseResourceResolver
 from ristops_lib_core.auth.authn import public
 from ristops_lib_core.exception import ErrorResponse
 from ristops_lib_core.schema.authz import ResourceType
+from ristops_lib_core.schema.pagination import Page
 from ristops_lib_core.schema.user import UserResponse
 from ristops_lib_sql.engine import sql_transactional
 
@@ -22,6 +25,38 @@ user_router = APIRouter(
     prefix="/users",
     tags=["users"],
 )
+
+member_router = APIRouter(
+    prefix="/members",
+    tags=["members"],
+)
+
+
+@member_router.get(
+    "",
+    response_model=Page[MemberResponse],
+)
+@policy()
+@sql_transactional
+async def search_member(
+        query: Annotated[MemberSearchQuery, Query()],
+) -> Page[MemberResponse]:
+    """Search members: the public view of users. Any authenticated user may call this."""
+    return await search_members(query)
+
+
+@member_router.get(
+    "/{user_id}",
+    response_model=MemberResponse,
+)
+@policy()
+@sql_transactional
+async def get_member(
+        user_id: Annotated[UUID, Path(description="User ID")],
+) -> MemberResponse:
+    """Fetch a member: the public view of a user. Any authenticated user may call this."""
+    user = await find_user_or_throw(user_id)
+    return MemberResponse.model_validate(user, from_attributes=True)
 
 
 @user_router.get(

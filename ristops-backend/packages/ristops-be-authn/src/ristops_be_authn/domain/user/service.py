@@ -9,12 +9,16 @@ from pydantic import SecretStr
 from sqlalchemy import select, ScalarResult, ColumnElement
 
 from ristops_be_authn.domain.user.entities import UserEntity
-from ristops_be_authn.domain.user.schema import UserCreationRequest, UserUpdateRequest
+from ristops_be_authn.domain.user.schema import (
+    UserCreationRequest, UserUpdateRequest, MemberResponse, MemberSearchQuery,
+)
 from ristops_be_authn.services.authz import publish_user_created_event, publish_user_deleted_event
 from ristops_be_authn.settings import Argon2Settings
 from ristops_lib_core.auth.authn import RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
+from ristops_lib_core.schema.pagination import Page
 from ristops_lib_sql.engine import get_sql_session
+from ristops_lib_sql.search import SearchQueryExecutor
 
 _logger = logging.getLogger(__name__)
 _admin_id = uuid5(RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME)
@@ -175,6 +179,28 @@ async def _find_user_by_or_throw(query: ColumnElement[bool]) -> UserEntity:
 async def find_me() -> UserEntity:
     user_id = APP_CONTEXT.get_or_throw(ContextKey.USER_ID)
     return await find_user_or_throw(user_id)
+
+
+def _build_member_conditions(query: MemberSearchQuery, _scope: None) -> list[ColumnElement[bool]]:
+    """Build the WHERE conditions for a member search from its filter fields."""
+    conditions: list[ColumnElement[bool]] = []
+    if query.username is not None:
+        conditions.append(UserEntity.username.ilike(f"%{query.username}%"))
+    if query.display_name is not None:
+        conditions.append(UserEntity.display_name.ilike(f"%{query.display_name}%"))
+    return conditions
+
+
+_member_search_executor = SearchQueryExecutor[MemberSearchQuery, None, UserEntity, MemberResponse](
+    entity_class=UserEntity,
+    response_class=MemberResponse,
+    condition_builder=_build_member_conditions,
+)
+
+
+async def search_members(query: MemberSearchQuery) -> Page[MemberResponse]:
+    """Return a page of members: the public view of users."""
+    return await _member_search_executor.execute(query, None)
 
 
 async def authenticate_user(email: str, password: str) -> str:

@@ -219,6 +219,36 @@ simpler to reason about than full policy engines.
 
 ---
 
+### Deterministic ACL identity (one ACL per user / resource / role)
+
+**Context:** An ACL grant links a user to a resource with a role
+(`(:User)-[:HAS_ACCESS]->(:Acl)-[:ON]->(:Resource)` and `(:Acl)-[:WITH_ROLE]->(:Role)`).
+The original implementation gave each `Acl` a random `uuid4` and `MERGE`d the access path
+keyed only on `(user, resource)`. The role was outside the merge key, so granting a second
+role on the same resource reused the existing `Acl` node (attaching multiple `WITH_ROLE`
+relationships) and the `ON CREATE` clause overwrote the node id. There was no database-level
+guarantee of a single ACL per `(user, resource, role)` tuple.
+
+**Decision:** Derive the `Acl` id deterministically from the tuple —
+`uuid5(namespace, "{user_id}|{resource_type}|{resource_id}|{role_id}")` — and `MERGE` on
+`(:Acl {id})`, then `MERGE` each relationship individually. The pre-existing
+`acl_id IS UNIQUE` constraint then enforces one ACL per tuple.
+
+**Why:** A natural-key id turns the existing uniqueness constraint into tuple-level
+enforcement at the database, prevents roles from collapsing onto a shared node, and gives both
+grant and revoke an unambiguous target (the node with the recomputed id) with no traversal.
+Because creating an existing grant now writes nothing, grant can detect the duplicate from the
+query counters and reject it with `409 Conflict` (and revoke likewise returns `404` when the
+target ACL is absent) — the response always reflects what actually changed.
+
+**Trade-off:** The id is no longer opaque — it is a pure function of the grant tuple.
+Acceptable: the tuple is the natural identity of a grant, and a reproducible id is shared
+cleanly between grant and revoke.
+
+**Status:** Accepted
+
+---
+
 ### Redis Streams for async service-to-service messaging
 
 **Context:** Services need to publish and consume events asynchronously

@@ -1,10 +1,15 @@
 from datetime import datetime
+from enum import Enum
 from typing import Annotated, Protocol
 from typing import Any
 
 import strawberry
 
-from ristops_bff_web.domain.auth.service import find_user, find_me, update_user, find_role, find_user_roles, list_roles
+from ristops_bff_web.domain.auth.service import (
+    find_user, find_me, update_user, find_role, find_user_roles, list_roles, grant_access,
+    revoke_access, find_member, search_members,
+)
+from ristops_bff_web.graphql.pagination import Page, PaginationInput, SearchQueryParams, SortInput
 from ristops_bff_web.graphql.types import EntityId
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
 from ristops_lib_core.schema.authz import ResourceType as _ResourceType
@@ -75,8 +80,32 @@ class RoleIdAware(Protocol):
     role_id: str
 
 
+class UserIdAware(Protocol):
+    user_id: str
+
+
 async def _resolve_role(root: RoleIdAware, _: strawberry.Info) -> Role:
     return await resolve_get_role(root.role_id)
+
+
+async def resolve_get_member(user_id: EntityId) -> "Member":
+    member = await find_member(user_id)
+    return Member.from_dict(member)
+
+
+async def resolve_search_members(
+        _input: Annotated[
+            "MemberSearchInput",
+            strawberry.argument(description="Member search query.", name="input")
+        ]
+) -> Page["Member"]:
+    params = MemberQueryParams(_input).build()
+    page = await search_members(params)
+    return Page.from_dict(page, Member.from_dict)
+
+
+async def _resolve_member(root: UserIdAware, _: strawberry.Info) -> "Member":
+    return await resolve_get_member(root.user_id)
 
 
 async def _resolve_list_roles(
@@ -86,6 +115,26 @@ async def _resolve_list_roles(
         ]) -> RolesList:
     roles = await list_roles(strawberry.asdict(_input))
     return RolesList.from_dict(roles)
+
+
+async def resolve_grant_access(
+        _input: Annotated[
+            GrantAccessInput,
+            strawberry.argument(description="Access grant request.", name="input")
+        ]
+) -> Acl:
+    acl = await grant_access(strawberry.asdict(_input))
+    return Acl.from_dict(acl)
+
+
+async def resolve_revoke_access(
+        _input: Annotated[
+            RevokeAccessInput,
+            strawberry.argument(description="Access revoke request.", name="input")
+        ]
+) -> bool:
+    await revoke_access(strawberry.asdict(_input))
+    return True
 
 
 ResourceType = strawberry.enum(_ResourceType)
@@ -246,6 +295,146 @@ class ListGrantsInput:
     )
 
 
+@strawberry.input(
+    description="Request to grant a role to a user on a resource.",
+)
+class GrantAccessInput:
+    user_id: str = strawberry.field(
+        description="ID of the user to grant access to.",
+    )
+    role_id: str = strawberry.field(
+        description="Role to grant on the resource.",
+    )
+    resource_id: str = strawberry.field(
+        description="Resource identifier.",
+    )
+    resource_type: ResourceType = strawberry.field(
+        description="Resource type.",
+    )
+
+
+@strawberry.input(
+    description="Request to revoke a role from a user on a resource.",
+)
+class RevokeAccessInput:
+    user_id: str = strawberry.field(
+        description="ID of the user to revoke access from.",
+    )
+    role_id: str = strawberry.field(
+        description="Role to revoke on the resource.",
+    )
+    resource_id: str = strawberry.field(
+        description="Resource identifier.",
+    )
+    resource_type: ResourceType = strawberry.field(
+        description="Resource type.",
+    )
+
+
+@strawberry.type(
+    description="Access control entry granting a role to a user on a resource.",
+)
+class Acl:
+    role_id: strawberry.Private[str]
+    user_id: strawberry.Private[str]
+    id: str = strawberry.field(description="ACL identifier.")
+    created_at: datetime = strawberry.field(description="Creation date.")
+    resource: AuthorizationResource = strawberry.field(
+        description="Resource the access was granted on.",
+    )
+    role: Role = strawberry.field(
+        description="Role granted on the resource.",
+        resolver=_resolve_role,
+    )
+    user: "Member" = strawberry.field(
+        description="User the access was granted to (public view).",
+        resolver=_resolve_member,
+    )
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "Acl":
+        return Acl(
+            id=obj["id"],
+            created_at=obj["created_at"],
+            role_id=obj["role_id"],
+            user_id=obj["user_id"],
+            resource=AuthorizationResource(
+                resource_id=obj["resource"]["resource_id"],
+                resource_type=obj["resource"]["resource_type"],
+            ),
+        )
+
+
+@strawberry.type(
+    description="Public view of a user.",
+)
+class Member:
+    id: str = strawberry.field(description="User identifier.")
+    username: str = strawberry.field(description="Username of the member.")
+    display_name: str | None = strawberry.field(description="Display name of the member.")
+    created_at: datetime = strawberry.field(description="Registration date.")
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "Member":
+        return Member(
+            id=obj["id"],
+            username=obj["username"],
+            display_name=obj.get("display_name"),
+            created_at=obj["created_at"],
+        )
+
+
+@strawberry.input(
+    description="Member search filter.",
+)
+class MemberFilterInput:
+    username: str | None = strawberry.field(
+        default=None,
+        description="Filter by username using `like` operator.",
+    )
+    display_name: str | None = strawberry.field(
+        default=None,
+        description="Filter by display name using `like` operator.",
+    )
+
+
+@strawberry.enum(description="Fields a member search may be sorted by.")
+class MemberSortField(Enum):
+    ID = "id"
+    USERNAME = "username"
+    DISPLAY_NAME = "display_name"
+    CREATED_AT = "created_at"
+
+
+@strawberry.input(description="Member search query.")
+class MemberSearchInput:
+    pagination: PaginationInput = strawberry.field(
+        default_factory=PaginationInput,
+        description="Pagination parameters.",
+    )
+    sort: list[SortInput[MemberSortField]] = strawberry.field(
+        default_factory=list,
+        description="Sort instructions.",
+    )
+    filter: MemberFilterInput | None = strawberry.field(
+        default=None,
+        description="Filter parameters.",
+    )
+
+
+class MemberQueryParams(SearchQueryParams):
+    """Builds the backend member-search query params from a MemberSearchInput."""
+
+    def __init__(self, search: MemberSearchInput) -> None:
+        super().__init__(search.pagination, search.sort)
+        self._filter = search.filter
+
+    def _finalize(self) -> None:
+        if self._filter is not None:
+            self._set_filter("username", self._filter.username)
+            self._set_filter("display_name", self._filter.display_name)
+
+
 @strawberry.type
 class AuthQuery:
     user: User = strawberry.field(
@@ -268,6 +457,14 @@ class AuthQuery:
         resolver=_resolve_list_roles,
         description="List app roles, optionally filtered by id, name or permission",
     )
+    member: Member = strawberry.field(
+        resolver=resolve_get_member,
+        description="Fetch a member (public user view) by ID",
+    )
+    search_members: Page[Member] = strawberry.field(
+        resolver=resolve_search_members,
+        description="Search members (public user view)",
+    )
 
 
 @strawberry.type
@@ -279,4 +476,12 @@ class AuthMutation:
     update_me = strawberry.mutation(
         resolver=resolve_update_me,
         description="Update current user data",
+    )
+    grant_access = strawberry.mutation(
+        resolver=resolve_grant_access,
+        description="Grant a role to a user on a resource",
+    )
+    revoke_access = strawberry.mutation(
+        resolver=resolve_revoke_access,
+        description="Revoke a role from a user on a resource",
     )

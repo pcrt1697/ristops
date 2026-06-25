@@ -22,6 +22,7 @@ class UserEntity(Base):
     )
     display_name: Mapped[str | None] = mapped_column(
         String(60),
+        index=True,
     )
     email: Mapped[str] = mapped_column(
         String(320),
@@ -33,6 +34,7 @@ class UserEntity(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
+        index=True,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

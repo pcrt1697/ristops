@@ -1,6 +1,9 @@
 import logging
 from datetime import datetime, UTC
-from uuid import uuid5, uuid4
+from http import HTTPStatus
+from uuid import uuid5
+
+from fastapi import HTTPException
 
 from ristops_be_authz.domain.models import AclNode
 from ristops_be_authz.domain.resource.service import (
@@ -8,7 +11,10 @@ from ristops_be_authz.domain.resource.service import (
 )
 from ristops_be_authz.domain.role.service import find_role_by_id_or_throw
 from ristops_lib_core.auth.authn import RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME
-from ristops_lib_core.schema.authz import GrantAccessRequest, CheckAuthorizationRequest, ResourceType
+from ristops_lib_core.schema.authz import (
+    GrantAccessRequest, RevokeAccessRequest, CheckAuthorizationRequest,
+    ResourceType, AuthorizationResource
+)
 from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transactional
 
 _logger = logging.getLogger(__name__)
@@ -16,48 +22,97 @@ _SYSTEM_ADMIN_ROLE = "admin"
 _SYSTEM_MEMBER_ROLE = "member"
 
 
-async def grant_access(request: GrantAccessRequest) -> AclNode:
-    """ Grants the user to access resource. If the ACL entry already exists, then it is not created. """
+def get_acl_id(user_id: str, resource_type: ResourceType, resource_id: str, role_id: str) -> str:
+    _acl_id = uuid5(
+        RISTOPS_NAMESPACE_UUID,
+        f"{user_id}|{resource_type.value}|{resource_id}|{role_id}",
+    )
+    return str(_acl_id)
 
-    await throw_if_resource_not_exists(request.resource_type.value, request.resource_id)
+
+async def grant_access(request: GrantAccessRequest) -> AclNode:
+    """ Grant the user access to the resource with the given role. Idempotent per (user, resource, role). """
+
+    await throw_if_resource_not_exists(request.resource.resource_type.value, request.resource.resource_id)
     role = await find_role_by_id_or_throw(request.role_id)
 
     transaction = get_neo4j_transaction()
-    _acl_id = uuid4()
+    # deterministic id from the (user, resource, role) tuple: the acl_id UNIQUE constraint then
+    # enforces a single ACL per tuple and makes the grant idempotent.
+    acl_id = get_acl_id(
+        user_id=request.user_id,
+        resource_type=request.resource.resource_type,
+        resource_id=request.resource.resource_id,
+        role_id=role.id,
+    )
 
-    _logger.info(f"Creating ACL entry {_acl_id}")
+    _logger.info(f"Creating ACL entry {acl_id}")
     result = await transaction.run(
         """
         MATCH (role:Role {id: $role_id})
         MATCH (r:Resource {resource_type: $resource_type, resource_id: $resource_id})
         MERGE (u:User {id: $user_id})
-        ON CREATE SET u.id = $user_id, u.created_at = $created_at
-        MERGE (u)-[:HAS_ACCESS]->(acl:Acl)-[:ON]->(r)
+          ON CREATE SET u.created_at = $created_at
+        MERGE (acl:Acl {id: $acl_id})
+          ON CREATE SET acl.created_at = $created_at
+        MERGE (u)-[:HAS_ACCESS]->(acl)
+        MERGE (acl)-[:ON]->(r)
         MERGE (acl)-[:WITH_ROLE]->(role)
-        ON CREATE SET acl.id = $acl_id, acl.created_at = $created_at
         RETURN acl
         """,
         role_id=role.id,
         user_id=request.user_id,
-        resource_type=request.resource_type.value,
-        resource_id=request.resource_id,
-        acl_id=str(_acl_id),
+        resource_type=request.resource.resource_type.value,
+        resource_id=request.resource.resource_id,
+        acl_id=acl_id,
         created_at=datetime.now(UTC).isoformat(),
     )
     record = await result.single()
     if record is None:
         raise RuntimeError("Failed to create ACL entry")
+    summary = await result.consume()
+    if summary.counters.relationships_created == 0:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail="ACL entry already exists",
+        )
     node = AclNode.model_validate(record["acl"])
     _logger.info(f"Created ACL entry {node.id}")
     return node
+
+
+async def revoke_access(request: RevokeAccessRequest) -> None:
+    """Revoke a user's role grant on a resource by deleting the matching ACL entry."""
+    acl_id = get_acl_id(
+        user_id=request.user_id,
+        resource_type=request.resource.resource_type,
+        resource_id=request.resource.resource_id,
+        role_id=request.role_id,
+    )
+    transaction = get_neo4j_transaction()
+    result = await transaction.run(
+        """
+        MATCH (acl:Acl {id: $acl_id})
+        DETACH DELETE acl
+        """,
+        {"acl_id": acl_id},
+    )
+    summary = await result.consume()
+    if summary.counters.nodes_deleted == 0:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail="ACL entry not found",
+        )
 
 
 async def create_member_acl(user_id: str) -> None:
     request = GrantAccessRequest(
         user_id=user_id,
         role_id=_SYSTEM_MEMBER_ROLE,
-        resource_id=user_id,
-        resource_type=ResourceType.USER,
+        resource=AuthorizationResource(
+            resource_id=user_id,
+            resource_type=ResourceType.USER,
+        ),
     )
     await grant_access(request)
 
@@ -86,8 +141,10 @@ async def setup_admin_acl() -> None:
     request = GrantAccessRequest(
         user_id=admin_id,
         role_id=_SYSTEM_ADMIN_ROLE,
-        resource_id="*",
-        resource_type=ResourceType.APP,
+        resource=AuthorizationResource(
+            resource_id="*",
+            resource_type=ResourceType.APP,
+        ),
     )
     _logger.info(f"Creating root resource...")
     await find_or_create_root()

@@ -6,7 +6,7 @@ from starlette.requests import Request
 from ristops_lib_be.authz.interceptor import policy_to_grant
 from ristops_lib_be.authz.policy import Policy
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
-from ristops_lib_core.schema.authz import ResourceType, ListUserResourceGrantsResponse, CheckAuthorizationRequest
+from ristops_lib_core.schema.authz import ResourceType, ListUserResourceGrantsResponse, CheckAuthorizationRequest, AclCheckRequest
 
 
 class CheckAuthorizationPolicy:
@@ -19,8 +19,8 @@ class CheckAuthorizationPolicy:
         """Return whether the authz service authorizes the requested grants."""
         authz_client = self._authz_client_factory()
         _user = await authz_client.post(
-            url=f"/acl/check",
-            json=request.model_dump(mode="json")
+            url=f"/users/{request.user_id}/acl-check",
+            json=AclCheckRequest(grants=request.grants).model_dump(mode="json"),
         )
         return _user.json().get("is_authorized", False)
 

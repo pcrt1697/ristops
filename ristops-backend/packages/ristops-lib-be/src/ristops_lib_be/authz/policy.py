@@ -103,3 +103,11 @@ def resolve_static_resource(resource_id: str, resource_type: ResourceType) -> Re
         )
 
     return _resolver
+
+
+async def resolve_path_resource(request: Request) -> AuthorizationResource:
+    """Resolve the target resource from the `resource_type` and `resource_id` path params."""
+    return AuthorizationResource(
+        resource_id=request.path_params["resource_id"],
+        resource_type=ResourceType(request.path_params["resource_type"]),
+    )

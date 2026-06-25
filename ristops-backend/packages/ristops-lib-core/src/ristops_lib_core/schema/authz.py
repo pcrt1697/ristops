@@ -42,13 +42,31 @@ class CheckAuthorizationRequest(BaseModel):
     grants: list[AuthorizationGrant]
 
 
+class AclCheckRequest(BaseModel):
+    """Body for an ACL check; the user comes from the path."""
+    grants: list[AuthorizationGrant] = Field(description="Grants to evaluate for the user")
+
+
 class AuthorizationResponse(BaseModel):
     is_authorized: bool = Field(description="Indicates whether the user is authorized to access the resource")
 
 
-class GrantAccessRequest(AuthorizationResource):
+class GrantAccessRequest(BaseModel):
     user_id: str = Field(description="ID of the user to grant access to")
     role_id: str = Field(description="Role used to grant access to resource")
+    resource: AuthorizationResource = Field(description="Resource to grant access on")
+
+
+class GrantRoleRequest(BaseModel):
+    """Body for granting a role on a resource; the resource comes from the path."""
+    user_id: str = Field(description="ID of the user to grant the role to")
+    role_id: str = Field(description="Role to grant on the resource")
+
+
+class RevokeAccessRequest(BaseModel):
+    user_id: str = Field(description="ID of the user to revoke access from")
+    role_id: str = Field(description="Role to revoke on the resource")
+    resource: AuthorizationResource = Field(description="Resource to revoke access on")
 
 
 class CreateAuthorizationResourceRequest(BaseModel):
@@ -62,6 +80,9 @@ class AuthorizationUserResponse(BaseModel):
 class AclResponse(BaseModel):
     id: str = Field(description="Acl ID")
     created_at: datetime = Field(description="Acl creation time")
+    user_id: str = Field(description="ID of the user the access was granted to")
+    role_id: str = Field(description="ID of the role granted on the resource")
+    resource: AuthorizationResource = Field(description="Resource the access was granted on")
 
 
 class RoleResponse(BaseModel):

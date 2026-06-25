@@ -1,3 +1,21 @@
+"""Access control entry granting a role to a user on a resource."""
+type Acl {
+  """ACL identifier."""
+  id: String!
+
+  """Creation date."""
+  createdAt: DateTime!
+
+  """Resource the access was granted on."""
+  resource: AuthorizationResource!
+
+  """Role granted on the resource."""
+  role: Role!
+
+  """User the access was granted to (public view)."""
+  user: Member!
+}
+
 """Authorization resource definition."""
 type AuthorizationResource {
   """ACL resource identifier"""
@@ -22,6 +40,21 @@ input CreateVenueInput {
 """Date with time (isoformat)"""
 scalar DateTime
 
+"""Request to grant a role to a user on a resource."""
+input GrantAccessInput {
+  """ID of the user to grant access to."""
+  userId: String!
+
+  """Role to grant on the resource."""
+  roleId: String!
+
+  """Resource identifier."""
+  resourceId: String!
+
+  """Resource type."""
+  resourceType: ResourceType!
+}
+
 """Input query to list grants."""
 input ListGrantsInput {
   """Resource identifier."""
@@ -43,6 +76,77 @@ input ListRolesInput {
   permission: String = null
 }
 
+"""Public view of a user."""
+type Member {
+  """User identifier."""
+  id: String!
+
+  """Username of the member."""
+  username: String!
+
+  """Display name of the member."""
+  displayName: String
+
+  """Registration date."""
+  createdAt: DateTime!
+}
+
+"""Member search filter."""
+input MemberFilterInput {
+  """Filter by username using `like` operator."""
+  username: String = null
+
+  """Filter by display name using `like` operator."""
+  displayName: String = null
+}
+
+"""A single page of results with pagination metadata."""
+type MemberPage {
+  """Items in the current page."""
+  items: [Member!]!
+
+  """Total number of items across all pages."""
+  total: Int!
+
+  """0-indexed page number."""
+  page: Int!
+
+  """Number of items per page."""
+  pageSize: Int!
+
+  """Total number of pages."""
+  totalPages: Int!
+}
+
+"""Member search query."""
+input MemberSearchInput {
+  """Pagination parameters."""
+  pagination: PaginationInput! = {page: 0}
+
+  """Sort instructions."""
+  sort: [MemberSortFieldSortInput!]! = []
+
+  """Filter parameters."""
+  filter: MemberFilterInput = null
+}
+
+"""Fields a member search may be sorted by."""
+enum MemberSortField {
+  ID
+  USERNAME
+  DISPLAY_NAME
+  CREATED_AT
+}
+
+"""A single sort instruction."""
+input MemberSortFieldSortInput {
+  """Field to sort by."""
+  field: MemberSortField!
+
+  """Sort direction."""
+  direction: SortDirection! = ASC
+}
+
 type Mutation {
   """Update user data by ID"""
   updateUser(
@@ -58,6 +162,18 @@ type Mutation {
     """User information to update."""
     input: UpdateUserInput!
   ): User!
+
+  """Grant a role to a user on a resource"""
+  grantAccess(
+    """Access grant request."""
+    input: GrantAccessInput!
+  ): Acl!
+
+  """Revoke a role from a user on a resource"""
+  revokeAccess(
+    """Access revoke request."""
+    input: RevokeAccessInput!
+  ): Boolean!
 
   """Create a new venue."""
   createVenue(
@@ -109,6 +225,18 @@ type Query {
     input: ListRolesInput!
   ): RolesList!
 
+  """Fetch a member (public user view) by ID"""
+  member(
+    """Entity identifier."""
+    id: ID!
+  ): Member!
+
+  """Search members (public user view)"""
+  searchMembers(
+    """Member search query."""
+    input: MemberSearchInput!
+  ): MemberPage!
+
   """Fetch venue by ID"""
   venue(
     """Entity identifier."""
@@ -129,6 +257,21 @@ enum ResourceType {
   ROLE
   ACL
   USER
+}
+
+"""Request to revoke a role from a user on a resource."""
+input RevokeAccessInput {
+  """ID of the user to revoke access from."""
+  userId: String!
+
+  """Role to revoke on the resource."""
+  roleId: String!
+
+  """Resource identifier."""
+  resourceId: String!
+
+  """Resource type."""
+  resourceType: ResourceType!
 }
 
 """Role entity information."""
