@@ -1,12 +1,12 @@
 import { Tabs, type TabsProps } from 'antd';
+import RolesTab from '../../components/acl/RolesTab.tsx';
 
 export default function AdminAclPage() {
-  // todo: define permissions to enable tabs
   const items: TabsProps['items'] = [
     {
       key: 'roles',
       label: 'Roles',
-      children: 'List of roles',
+      children: <RolesTab />,
     },
     {
       key: 'permissions',
@@ -16,7 +16,7 @@ export default function AdminAclPage() {
   ];
   return (
     <div>
-      <Tabs defaultActiveKey="roles" items={items} />;
+      <Tabs defaultActiveKey="roles" items={items} />
     </div>
   );
 }

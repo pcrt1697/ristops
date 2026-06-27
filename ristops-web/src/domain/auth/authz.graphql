@@ -14,3 +14,14 @@ query ListMyGrants($input: ListGrantsInput!) {
         }
     }
 }
+
+query ListRoles($input: ListRolesInput!) {
+    listRoles(input: $input) {
+        roles {
+            id
+            name
+            description
+            permissions
+        }
+    }
+}

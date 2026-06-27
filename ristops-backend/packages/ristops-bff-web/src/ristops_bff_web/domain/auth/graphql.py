@@ -1,3 +1,5 @@
+# TODO: the lazy `role` / `user` field resolvers (e.g. on RoleGrant, ResourceUserGrants, Acl,
+#  UserRoleGrant) are N+1 when selected across a page. Batch them with strawberry DataLoaders.
 from datetime import datetime
 from enum import Enum
 from typing import Annotated, Protocol
@@ -7,7 +9,7 @@ import strawberry
 
 from ristops_bff_web.domain.auth.service import (
     find_user, find_me, update_user, find_role, find_user_roles, list_roles, grant_access,
-    revoke_access, find_member, search_members,
+    revoke_access, find_member, search_members, list_permissions, search_resource_grants,
 )
 from ristops_bff_web.graphql.pagination import Page, PaginationInput, SearchQueryParams, SortInput
 from ristops_bff_web.graphql.types import EntityId
@@ -108,6 +110,17 @@ async def _resolve_member(root: UserIdAware, _: strawberry.Info) -> "Member":
     return await resolve_get_member(root.user_id)
 
 
+async def resolve_search_resource_grants(
+        _input: Annotated[
+            "SearchResourceGrantsInput",
+            strawberry.argument(description="Resource grants search query.", name="input")
+        ]
+) -> Page["ResourceUserGrants"]:
+    params = ResourceGrantsQueryParams(_input).build()
+    page = await search_resource_grants(_input.resource_type, _input.resource_id, params)
+    return Page.from_dict(page, ResourceUserGrants.from_dict)
+
+
 async def _resolve_list_roles(
         _input: Annotated[
             ListRolesInput,
@@ -115,6 +128,15 @@ async def _resolve_list_roles(
         ]) -> RolesList:
     roles = await list_roles(strawberry.asdict(_input))
     return RolesList.from_dict(roles)
+
+
+async def _resolve_list_permissions(
+        query: Annotated[
+            str | None,
+            strawberry.argument(description="Query for permissions using `contains` operator.", name="input")
+        ] = None) -> PermissionsList:
+    permissions = await list_permissions(query)
+    return PermissionsList(permissions=permissions)
 
 
 async def resolve_grant_access(
@@ -283,6 +305,15 @@ class RolesList:
         )
 
 
+@strawberry.type(
+    description="List of app permissions.",
+)
+class PermissionsList:
+    permissions: list[str] = strawberry.field(
+        description="List of permissions.",
+    )
+
+
 @strawberry.input(
     description="Input query to list grants.",
 )
@@ -435,6 +466,110 @@ class MemberQueryParams(SearchQueryParams):
             self._set_filter("display_name", self._filter.display_name)
 
 
+@strawberry.type(description="A role granted to a user on a resource.")
+class RoleGrant:
+    role_id: strawberry.Private[str]
+    resource: AuthorizationResource = strawberry.field(description="Resource the role is granted on.")
+    assigned_at: datetime = strawberry.field(description="Assignment date.")
+    role: Role = strawberry.field(
+        description="Role granted on the resource.",
+        resolver=_resolve_role,
+    )
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "RoleGrant":
+        return RoleGrant(
+            role_id=obj["role_id"],
+            resource=AuthorizationResource(
+                resource_id=obj["resource"]["resource_id"],
+                resource_type=obj["resource"]["resource_type"],
+            ),
+            assigned_at=datetime.fromisoformat(obj["assigned_at"]),
+        )
+
+
+@strawberry.type(description="A user and the roles they hold on a resource (direct or inherited).")
+class ResourceUserGrants:
+    user_id: strawberry.Private[str]
+    grants: list[RoleGrant] = strawberry.field(description="Roles the user holds on the resource.")
+    user: Member = strawberry.field(
+        description="The user the grants belong to (public view).",
+        resolver=_resolve_member,
+    )
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "ResourceUserGrants":
+        return ResourceUserGrants(
+            user_id=obj["user_id"],
+            grants=[RoleGrant.from_dict(grant) for grant in obj["grants"]],
+        )
+
+
+@strawberry.input(description="Resource grants search filter.")
+class ResourceGrantsFilterInput:
+    username: str | None = strawberry.field(
+        default=None,
+        description="Filter by username using `like` operator.",
+    )
+    display_name: str | None = strawberry.field(
+        default=None,
+        description="Filter by display name using `like` operator.",
+    )
+    permission: str | None = strawberry.field(
+        default=None,
+        description="Filter by permission using `contains` operator.",
+    )
+    role_id: str | None = strawberry.field(
+        default=None,
+        description="Filter by role id using `contains` operator.",
+    )
+    role_name: str | None = strawberry.field(
+        default=None,
+        description="Filter by role name using `contains` operator.",
+    )
+
+
+@strawberry.enum(description="Fields a resource grants search may be sorted by.")
+class ResourceGrantSortField(Enum):
+    ID = "id"
+    USERNAME = "username"
+    DISPLAY_NAME = "display_name"
+
+
+@strawberry.input(description="Resource grants search query.")
+class SearchResourceGrantsInput:
+    resource_type: ResourceType = strawberry.field(description="Resource type.")
+    resource_id: str = strawberry.field(description="Resource identifier.")
+    pagination: PaginationInput = strawberry.field(
+        default_factory=PaginationInput,
+        description="Pagination parameters.",
+    )
+    sort: list[SortInput[ResourceGrantSortField]] = strawberry.field(
+        default_factory=list,
+        description="Sort instructions.",
+    )
+    filter: ResourceGrantsFilterInput | None = strawberry.field(
+        default=None,
+        description="Filter parameters.",
+    )
+
+
+class ResourceGrantsQueryParams(SearchQueryParams):
+    """Builds the backend resource-grants query params from a SearchResourceGrantsInput."""
+
+    def __init__(self, search: "SearchResourceGrantsInput") -> None:
+        super().__init__(search.pagination, search.sort)
+        self._filter = search.filter
+
+    def _finalize(self) -> None:
+        if self._filter is not None:
+            self._set_filter("username", self._filter.username)
+            self._set_filter("display_name", self._filter.display_name)
+            self._set_filter("permission", self._filter.permission)
+            self._set_filter("role_id", self._filter.role_id)
+            self._set_filter("role_name", self._filter.role_name)
+
+
 @strawberry.type
 class AuthQuery:
     user: User = strawberry.field(
@@ -455,7 +590,11 @@ class AuthQuery:
     )
     list_roles: RolesList = strawberry.field(
         resolver=_resolve_list_roles,
-        description="List app roles, optionally filtered by id, name or permission",
+        description="List app roles",
+    )
+    list_permissions: PermissionsList = strawberry.field(
+        resolver=_resolve_list_permissions,
+        description="List app permissions",
     )
     member: Member = strawberry.field(
         resolver=resolve_get_member,
@@ -464,6 +603,10 @@ class AuthQuery:
     search_members: Page[Member] = strawberry.field(
         resolver=resolve_search_members,
         description="Search members (public user view)",
+    )
+    search_resource_grants: Page[ResourceUserGrants] = strawberry.field(
+        resolver=resolve_search_resource_grants,
+        description="Search users with their granted roles on a resource (direct or inherited)",
     )
 
 

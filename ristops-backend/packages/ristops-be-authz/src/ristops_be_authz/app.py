@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Depends
 
 from ristops_be_authz.domain.acl.service import check_acl_authorization
+from ristops_be_authz.domain.permission.routers import permissions_router
 from ristops_be_authz.domain.resource.routers import resource_router
 from ristops_be_authz.domain.resource.service import on_resource_event
 from ristops_be_authz.domain.role.routers import roles_router
@@ -70,6 +71,7 @@ def create_app() -> FastAPI:
     api_router.include_router(resource_router)
     api_router.include_router(user_router)
     api_router.include_router(roles_router)
+    api_router.include_router(permissions_router)
     app.include_router(api_router)
 
     public_registry = PublicRoutesRegistry(app)

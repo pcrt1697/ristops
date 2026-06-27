@@ -10,13 +10,17 @@ from sqlalchemy import select, ScalarResult, ColumnElement
 
 from ristops_be_authn.domain.user.entities import UserEntity
 from ristops_be_authn.domain.user.schema import (
-    UserCreationRequest, UserUpdateRequest, MemberResponse, MemberSearchQuery,
+    UserCreationRequest, UserUpdateRequest, MemberSearchQuery,
 )
-from ristops_be_authn.services.authz import publish_user_created_event, publish_user_deleted_event
+from ristops_be_authn.services.authz import (
+    publish_user_created_event, publish_user_deleted_event,
+    publish_user_updated_event
+)
 from ristops_be_authn.settings import Argon2Settings
 from ristops_lib_core.auth.authn import RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
 from ristops_lib_core.schema.pagination import Page
+from ristops_lib_core.schema.user import MemberResponse, AppMember
 from ristops_lib_sql.engine import get_sql_session
 from ristops_lib_sql.search import SearchQueryExecutor
 
@@ -75,7 +79,8 @@ async def _create_user(user_id: UUID, request: UserCreationRequest) -> UserEntit
     session.add(user)
     await session.flush()
     await session.refresh(user)
-    await publish_user_created_event(user_id)
+    await publish_user_created_event(
+        AppMember(id=user_id, username=request.username, display_name=request.display_name))
     _logger.info(f"Created user: {user.id}")
     return user
 
@@ -131,6 +136,7 @@ async def update_user(user_id: UUID, request: UserUpdateRequest) -> UserEntity:
     session = get_sql_session()
     await session.flush()
     await session.refresh(user)
+    await publish_user_updated_event(AppMember(id=user.id, username=user.username, display_name=user.display_name))
     _logger.info(f"Updated user: {user.id}")
     return user
 
@@ -263,4 +269,5 @@ async def remove_user(user_id: UUID) -> None:
     user = await find_user_or_throw(user_id)
     session = get_sql_session()
     await session.delete(user)
-    await publish_user_deleted_event(user_id)
+    info = AppMember(id=user_id, username=user.username, display_name=user.display_name)
+    await publish_user_deleted_event(info)

@@ -4,11 +4,14 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query
 
 from ristops_be_authz.domain.acl.service import grant_access, revoke_access
+from ristops_be_authz.domain.resource.schema import ResourceUserSearchQuery
+from ristops_be_authz.domain.resource.service import search_resource_users
 from ristops_lib_be.authz.policy import policy, Policy, resolve_path_resource
 from ristops_lib_core.schema.authz import (
     ResourceType, AuthorizationResource, GrantAccessRequest, GrantRoleRequest,
-    RevokeAccessRequest, AclResponse,
+    RevokeAccessRequest, AclResponse, ResourceUserGrantsResponse
 )
+from ristops_lib_core.schema.pagination import Page
 from ristops_lib_neo4j.engine import neo4j_transactional
 
 resource_router = APIRouter(
@@ -70,3 +73,18 @@ async def revoke_resource_access(
         ),
     )
     await revoke_access(request)
+
+
+@resource_router.get(
+    "/{resource_type}/{resource_id}/users",
+    response_model=Page[ResourceUserGrantsResponse],
+)
+@policy(Policy(resolve_path_resource, "acl~list"))
+@neo4j_transactional
+async def grant_resource_access(
+        resource_type: Annotated[ResourceType, Path(description="Resource type")],
+        resource_id: Annotated[str, Path(description="Resource identifier")],
+        query: Annotated[ResourceUserSearchQuery, Query()],
+) -> Page[ResourceUserGrantsResponse]:
+    """Search users with granted access to the resource."""
+    return await search_resource_users(resource_type, resource_id, query)

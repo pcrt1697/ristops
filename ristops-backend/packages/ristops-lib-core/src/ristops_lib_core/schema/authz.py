@@ -124,3 +124,24 @@ class ListRolesQuery(BaseModel):
 
 class ListRolesResponse(BaseModel):
     roles: list[RoleResponse] = Field(description="List of roles")
+
+
+class ListPermissionsResponse(BaseModel):
+    permissions: list[str] = Field(description="List of permissions")
+
+
+class ResourceUsersSearchQuery(BaseModel):
+    permission: str | None = Field(default=None, description="Filter by permission using `contains` operator")
+    role_id: str | None = Field(default=None, description="Filter by role ID using `contains` operator")
+    role_name: str | None = Field(default=None, description="Filter by role name using `contains` operator")
+
+
+class RoleGrant(BaseModel):
+    resource: AuthorizationResource = Field(description="Resource to which the role is granted")
+    role_id: str = Field(description="ID of the role granted on the resource")
+    assigned_at: datetime = Field(description="Assignment date")
+
+
+class ResourceUserGrantsResponse(BaseModel):
+    user_id: str = Field(description="User identifier")
+    grants: list[RoleGrant] = Field(description="List of grants")

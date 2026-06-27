@@ -18,6 +18,21 @@ export type Scalars = {
   DateTime: { input: string; output: string; }
 };
 
+/** Access control entry granting a role to a user on a resource. */
+export type Acl = {
+  __typename?: 'Acl';
+  /** Creation date. */
+  createdAt: Scalars['DateTime']['output'];
+  /** ACL identifier. */
+  id: Scalars['String']['output'];
+  /** Resource the access was granted on. */
+  resource: AuthorizationResource;
+  /** Role granted on the resource. */
+  role: Role;
+  /** User the access was granted to (public view). */
+  user: Member;
+};
+
 /** Authorization resource definition. */
 export type AuthorizationResource = {
   __typename?: 'AuthorizationResource';
@@ -37,18 +52,107 @@ export type CreateVenueInput = {
   name: Scalars['String']['input'];
 };
 
-/** User information to update. */
-export type ListRolesInput = {
+/** Request to grant a role to a user on a resource. */
+export type GrantAccessInput = {
+  /** Resource identifier. */
+  resourceId: Scalars['String']['input'];
+  /** Resource type. */
+  resourceType: ResourceType;
+  /** Role to grant on the resource. */
+  roleId: Scalars['String']['input'];
+  /** ID of the user to grant access to. */
+  userId: Scalars['String']['input'];
+};
+
+/** Input query to list grants. */
+export type ListGrantsInput = {
   /** Resource identifier. */
   resourceId: Scalars['String']['input'];
   /** Resource type. */
   resourceType: ResourceType;
 };
 
+/** Input query to list roles. */
+export type ListRolesInput = {
+  /** Filter by permission using `contains` operator. */
+  permission?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by role id using `contains` operator. */
+  roleId?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by role name using `contains` operator. */
+  roleName?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** Public view of a user. */
+export type Member = {
+  __typename?: 'Member';
+  /** Registration date. */
+  createdAt: Scalars['DateTime']['output'];
+  /** Display name of the member. */
+  displayName?: Maybe<Scalars['String']['output']>;
+  /** User identifier. */
+  id: Scalars['String']['output'];
+  /** Username of the member. */
+  username: Scalars['String']['output'];
+};
+
+/** Member search filter. */
+export type MemberFilterInput = {
+  /** Filter by display name using `like` operator. */
+  displayName?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by username using `like` operator. */
+  username?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** A single page of results with pagination metadata. */
+export type MemberPage = {
+  __typename?: 'MemberPage';
+  /** Items in the current page. */
+  items: Array<Member>;
+  /** 0-indexed page number. */
+  page: Scalars['Int']['output'];
+  /** Number of items per page. */
+  pageSize: Scalars['Int']['output'];
+  /** Total number of items across all pages. */
+  total: Scalars['Int']['output'];
+  /** Total number of pages. */
+  totalPages: Scalars['Int']['output'];
+};
+
+/** Member search query. */
+export type MemberSearchInput = {
+  /** Filter parameters. */
+  filter?: InputMaybe<MemberFilterInput>;
+  /** Pagination parameters. */
+  pagination?: PaginationInput;
+  /** Sort instructions. */
+  sort?: Array<MemberSortFieldSortInput>;
+};
+
+/** Fields a member search may be sorted by. */
+export const MemberSortField = {
+  CreatedAt: 'CREATED_AT',
+  DisplayName: 'DISPLAY_NAME',
+  Id: 'ID',
+  Username: 'USERNAME'
+} as const;
+
+export type MemberSortField = typeof MemberSortField[keyof typeof MemberSortField];
+/** A single sort instruction. */
+export type MemberSortFieldSortInput = {
+  /** Sort direction. */
+  direction?: SortDirection;
+  /** Field to sort by. */
+  field: MemberSortField;
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
   /** Create a new venue. */
   createVenue: Venue;
+  /** Grant a role to a user on a resource */
+  grantAccess: Acl;
+  /** Revoke a role from a user on a resource */
+  revokeAccess: Scalars['Boolean']['output'];
   /** Update current user data */
   updateMe: User;
   /** Update user data by ID */
@@ -60,6 +164,16 @@ export type Mutation = {
 
 export type MutationCreateVenueArgs = {
   input: CreateVenueInput;
+};
+
+
+export type MutationGrantAccessArgs = {
+  input: GrantAccessInput;
+};
+
+
+export type MutationRevokeAccessArgs = {
+  input: RevokeAccessInput;
 };
 
 
@@ -87,14 +201,31 @@ export type PaginationInput = {
   pageSize?: Scalars['Int']['input'];
 };
 
+/** List of app permissions. */
+export type PermissionsList = {
+  __typename?: 'PermissionsList';
+  /** List of permissions. */
+  permissions: Array<Scalars['String']['output']>;
+};
+
 export type Query = {
   __typename?: 'Query';
+  /** List app permissions */
+  listPermissions: PermissionsList;
+  /** List app roles */
+  listRoles: RolesList;
   /** Fetch authenticated user */
   me: User;
+  /** Fetch a member (public user view) by ID */
+  member: Member;
   /** Fetch roles assigned to the authenticated user on a resource */
-  myRoles: UserRoleGrants;
+  myGrants: UserRoleGrants;
   /** Fetch role by ID */
   role: Role;
+  /** Search members (public user view) */
+  searchMembers: MemberPage;
+  /** Search users with their granted roles on a resource (direct or inherited) */
+  searchResourceGrants: ResourceUserGrantsPage;
   /** Search venues the user has access to. */
   searchVenues: VenuePage;
   /** Fetch user by ID */
@@ -104,13 +235,38 @@ export type Query = {
 };
 
 
-export type QueryMyRolesArgs = {
+export type QueryListPermissionsArgs = {
+  input?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryListRolesArgs = {
   input: ListRolesInput;
+};
+
+
+export type QueryMemberArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryMyGrantsArgs = {
+  input: ListGrantsInput;
 };
 
 
 export type QueryRoleArgs = {
   roleId: Scalars['String']['input'];
+};
+
+
+export type QuerySearchMembersArgs = {
+  input: MemberSearchInput;
+};
+
+
+export type QuerySearchResourceGrantsArgs = {
+  input: SearchResourceGrantsInput;
 };
 
 
@@ -128,6 +284,36 @@ export type QueryVenueArgs = {
   id: Scalars['ID']['input'];
 };
 
+/** Fields a resource grants search may be sorted by. */
+export const ResourceGrantSortField = {
+  DisplayName: 'DISPLAY_NAME',
+  Id: 'ID',
+  Username: 'USERNAME'
+} as const;
+
+export type ResourceGrantSortField = typeof ResourceGrantSortField[keyof typeof ResourceGrantSortField];
+/** A single sort instruction. */
+export type ResourceGrantSortFieldSortInput = {
+  /** Sort direction. */
+  direction?: SortDirection;
+  /** Field to sort by. */
+  field: ResourceGrantSortField;
+};
+
+/** Resource grants search filter. */
+export type ResourceGrantsFilterInput = {
+  /** Filter by display name using `like` operator. */
+  displayName?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by permission using `contains` operator. */
+  permission?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by role id using `contains` operator. */
+  roleId?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by role name using `contains` operator. */
+  roleName?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by username using `like` operator. */
+  username?: InputMaybe<Scalars['String']['input']>;
+};
+
 export const ResourceType = {
   Acl: 'ACL',
   App: 'APP',
@@ -138,6 +324,42 @@ export const ResourceType = {
 } as const;
 
 export type ResourceType = typeof ResourceType[keyof typeof ResourceType];
+/** A user and the roles they hold on a resource (direct or inherited). */
+export type ResourceUserGrants = {
+  __typename?: 'ResourceUserGrants';
+  /** Roles the user holds on the resource. */
+  grants: Array<RoleGrant>;
+  /** The user the grants belong to (public view). */
+  user: Member;
+};
+
+/** A single page of results with pagination metadata. */
+export type ResourceUserGrantsPage = {
+  __typename?: 'ResourceUserGrantsPage';
+  /** Items in the current page. */
+  items: Array<ResourceUserGrants>;
+  /** 0-indexed page number. */
+  page: Scalars['Int']['output'];
+  /** Number of items per page. */
+  pageSize: Scalars['Int']['output'];
+  /** Total number of items across all pages. */
+  total: Scalars['Int']['output'];
+  /** Total number of pages. */
+  totalPages: Scalars['Int']['output'];
+};
+
+/** Request to revoke a role from a user on a resource. */
+export type RevokeAccessInput = {
+  /** Resource identifier. */
+  resourceId: Scalars['String']['input'];
+  /** Resource type. */
+  resourceType: ResourceType;
+  /** Role to revoke on the resource. */
+  roleId: Scalars['String']['input'];
+  /** ID of the user to revoke access from. */
+  userId: Scalars['String']['input'];
+};
+
 /** Role entity information. */
 export type Role = {
   __typename?: 'Role';
@@ -149,6 +371,38 @@ export type Role = {
   name: Scalars['String']['output'];
   /** List of permissions granted by the role. */
   permissions: Array<Scalars['String']['output']>;
+};
+
+/** A role granted to a user on a resource. */
+export type RoleGrant = {
+  __typename?: 'RoleGrant';
+  /** Assignment date. */
+  assignedAt: Scalars['DateTime']['output'];
+  /** Resource the role is granted on. */
+  resource: AuthorizationResource;
+  /** Role granted on the resource. */
+  role: Role;
+};
+
+/** List of app roles. */
+export type RolesList = {
+  __typename?: 'RolesList';
+  /** List of roles. */
+  roles: Array<Role>;
+};
+
+/** Resource grants search query. */
+export type SearchResourceGrantsInput = {
+  /** Filter parameters. */
+  filter?: InputMaybe<ResourceGrantsFilterInput>;
+  /** Pagination parameters. */
+  pagination?: PaginationInput;
+  /** Resource identifier. */
+  resourceId: Scalars['String']['input'];
+  /** Resource type. */
+  resourceType: ResourceType;
+  /** Sort instructions. */
+  sort?: Array<ResourceGrantSortFieldSortInput>;
 };
 
 /** Direction of a sort clause. */
@@ -277,12 +531,19 @@ export type VenueSortFieldSortInput = {
   field: VenueSortField;
 };
 
-export type ListMyRolesQueryVariables = Exact<{
+export type ListMyGrantsQueryVariables = Exact<{
+  input: ListGrantsInput;
+}>;
+
+
+export type ListMyGrantsQuery = { __typename?: 'Query', myGrants: { __typename?: 'UserRoleGrants', grants: Array<{ __typename?: 'UserRoleGrant', resource: { __typename?: 'AuthorizationResource', resourceId: string, resourceType: ResourceType }, role: { __typename?: 'Role', id: string, name: string, description: string, permissions: Array<string> } }> } };
+
+export type ListRolesQueryVariables = Exact<{
   input: ListRolesInput;
 }>;
 
 
-export type ListMyRolesQuery = { __typename?: 'Query', myRoles: { __typename?: 'UserRoleGrants', grants: Array<{ __typename?: 'UserRoleGrant', resource: { __typename?: 'AuthorizationResource', resourceId: string, resourceType: ResourceType }, role: { __typename?: 'Role', id: string, name: string, description: string, permissions: Array<string> } }> } };
+export type ListRolesQuery = { __typename?: 'Query', listRoles: { __typename?: 'RolesList', roles: Array<{ __typename?: 'Role', id: string, name: string, description: string, permissions: Array<string> }> } };
 
 export type GetMeQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -326,7 +587,8 @@ export type UpdateVenueMutationVariables = Exact<{
 export type UpdateVenueMutation = { __typename?: 'Mutation', updateVenue: { __typename?: 'Venue', id: string, name: string, address: string, description?: string | null, createdAt: string, updatedAt: string } };
 
 
-export const ListMyRolesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ListMyRoles"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ListRolesInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myRoles"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"grants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"resourceId"}},{"kind":"Field","name":{"kind":"Name","value":"resourceType"}}]}},{"kind":"Field","name":{"kind":"Name","value":"role"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"permissions"}}]}}]}}]}}]}}]} as unknown as DocumentNode<ListMyRolesQuery, ListMyRolesQueryVariables>;
+export const ListMyGrantsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ListMyGrants"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ListGrantsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myGrants"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"grants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"resourceId"}},{"kind":"Field","name":{"kind":"Name","value":"resourceType"}}]}},{"kind":"Field","name":{"kind":"Name","value":"role"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"permissions"}}]}}]}}]}}]}}]} as unknown as DocumentNode<ListMyGrantsQuery, ListMyGrantsQueryVariables>;
+export const ListRolesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ListRoles"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ListRolesInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"listRoles"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"roles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"permissions"}}]}}]}}]}}]} as unknown as DocumentNode<ListRolesQuery, ListRolesQueryVariables>;
 export const GetMeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetMe"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"username"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<GetMeQuery, GetMeQueryVariables>;
 export const UpdateMeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateMe"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateUserInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateMe"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"username"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<UpdateMeMutation, UpdateMeMutationVariables>;
 export const SearchVenuesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SearchVenues"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"VenueSearchInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"searchVenues"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"page"}},{"kind":"Field","name":{"kind":"Name","value":"pageSize"}},{"kind":"Field","name":{"kind":"Name","value":"totalPages"}}]}}]}}]} as unknown as DocumentNode<SearchVenuesQuery, SearchVenuesQueryVariables>;

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { AuthState } from './auth.types.ts';
 import type { ServiceError } from '../../services/common.ts';
 import { message } from 'antd';
-import type { ResourceType } from '../../services/graphql/graphql.ts';
+import type { ListRolesInput, ResourceType } from '../../services/graphql/graphql.ts';
 import { hasPermission } from './authz.utils.ts';
 
 export function useAuth(): AuthState {
@@ -82,18 +82,26 @@ export function useRegister() {
   });
 }
 
+export function useListRoles(input: ListRolesInput, enabled = true) {
+  return useQuery({
+    queryKey: ['authz.listRoles', input],
+    queryFn: () => authZApi.listRoles(input),
+    enabled,
+  });
+}
+
 export function useCan(
   resource: { type: ResourceType; id: string },
   ...permissions: string[]
 ) {
   const { data, isLoading } = useQuery({
     queryKey: ['auth.myRoles', resource.type, resource.id],
-    queryFn: () => authZApi.listMyRoles(resource.type, resource.id),
+    queryFn: () => authZApi.listMyGrants(resource.type, resource.id),
     staleTime: Infinity,
   });
 
   const isAllowed =
-    !!data && permissions.some((p) => hasPermission(data.myRoles.grants, p));
+    !!data && permissions.some((p) => hasPermission(data.myGrants.grants, p));
 
   return { isAllowed, isLoading };
 }

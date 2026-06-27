@@ -51,8 +51,7 @@ async def grant_access(request: GrantAccessRequest) -> AclNode:
         """
         MATCH (role:Role {id: $role_id})
         MATCH (r:Resource {resource_type: $resource_type, resource_id: $resource_id})
-        MERGE (u:User {id: $user_id})
-          ON CREATE SET u.created_at = $created_at
+        MATCH (u:User {id: $user_id})
         MERGE (acl:Acl {id: $acl_id})
           ON CREATE SET acl.created_at = $created_at
         MERGE (u)-[:HAS_ACCESS]->(acl)
@@ -69,12 +68,11 @@ async def grant_access(request: GrantAccessRequest) -> AclNode:
     )
     record = await result.single()
     if record is None:
-        raise RuntimeError("Failed to create ACL entry")
-    summary = await result.consume()
-    if summary.counters.relationships_created == 0:
+        # role and resource are validated above, so an empty result means the user
+        # node doesn't exist (not yet replicated from be-authn).
         raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail="ACL entry already exists",
+            status_code=HTTPStatus.NOT_FOUND,
+            detail="User not found",
         )
     node = AclNode.model_validate(record["acl"])
     _logger.info(f"Created ACL entry {node.id}")
@@ -130,6 +128,25 @@ async def delete_user_acl(user_id: str) -> None:
     _logger.info(f"Deleted ACL for user {user_id}")
 
 
+async def _ensure_admin_user(admin_id: str) -> None:
+    """Bootstrap the admin User node so the admin grant can resolve it.
+
+    Run before the be-authn seed; be-authn's admin lifecycle event later reconciles
+    (overwrites) this node idempotently.
+    """
+    transaction = get_neo4j_transaction()
+    await transaction.run(
+        """
+        MERGE (u:User {id: $id})
+          ON CREATE SET u.created_at = $created_at
+        SET u.username = $username
+        """,
+        id=admin_id,
+        username=DEFAULT_ADMIN_USERNAME.lower(),
+        created_at=datetime.now(UTC).isoformat(),
+    )
+
+
 @neo4j_transactional
 async def setup_admin_acl() -> None:
     """ Create ACL for admin user. """
@@ -148,6 +165,7 @@ async def setup_admin_acl() -> None:
     )
     _logger.info(f"Creating root resource...")
     await find_or_create_root()
+    await _ensure_admin_user(admin_id)
     acl = await grant_access(request)
     _logger.info(f"ACL setup completed for admin, created entry {acl.id}")
 

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, UTC
 from http import HTTPStatus
 
 from fastapi import HTTPException
@@ -14,6 +15,7 @@ from ristops_lib_core.schema.authz import (
     ResourceType, PermissionGrant, AuthorizationResource, ResourceGrant,
     RolePermissions
 )
+from ristops_lib_core.schema.user import AppMember
 from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
 from ristops_lib_redis.engine import StreamPayload
 
@@ -32,12 +34,35 @@ async def find_user_by_id(user_id: str) -> UserNode | None:
     return UserNode.model_validate(record["u"])
 
 
-async def create_user(user_id: str) -> UserNode:
+async def upsert_user(info: AppMember) -> UserNode:
+    """Create or update the local user read-model. Idempotent: handles both create and update events.
+
+    Replicates the user's display fields (username, display_name) from be-authn and ensures the
+    user's own resource and base member ACL exist. Re-running with the same payload is a no-op.
+    """
+    user_id = str(info.id)
+    transaction = get_neo4j_transaction()
+    await transaction.run(
+        """
+        MERGE (u:User {id: $id})
+          ON CREATE SET u.created_at = $created_at
+        SET u.username = $username,
+            u.display_name = $display_name
+        """,
+        id=user_id,
+        # stored lowercased: these are a search-only index (never returned/displayed —
+        # the frontend reads member info from be-authn), so the TEXT indexes back
+        # case-insensitive CONTAINS by lowercasing the search term at query time.
+        username=info.username.lower(),
+        display_name=info.display_name.lower() if info.display_name else None,
+        created_at=datetime.now(UTC).isoformat(),
+    )
+    # both are idempotent (MERGE-based), so they self-heal on update too
     await find_or_create_user_resource(user_id)
     await create_member_acl(user_id)
     user = await find_user_by_id(user_id)
     if user is None:
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to create user")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to upsert user")
     return user
 
 
@@ -126,7 +151,7 @@ async def list_user_resources(user_id: str, resource_type: ResourceType, permiss
 async def on_user_event(_: str, payload: StreamPayload) -> None:
     event = UserLifecycleEvent.model_validate(payload)
     async with neo4j_transaction_provider.context():
-        if event.operation == LifecycleOperationType.CREATED:
-            await create_user(event.user_id)
+        if event.operation in (LifecycleOperationType.CREATED, LifecycleOperationType.UPDATED):
+            await upsert_user(event)
         elif event.operation == LifecycleOperationType.DELETED:
-            await remove_user(event.user_id)
+            await remove_user(str(event.id))

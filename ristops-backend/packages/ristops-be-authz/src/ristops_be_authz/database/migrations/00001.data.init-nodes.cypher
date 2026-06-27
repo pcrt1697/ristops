@@ -16,9 +16,12 @@ MERGE (:Permission {id: "user~edit"});
 MERGE (:Permission {id: "role~get"});
 MERGE (:Permission {id: "role~list"});
 
+MERGE (:Permission {id: "permission~list"});
+
 MERGE (:Permission {id: "acl~get"});
 MERGE (:Permission {id: "acl~add"});
 MERGE (:Permission {id: "acl~remove"});
+MERGE (:Permission {id: "acl~list"});
 
 MERGE (:Permission {id: "venue~add"});
 MERGE (:Permission {id: "venue~get"});
@@ -34,7 +37,7 @@ MATCH (p:Permission {id: "*"})
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Member role --
-MERGE (:Role {id: "member", name: "Member", description: "Base role to let users access the app and manage its own account"});
+MERGE (:Role {id: "member", name: "Member", description: "Base role to let users access the app and manage their own account"});
 
 // Assign permissions to member role
 MATCH (r:Role {id: "member"})

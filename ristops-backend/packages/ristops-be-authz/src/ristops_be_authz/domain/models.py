@@ -35,6 +35,8 @@ class UserNode(BaseModel):
     __label__ = "User"
 
     id: str = Field(description="User ID")
+    username: str = Field(description="Username, replicated from be-authn")
+    display_name: str | None = Field(default=None, description="Display name, replicated from be-authn")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Acl creation time")
 
 

@@ -30,7 +30,7 @@ async def get_role(
     "",
     response_model=ListRolesResponse,
 )
-@policy()  # the role catalog is global, non-sensitive metadata: any authenticated user may read it
+@policy()
 @neo4j_transactional
 async def get_roles(
         query: Annotated[ListRolesQuery, Query()],

@@ -20,6 +20,7 @@ class VenueEntity(Base):
     )
     name: Mapped[str] = mapped_column(
         String(120),
+        index=True,
     )
     address: Mapped[str] = mapped_column(
         String(255),

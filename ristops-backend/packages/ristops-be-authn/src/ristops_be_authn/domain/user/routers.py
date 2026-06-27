@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 from fastapi.params import Path
 
 from ristops_be_authn.domain.user.schema import (
-    UserCreationRequest, UserUpdateRequest, MemberResponse, MemberSearchQuery,
+    UserCreationRequest, UserUpdateRequest, MemberSearchQuery,
 )
 from ristops_be_authn.domain.user.service import (
     create_user, update_user, find_user_or_throw, find_me, remove_user, remove_me, search_members
@@ -16,7 +16,7 @@ from ristops_lib_core.auth.authn import public
 from ristops_lib_core.exception import ErrorResponse
 from ristops_lib_core.schema.authz import ResourceType
 from ristops_lib_core.schema.pagination import Page
-from ristops_lib_core.schema.user import UserResponse
+from ristops_lib_core.schema.user import UserResponse, MemberResponse
 from ristops_lib_sql.engine import sql_transactional
 
 _user_path_resolver = BaseResourceResolver(ResourceType.USER)

@@ -10,7 +10,8 @@ services:
       - 5432:5432
     volumes:
       - /$HOME/.ristops/postgres/data:/var/lib/postgresql/data
-      - ./postgres/000.init-db.auth.sql:/docker-entrypoint-initdb.d/000.init-db.auth.sql
+      - ./postgres/000.init-db.authn.sql:/docker-entrypoint-initdb.d/000.init-db.authn.sql
+      - ./postgres/001.init-db.venue.sql:/docker-entrypoint-initdb.d/001.init-db.venue.sql
     environment:
       - POSTGRES_PASSWORD=${RISTOPS_PG_PWD:-ristops}
       - POSTGRES_USER=ristops

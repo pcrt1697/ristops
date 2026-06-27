@@ -4,11 +4,15 @@ from pydantic import Field, TypeAdapter
 
 from ristops_lib_be.events import LifecycleOperationType, BaseEvent
 from ristops_lib_core.schema.authz import AuthorizationResource, ResourceType
+from ristops_lib_core.schema.user import AppMember
 
 
-class UserLifecycleEvent(BaseEvent):
-    operation: Literal[LifecycleOperationType.CREATED, LifecycleOperationType.DELETED]
-    user_id: str
+class UserLifecycleEvent(AppMember):
+    operation: Literal[
+        LifecycleOperationType.CREATED,
+        LifecycleOperationType.UPDATED,
+        LifecycleOperationType.DELETED,
+    ]
 
 
 class ResourceCreatedLifecycleEvent(BaseEvent):

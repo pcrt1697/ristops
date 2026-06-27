@@ -3,7 +3,9 @@ import type { LoginInput, LoginResponse, RegisterInput } from './auth.types.ts';
 import { gqlRequest } from '../../services/graphql/client.ts';
 import {
   GetMeDocument,
-  ListMyRolesDocument,
+  ListMyGrantsDocument,
+  ListRolesDocument,
+  type ListRolesInput,
   type ResourceType,
   UpdateMeDocument,
   type UpdateUserInput,
@@ -33,6 +35,9 @@ export const userApi = {
 };
 
 export const authZApi = {
-  listMyRoles: (resourceType: ResourceType, resourceId: string) =>
-    gqlRequest(ListMyRolesDocument, { input: { resourceType, resourceId } }),
+  listMyGrants: (resourceType: ResourceType, resourceId: string) =>
+    gqlRequest(ListMyGrantsDocument, { input: { resourceType, resourceId } }),
+
+  listRoles: (input: ListRolesInput) =>
+    gqlRequest(ListRolesDocument, { input }),
 };

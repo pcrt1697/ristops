@@ -13,3 +13,5 @@ create table ristops_authn.users (
   unique (username),
   unique (email)
 );
+create index ix_ristops_authn_users_created_at on ristops_authn.users (created_at);
+create index ix_ristops_authn_users_display_name on ristops_authn.users (display_name);

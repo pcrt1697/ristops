@@ -116,6 +116,17 @@ async def list_roles(params: dict[str, Any]) -> list[dict[str, Any]]:
     return response.json()["roles"]
 
 
+async def list_permissions(query: str | None) -> list[str]:
+    params = {}
+    if query:
+        params["query"] = query
+    response = await authz_client.client.get(
+        url="permissions",
+        params=params,
+    )
+    return response.json()["permissions"]
+
+
 async def grant_access(grant_input: dict[str, Any]) -> dict[str, Any]:
     resource_type = grant_input["resource_type"]
     resource_id = grant_input["resource_id"]
@@ -156,3 +167,15 @@ async def search_members(params: dict[str, Any]) -> dict[str, Any]:
     page = response.json()
     page["items"] = [member_transformer.transform(item) for item in page["items"]]
     return page
+
+
+async def search_resource_grants(
+        resource_type: str,
+        resource_id: str,
+        params: dict[str, Any],
+) -> dict[str, Any]:
+    response = await authz_client.client.get(
+        url=f"resources/{resource_type}/{resource_id}/users",
+        params=params,
+    )
+    return response.json()

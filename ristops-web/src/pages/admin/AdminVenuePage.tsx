@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Button, Spin } from 'antd';
+import { Avatar, Card, Spin, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import RequirePermission from '../../components/routing/RequirePermission.tsx';
 import { ResourceType } from '../../services/graphql/graphql.ts';
 import { useCan } from '../../domain/auth/auth.hooks.ts';
 import CreateVenueModal from '../../components/venue/CreateVenueModal.tsx';
-import VenueListTable from '../../components/venue/VenueListTable.tsx';
 
-function CreateVenueButton() {
+const { Meta } = Card;
+
+function CreateVenueCard() {
+  const { token } = theme.useToken();
   const [modalOpen, setModalOpen] = useState(false);
   const { isAllowed: canAddVenues, isLoading } = useCan(
     { type: ResourceType.App, id: '*' },
@@ -15,17 +17,26 @@ function CreateVenueButton() {
   );
 
   if (isLoading) return <Spin fullscreen />;
-
+  const onClick = canAddVenues ? () => setModalOpen(true) : undefined;
+  const iconColor = canAddVenues ? token.colorPrimary : token.colorTextDisabled;
   return (
     <>
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        disabled={!canAddVenues}
-        onClick={() => setModalOpen(true)}
-      >
-        Create venue
-      </Button>
+      <Card hoverable={canAddVenues} onClick={onClick}>
+        <Meta
+          avatar={
+            <Avatar
+              icon={<PlusOutlined />}
+              style={{ backgroundColor: iconColor }}
+            />
+          }
+          title="Create Venue"
+          description={
+            canAddVenues
+              ? 'Start setup procedure to create a new Venue'
+              : "You don't have permission to create venues"
+          }
+        />
+      </Card>
       <CreateVenueModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </>
   );
@@ -37,10 +48,15 @@ export default function AdminVenuePage() {
       resource={{ type: ResourceType.App, id: '*' }}
       permissions={['venue~list']}
     >
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <CreateVenueButton />
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'start',
+          alignItems: 'center',
+        }}
+      >
+        <CreateVenueCard />
       </div>
-      <VenueListTable />
     </RequirePermission>
   );
 }

@@ -200,6 +200,12 @@ input PaginationInput {
   pageSize: Int! = 20
 }
 
+"""List of app permissions."""
+type PermissionsList {
+  """List of permissions."""
+  permissions: [String!]!
+}
+
 type Query {
   """Fetch user by ID"""
   user(
@@ -219,11 +225,17 @@ type Query {
     input: ListGrantsInput!
   ): UserRoleGrants!
 
-  """List app roles, optionally filtered by id, name or permission"""
+  """List app roles"""
   listRoles(
     """Query for roles."""
     input: ListRolesInput!
   ): RolesList!
+
+  """List app permissions"""
+  listPermissions(
+    """Query for permissions using `contains` operator."""
+    input: String = null
+  ): PermissionsList!
 
   """Fetch a member (public user view) by ID"""
   member(
@@ -236,6 +248,14 @@ type Query {
     """Member search query."""
     input: MemberSearchInput!
   ): MemberPage!
+
+  """
+  Search users with their granted roles on a resource (direct or inherited)
+  """
+  searchResourceGrants(
+    """Resource grants search query."""
+    input: SearchResourceGrantsInput!
+  ): ResourceUserGrantsPage!
 
   """Fetch venue by ID"""
   venue(
@@ -250,6 +270,40 @@ type Query {
   ): VenuePage!
 }
 
+"""Fields a resource grants search may be sorted by."""
+enum ResourceGrantSortField {
+  ID
+  USERNAME
+  DISPLAY_NAME
+}
+
+"""A single sort instruction."""
+input ResourceGrantSortFieldSortInput {
+  """Field to sort by."""
+  field: ResourceGrantSortField!
+
+  """Sort direction."""
+  direction: SortDirection! = ASC
+}
+
+"""Resource grants search filter."""
+input ResourceGrantsFilterInput {
+  """Filter by username using `like` operator."""
+  username: String = null
+
+  """Filter by display name using `like` operator."""
+  displayName: String = null
+
+  """Filter by permission using `contains` operator."""
+  permission: String = null
+
+  """Filter by role id using `contains` operator."""
+  roleId: String = null
+
+  """Filter by role name using `contains` operator."""
+  roleName: String = null
+}
+
 enum ResourceType {
   APP
   VENUE
@@ -257,6 +311,33 @@ enum ResourceType {
   ROLE
   ACL
   USER
+}
+
+"""A user and the roles they hold on a resource (direct or inherited)."""
+type ResourceUserGrants {
+  """Roles the user holds on the resource."""
+  grants: [RoleGrant!]!
+
+  """The user the grants belong to (public view)."""
+  user: Member!
+}
+
+"""A single page of results with pagination metadata."""
+type ResourceUserGrantsPage {
+  """Items in the current page."""
+  items: [ResourceUserGrants!]!
+
+  """Total number of items across all pages."""
+  total: Int!
+
+  """0-indexed page number."""
+  page: Int!
+
+  """Number of items per page."""
+  pageSize: Int!
+
+  """Total number of pages."""
+  totalPages: Int!
 }
 
 """Request to revoke a role from a user on a resource."""
@@ -289,10 +370,40 @@ type Role {
   permissions: [String!]!
 }
 
+"""A role granted to a user on a resource."""
+type RoleGrant {
+  """Resource the role is granted on."""
+  resource: AuthorizationResource!
+
+  """Assignment date."""
+  assignedAt: DateTime!
+
+  """Role granted on the resource."""
+  role: Role!
+}
+
 """List of app roles."""
 type RolesList {
   """List of roles."""
   roles: [Role!]!
+}
+
+"""Resource grants search query."""
+input SearchResourceGrantsInput {
+  """Resource type."""
+  resourceType: ResourceType!
+
+  """Resource identifier."""
+  resourceId: String!
+
+  """Pagination parameters."""
+  pagination: PaginationInput! = {page: 0}
+
+  """Sort instructions."""
+  sort: [ResourceGrantSortFieldSortInput!]! = []
+
+  """Filter parameters."""
+  filter: ResourceGrantsFilterInput = null
 }
 
 """Direction of a sort clause."""
