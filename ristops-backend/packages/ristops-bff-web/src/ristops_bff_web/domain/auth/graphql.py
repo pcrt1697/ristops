@@ -431,9 +431,9 @@ class MemberFilterInput:
 
 @strawberry.enum(description="Fields a member search may be sorted by.")
 class MemberSortField(Enum):
+    DISPLAY_NAME = "display_name"
     ID = "id"
     USERNAME = "username"
-    DISPLAY_NAME = "display_name"
     CREATED_AT = "created_at"
 
 

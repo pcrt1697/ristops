@@ -9,8 +9,8 @@ from ristops_lib_core.schema.pagination import SearchQuery
 class ResourceUserSortField(StrEnum):
     """Fields a resource user search may be sorted by."""
 
-    ID = "id"
     USERNAME = "username"
+    ID = "id"
     DISPLAY_NAME = "display_name"
 
 

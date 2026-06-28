@@ -1,11 +1,14 @@
 import { Button, Card, Form, Input, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import { useRegister } from '../../domain/auth/auth.hooks.ts';
-import type { RegisterInput } from '../../domain/auth/auth.types.ts';
 
 const { Title } = Typography;
 
-interface RegisterFormValues extends RegisterInput {
+interface RegisterFormValues {
+  username: string;
+  displayName: string;
+  email: string;
+  password: string;
   confirmPassword: string;
 }
 
@@ -15,7 +18,7 @@ export default function UserRegisterPage() {
   const onFinish = (values: RegisterFormValues) => {
     register({
       username: values.username,
-      displayName: values.displayName,
+      display_name: values.displayName,
       email: values.email,
       password: values.password,
     });
@@ -42,11 +45,7 @@ export default function UserRegisterPage() {
           >
             <Input placeholder="john42" />
           </Form.Item>
-          <Form.Item
-            label="Display name"
-            name="displayName"
-            rules={[{ required: true, message: 'Please enter a display name' }]}
-          >
+          <Form.Item label="Display name" name="displayName">
             <Input placeholder="John" />
           </Form.Item>
           <Form.Item

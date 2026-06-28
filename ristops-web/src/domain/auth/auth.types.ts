@@ -22,7 +22,7 @@ export interface LoginInput {
 
 export interface RegisterInput {
   username: string;
-  displayName: string;
+  display_name: string;
   email: string;
   password: string;
 }

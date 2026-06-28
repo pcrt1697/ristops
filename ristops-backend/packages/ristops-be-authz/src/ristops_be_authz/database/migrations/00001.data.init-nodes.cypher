@@ -45,3 +45,12 @@ MATCH (r:Role {id: "member"})
 MATCH (p:Permission)
 WHERE p.id IN ["user:get", "user:edit", "user:remove", "role:list", "resource:list", "acl:get"]
 MERGE (r)-[:GRANTS]->(p);
+
+// -- Developer role --
+MERGE (:Role {id: "developer", name: "Developer", description: "Role with all fine grained permissions on the app"});
+
+// Assign permissions to developer role
+MATCH (r:Role {id: "developer"})
+MATCH (p:Permission)
+WHERE p.id <> "*" AND NOT p.id STARTS WITH "app:"
+MERGE (r)-[:GRANTS]->(p);

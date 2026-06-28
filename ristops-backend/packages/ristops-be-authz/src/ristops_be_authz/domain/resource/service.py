@@ -191,8 +191,7 @@ _RESOURCE_USERS_COUNT = _RESOURCE_USERS_BASE + "\nRETURN count(u) AS total"
 # filter) so the caller sees the full picture, with each grant's source resource
 # (to identify non-direct, inherited, grants)
 _RESOURCE_USERS_PAGE = _RESOURCE_USERS_BASE + """
-CALL {
-    WITH u, target
+CALL (u, target) {
     MATCH (u)-[:HAS_ACCESS]->(acl:Acl)-[:ON]->(src:Resource)
     WHERE (target)-[:BELONGS_TO*0..]->(src)
     MATCH (acl)-[:WITH_ROLE]->(role:Role)
@@ -220,7 +219,7 @@ def _build_resource_users_order_by(query: ResourceUserSearchQuery) -> str:
             continue
         direction = "DESC" if clause.direction == SortDirection.DESC else "ASC"
         parts.append(f"{expression} {direction}")
-    return ", ".join(parts) if parts else "u.id ASC"
+    return ", ".join(parts) if parts else "u.username ASC"
 
 
 async def search_resource_users(

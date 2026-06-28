@@ -55,7 +55,7 @@ class SearchQuery(PaginationParams):
     model_config = ConfigDict(alias_generator=query_alias, populate_by_name=True)
 
     sort: list[str] = Field(
-        default_factory=lambda: ["id"],
+        default_factory=list,
         description="Repeatable. Prefix a field with '-' for descending.",
         min_length=1,
     )
@@ -106,7 +106,11 @@ class SearchQuery(PaginationParams):
 
     def get_sort_clauses(self) -> list[SortClause]:
         """Parsed, validated sort clauses in the order given by the client."""
-        return self._sort_clauses
+        return self._sort_clauses or [
+            SortClause(
+                field=next(iter(self.sort_field_enum)).value,
+            )
+        ]
 
 
 class Page[TItem](BaseModel):

@@ -129,8 +129,8 @@ class VenueFilterInput:
 
 @strawberry.enum(description="Fields a venue search may be sorted by.")
 class VenueSortField(Enum):
-    ID = "id"
     NAME = "name"
+    ID = "id"
     CREATED_AT = "created_at"
 
 

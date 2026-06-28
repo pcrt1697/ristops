@@ -53,7 +53,7 @@ async def _publish_resource_lifecycle_event(
     settings = ResourceLifecycleProducerSettings.get()
     await redis_client.redis.xadd(
         settings.stream,
-        event.model_dump(mode="json"),
+        event.model_dump(mode="json", exclude_none=True),
         maxlen=10_000,
         approximate=True,
     )

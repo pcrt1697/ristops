@@ -4,21 +4,18 @@ import {
   Dropdown,
   Flex,
   Input,
-  Popconfirm,
   Result,
   Select,
   Spin,
   Table,
   type TableProps,
   Tag,
-  Typography,
 } from 'antd';
 import { MoreOutlined, PlusOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import {
   useCan,
   useListPermissions,
-  useRevokeAccess,
   useSearchResourceGrants,
 } from '../../domain/auth/auth.hooks.ts';
 import {
@@ -27,8 +24,8 @@ import {
 } from '../../services/graphql/graphql.ts';
 import { useDebounced } from '../../commons/hooks.ts';
 import { matchOption, orNull } from '../../commons/utils.ts';
-import { message } from 'antd';
 import AssignRoleModal from './AssignRoleModal.tsx';
+import RevokeAppRoleModal from './RevokeAppRoleModal.tsx';
 
 const APP_RESOURCE = { type: ResourceType.App, id: '*' };
 const PAGE_SIZE = 20;
@@ -38,9 +35,7 @@ type GrantRow =
 
 export default function AppTab() {
   const [assignOpen, setAssignOpen] = useState(false);
-  // Which row's actions dropdown is open; kept controlled so the nested Popconfirm
-  // can open without the menu closing on item click.
-  const [openMenuUserId, setOpenMenuUserId] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<GrantRow | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const username = searchParams.get('username') ?? '';
@@ -77,7 +72,10 @@ export default function AppTab() {
   const debRoleName = useDebounced(roleName);
   const debPermission = useDebounced(permission);
 
-  const { isAllowed, isLoading: isLoadingCan } = useCan(APP_RESOURCE, 'acl:list');
+  const { isAllowed, isLoading: isLoadingCan } = useCan(
+    APP_RESOURCE,
+    'acl:list',
+  );
   const { isAllowed: canAssign } = useCan(APP_RESOURCE, 'acl:add');
   const { isAllowed: canRevoke } = useCan(APP_RESOURCE, 'acl:remove');
 
@@ -97,24 +95,9 @@ export default function AppTab() {
   );
 
   const { data: permsData } = useListPermissions('', isAllowed);
-  const permissionOptions = (permsData?.listPermissions.permissions ?? []).map(
-    (p) => ({ value: p }),
-  );
-
-  const revoke = useRevokeAccess();
-  const handleRevoke = (targetUserId: string, roleId: string) =>
-    revoke.mutate(
-      {
-        userId: targetUserId,
-        roleId,
-        resourceType: ResourceType.App,
-        resourceId: '*',
-      },
-      {
-        onSuccess: () => void message.success('Access revoked'),
-        onError: () => void message.error('Failed to revoke access'),
-      },
-    );
+  const permissionOptions = [...(permsData?.listPermissions.permissions ?? [])]
+    .sort()
+    .map((p) => ({ value: p }));
 
   if (isLoadingCan) return <Spin />;
   if (!isAllowed)
@@ -142,9 +125,11 @@ export default function AppTab() {
       key: 'roles',
       render: (_, row) => (
         <Flex gap={4} wrap>
-          {row.grants.map((g) => (
-            <Tag key={g.role.id}>{g.role.name}</Tag>
-          ))}
+          {[...row.grants]
+            .sort((a, b) => a.role.name.localeCompare(b.role.name))
+            .map((g) => (
+              <Tag key={g.role.id}>{g.role.name}</Tag>
+            ))}
         </Flex>
       ),
     },
@@ -157,34 +142,15 @@ export default function AppTab() {
             render: (_: unknown, row: GrantRow) => (
               <Dropdown
                 trigger={['click']}
-                open={openMenuUserId === row.user.id}
-                onOpenChange={(open) =>
-                  setOpenMenuUserId(open ? row.user.id : null)
-                }
                 menu={{
-                  items: row.grants.map((g) => ({
-                    key: g.role.id,
-                    label: (
-                      <Popconfirm
-                        title="Revoke role"
-                        description={`Revoke "${g.role.name}" from this user?`}
-                        okText="Revoke"
-                        okButtonProps={{ danger: true }}
-                        onConfirm={() => {
-                          handleRevoke(row.user.id, g.role.id);
-                          setOpenMenuUserId(null);
-                        }}
-                      >
-                        <Typography.Text
-                          type="danger"
-                          style={{ display: 'block' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Revoke {g.role.name}
-                        </Typography.Text>
-                      </Popconfirm>
-                    ),
-                  })),
+                  items: [
+                    {
+                      key: 'revoke',
+                      label: 'Revoke role',
+                      danger: true,
+                      onClick: () => setRevokeTarget(row),
+                    },
+                  ],
                 }}
               >
                 <Button type="text" icon={<MoreOutlined />} />
@@ -253,9 +219,11 @@ export default function AppTab() {
           onChange: (p) => setPage(p - 1),
         }}
       />
-      <AssignRoleModal
-        open={assignOpen}
-        onClose={() => setAssignOpen(false)}
+      <AssignRoleModal open={assignOpen} onClose={() => setAssignOpen(false)} />
+      <RevokeAppRoleModal
+        key={revokeTarget?.user.id ?? 'none'}
+        target={revokeTarget}
+        onClose={() => setRevokeTarget(null)}
       />
     </>
   );
