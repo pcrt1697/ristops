@@ -157,7 +157,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         start_time = time.time()
-        _logger.info('[BEFORE] Processing request "%s %s"', request.method, request.url.path)
+        _logger.info('[BEFORE] Processing request "%s %s?%s"', request.method, request.url.path, request.url.query)
         response = await call_next(request)
         _logger.info(
             '[AFTER] Processed request in %.3fs "%s %s" %s',

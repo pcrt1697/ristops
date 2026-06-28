@@ -82,7 +82,7 @@ async def get_me() -> UserResponse:
     "/{user_id}",
     response_model=UserResponse
 )
-@policy(Policy(_user_path_resolver, "user~get"))
+@policy(Policy(_user_path_resolver, "user:get"))
 @sql_transactional
 async def get(
         user_id: Annotated[UUID, Path(description="User ID")],
@@ -118,7 +118,7 @@ async def create(request: UserCreationRequest) -> UserResponse:
     "/{user_id}",
     response_model=UserResponse
 )
-@policy(Policy(_user_path_resolver, "user~edit"))
+@policy(Policy(_user_path_resolver, "user:edit"))
 @sql_transactional
 async def update(
         user_id: Annotated[UUID, Path(description="User ID")],
@@ -147,7 +147,7 @@ async def delete_me(
     "/{user_id}",
     status_code=HTTPStatus.NO_CONTENT,
 )
-@policy(Policy(_user_path_resolver, "user~remove"))
+@policy(Policy(_user_path_resolver, "user:remove"))
 @sql_transactional
 async def delete(
         user_id: Annotated[UUID, Path(description="User ID")],

@@ -13,7 +13,7 @@ export default function AppLayout() {
   } = theme.useToken();
 
   return (
-    <Layout style={{ minHeight: '100vh', padding: 16, gap: 16, background: colorBgLayout }}>
+    <Layout style={{ height: '100vh', overflow: 'hidden', padding: 16, gap: 16, background: colorBgLayout }}>
       <Sidebar />
       <Layout style={{ gap: 16, background: 'transparent' }}>
         <TopBar />
@@ -22,6 +22,8 @@ export default function AppLayout() {
             background: colorBgContainer,
             borderRadius: borderRadiusLG,
             padding: 24,
+            overflow: 'auto',
+            minHeight: 0,
           }}
         >
           {error && (

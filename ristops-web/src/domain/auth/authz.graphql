@@ -25,3 +25,60 @@ query ListRoles($input: ListRolesInput!) {
         }
     }
 }
+
+query ListPermissions($query: String) {
+    listPermissions(input: $query) {
+        permissions
+    }
+}
+
+query SearchResourceGrants($input: SearchResourceGrantsInput!) {
+    searchResourceGrants(input: $input) {
+        items {
+            user {
+                id
+                username
+                displayName
+            }
+            grants {
+                role {
+                    id
+                    name
+                }
+                resource {
+                    resourceId
+                    resourceType
+                }
+                assignedAt
+            }
+        }
+        total
+        page
+        pageSize
+        totalPages
+    }
+}
+
+query SearchMembers($input: MemberSearchInput!) {
+    searchMembers(input: $input) {
+        items {
+            id
+            username
+            displayName
+        }
+        total
+        page
+        pageSize
+        totalPages
+    }
+}
+
+mutation GrantAccess($input: GrantAccessInput!) {
+    grantAccess(input: $input) {
+        id
+    }
+}
+
+mutation RevokeAccess($input: RevokeAccessInput!) {
+    revokeAccess(input: $input)
+}

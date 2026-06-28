@@ -3,7 +3,7 @@ from http import HTTPStatus
 from fastapi import HTTPException
 
 from ristops_be_authz.domain.models import RoleNode
-from ristops_lib_core.schema.authz import RoleResponse, ListRolesQuery
+from ristops_lib_core.schema.authz import RoleResponse, ListRolesQuery, PERMISSION_SEPARATOR
 from ristops_lib_neo4j.engine import get_neo4j_transaction
 
 
@@ -52,6 +52,13 @@ async def find_role(role_id: str) -> RoleResponse:
 
 async def list_roles(query: ListRolesQuery) -> list[RoleResponse]:
     transaction = get_neo4j_transaction()
+    permission = query.permission.lower() if query.permission else None
+    # When the filter is a full permission id (e.g. "venue:add"), also match roles granting the
+    # scope wildcard ("venue:*"); the global wildcard ("*") is matched in the query unconditionally.
+    permission_scope_wildcard = None
+    if permission and PERMISSION_SEPARATOR in permission:
+        scope = permission.split(PERMISSION_SEPARATOR)[0]
+        permission_scope_wildcard = f"{scope}{PERMISSION_SEPARATOR}*"
     result = await transaction.run(
         """
         MATCH (r:Role)
@@ -60,6 +67,8 @@ async def list_roles(query: ListRolesQuery) -> list[RoleResponse]:
           AND ($permission IS NULL OR EXISTS {
                 MATCH (r)-[:GRANTS]->(p:Permission)
                 WHERE toLower(p.id) CONTAINS $permission
+                   OR p.id = '*'
+                   OR ($permission_scope_wildcard IS NOT NULL AND toLower(p.id) = $permission_scope_wildcard)
           })
         OPTIONAL MATCH (r)-[:GRANTS]->(perm:Permission)
         RETURN r.id          AS id,
@@ -70,6 +79,7 @@ async def list_roles(query: ListRolesQuery) -> list[RoleResponse]:
         """,
         role_id=query.role_id.lower() if query.role_id else None,
         role_name=query.role_name.lower() if query.role_name else None,
-        permission=query.permission.lower() if query.permission else None,
+        permission=permission,
+        permission_scope_wildcard=permission_scope_wildcard,
     )
     return [RoleResponse(**record.data()) async for record in result]

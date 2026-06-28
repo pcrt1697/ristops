@@ -23,6 +23,10 @@ class PermissionAction(StrEnum):
     MANAGE = '*'
 
 
+# Separator between a permission's scope and action (e.g. "venue:add").
+PERMISSION_SEPARATOR = ":"
+
+
 class AuthorizationResource(BaseModel):
     """ ACL resource definition."""
     resource_id: str = Field(description="ACL resource identifier")

@@ -25,7 +25,7 @@ user_router = APIRouter(
     "/{user_id}/roles",
     response_model=ListUserGrantsResponse,
 )
-@policy(Policy(_user_path_resolver, "role~list"))
+@policy(Policy(_user_path_resolver, "role:list"))
 @neo4j_transactional
 async def list_roles(
         user_id: Annotated[str, Path(description="User ID")],
@@ -41,7 +41,7 @@ async def list_roles(
     "/{user_id}/resources",
     response_model=ListUserResourceGrantsResponse,
 )
-@policy(Policy(_user_path_resolver, "resource~list"))
+@policy(Policy(_user_path_resolver, "resource:list"))
 @neo4j_transactional
 async def list_resources(
         user_id: Annotated[str, Path(description="User ID")],
@@ -57,7 +57,7 @@ async def list_resources(
     "/{user_id}/acl-check",
     response_model=AuthorizationResponse,
 )
-@policy(Policy(_user_path_resolver, "acl~get"))
+@policy(Policy(_user_path_resolver, "acl:get"))
 @neo4j_transactional
 async def acl_check(
         user_id: Annotated[str, Path(description="User ID")],

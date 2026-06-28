@@ -40,8 +40,8 @@ async def list_venues(
                 AuthorizationResourceGrantsFetcher(
                     authz_client_factory,
                     ResourceType.VENUE,
-                    "venue~get",
-                    override_policies=(Policy(resolve_static_resource("*", ResourceType.APP), "venue~list"),)
+                    "venue:get",
+                    override_policies=(Policy(resolve_static_resource("*", ResourceType.APP), "venue:list"),)
                 )
             )
         ]
@@ -59,7 +59,7 @@ async def list_venues(
     response_model=VenueResponse,
     status_code=HTTPStatus.CREATED,
 )
-@policy(Policy(resolve_static_resource("*", ResourceType.APP), "venue~add"))
+@policy(Policy(resolve_static_resource("*", ResourceType.APP), "venue:add"))
 @sql_transactional
 async def create(request: VenueCreationRequest) -> VenueResponse:
     """Create a new venue."""
@@ -74,7 +74,7 @@ async def create(request: VenueCreationRequest) -> VenueResponse:
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
     },
 )
-@policy(Policy(_venue_path_resolver, "venue~get"))
+@policy(Policy(_venue_path_resolver, "venue:get"))
 @sql_transactional
 async def get(
         venue_id: Annotated[UUID, Path(description="Venue ID")],
@@ -91,7 +91,7 @@ async def get(
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
     },
 )
-@policy(Policy(_venue_path_resolver, "venue~edit"))
+@policy(Policy(_venue_path_resolver, "venue:edit"))
 @sql_transactional
 async def update(
         venue_id: Annotated[UUID, Path(description="Venue ID")],
@@ -109,7 +109,7 @@ async def update(
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
     },
 )
-@policy(Policy(_venue_path_resolver, "venue~remove"))
+@policy(Policy(_venue_path_resolver, "venue:remove"))
 @sql_transactional
 async def delete(
         venue_id: Annotated[UUID, Path(description="Venue ID")],

@@ -11,7 +11,9 @@ from ristops_lib_be.authz.events import (
     ResourceDeletedLifecycleEvent
 )
 from ristops_lib_be.events import LifecycleOperationType
-from ristops_lib_core.schema.authz import ResourceType, AuthorizationResource, ResourceUserGrantsResponse
+from ristops_lib_core.schema.authz import (
+    ResourceType, AuthorizationResource, ResourceUserGrantsResponse, PERMISSION_SEPARATOR
+)
 from ristops_lib_core.schema.pagination import Page, SortDirection
 from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transaction_provider
 from ristops_lib_redis.engine import StreamPayload
@@ -74,6 +76,7 @@ async def find_or_create_resources(
 
 
 async def find_or_create_root() -> ResourceNode:
+    _logger.info(f"Creating root resource...")
     return await _find_or_create_resource(ResourceType.APP.value, "*")
 
 
@@ -174,7 +177,10 @@ WHERE ($username IS NULL OR u.username CONTAINS $username)
     WHERE ($role_id IS NULL OR toLower(role.id) CONTAINS $role_id)
       AND ($role_name IS NULL OR toLower(role.name) CONTAINS $role_name)
       AND ($permission IS NULL OR EXISTS {
-            MATCH (role)-[:GRANTS]->(p:Permission) WHERE toLower(p.id) CONTAINS $permission
+            MATCH (role)-[:GRANTS]->(p:Permission)
+            WHERE toLower(p.id) CONTAINS $permission
+               OR p.id = '*'
+               OR ($permission_scope_wildcard IS NOT NULL AND toLower(p.id) = $permission_scope_wildcard)
       })
   }
 """
@@ -224,6 +230,13 @@ async def search_resource_users(
 ) -> Page[ResourceUserGrantsResponse]:
     """Page of users with access to the resource, each with their (direct + inherited) role grants."""
     transaction = get_neo4j_transaction()
+    permission = query.permission.lower() if query.permission else None
+    # When the filter is a full permission id (e.g. "venue:add"), also match roles granting the
+    # scope wildcard ("venue:*"); the global wildcard ("*") is matched in the query unconditionally.
+    permission_scope_wildcard = None
+    if permission and PERMISSION_SEPARATOR in permission:
+        scope = permission.split(PERMISSION_SEPARATOR)[0]
+        permission_scope_wildcard = f"{scope}{PERMISSION_SEPARATOR}*"
     params = {
         "resource_type": resource_type.value,
         "resource_id": resource_id,
@@ -231,7 +244,8 @@ async def search_resource_users(
         "display_name": query.display_name.lower() if query.display_name else None,
         "role_id": query.role_id.lower() if query.role_id else None,
         "role_name": query.role_name.lower() if query.role_name else None,
-        "permission": query.permission.lower() if query.permission else None,
+        "permission": permission,
+        "permission_scope_wildcard": permission_scope_wildcard,
         "skip": query.page * query.page_size,
         "limit": query.page_size,
     }

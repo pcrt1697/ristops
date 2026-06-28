@@ -19,7 +19,7 @@ permissions_router = APIRouter(
     "",
     response_model=ListPermissionsResponse,
 )
-@policy(Policy(resolve_static_resource("*", ResourceType.APP), "permission~list"))
+@policy(Policy(resolve_static_resource("*", ResourceType.APP), "permission:list"))
 @neo4j_transactional
 async def get_permissions(
         query: Annotated[

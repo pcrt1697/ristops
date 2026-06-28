@@ -1,22 +1,27 @@
 import { Tabs, type TabsProps } from 'antd';
-import RolesTab from '../../components/acl/RolesTab.tsx';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+
+const BASE_PATH = '/admin/access-control';
+
+const items: TabsProps['items'] = [
+  { key: 'app', label: 'App' },
+  { key: 'roles', label: 'Roles' },
+  { key: 'permissions', label: 'Permissions' },
+];
 
 export default function AdminAclPage() {
-  const items: TabsProps['items'] = [
-    {
-      key: 'roles',
-      label: 'Roles',
-      children: <RolesTab />,
-    },
-    {
-      key: 'permissions',
-      label: 'Permissions',
-      children: 'List of permissions',
-    },
-  ];
+  const navigate = useNavigate();
+  const location = useLocation();
+  const activeKey = location.pathname.split('/').pop() ?? 'roles';
+
   return (
     <div>
-      <Tabs defaultActiveKey="roles" items={items} />
+      <Tabs
+        activeKey={activeKey}
+        items={items}
+        onChange={(key) => void navigate(`${BASE_PATH}/${key}`)}
+      />
+      <Outlet />
     </div>
   );
 }

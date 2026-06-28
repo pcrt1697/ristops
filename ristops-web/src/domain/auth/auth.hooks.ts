@@ -4,7 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import type { AuthState } from './auth.types.ts';
 import type { ServiceError } from '../../services/common.ts';
 import { message } from 'antd';
-import type { ListRolesInput, ResourceType } from '../../services/graphql/graphql.ts';
+import type {
+  ListRolesInput,
+  MemberSearchInput,
+  ResourceType,
+  SearchResourceGrantsInput,
+} from '../../services/graphql/graphql.ts';
 import { hasPermission } from './authz.utils.ts';
 
 export function useAuth(): AuthState {
@@ -87,6 +92,57 @@ export function useListRoles(input: ListRolesInput, enabled = true) {
     queryKey: ['authz.listRoles', input],
     queryFn: () => authZApi.listRoles(input),
     enabled,
+  });
+}
+
+export function useListPermissions(input: string | null = null, enabled = true) {
+  return useQuery({
+    queryKey: ['authz.listPermissions', input],
+    queryFn: () => authZApi.listPermissions(input),
+    enabled,
+  });
+}
+
+export function useSearchResourceGrants(
+  input: SearchResourceGrantsInput,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['authz.searchResourceGrants', input],
+    queryFn: () => authZApi.searchResourceGrants(input),
+    enabled,
+  });
+}
+
+export function useSearchMembers(input: MemberSearchInput, enabled = true) {
+  return useQuery({
+    queryKey: ['authz.searchMembers', input],
+    queryFn: () => authZApi.searchMembers(input),
+    enabled,
+  });
+}
+
+export function useGrantAccess() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: authZApi.grantAccess,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['authz.searchResourceGrants'],
+      });
+    },
+  });
+}
+
+export function useRevokeAccess() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: authZApi.revokeAccess,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['authz.searchResourceGrants'],
+      });
+    },
   });
 }
 

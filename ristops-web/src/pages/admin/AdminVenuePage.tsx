@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Avatar, Card, Spin, theme } from 'antd';
+import { Avatar, Card, Spin, theme, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import RequirePermission from '../../components/routing/RequirePermission.tsx';
 import { ResourceType } from '../../services/graphql/graphql.ts';
@@ -13,7 +13,7 @@ function CreateVenueCard() {
   const [modalOpen, setModalOpen] = useState(false);
   const { isAllowed: canAddVenues, isLoading } = useCan(
     { type: ResourceType.App, id: '*' },
-    'venue~add',
+    'venue:add',
   );
 
   if (isLoading) return <Spin fullscreen />;
@@ -21,7 +21,11 @@ function CreateVenueCard() {
   const iconColor = canAddVenues ? token.colorPrimary : token.colorTextDisabled;
   return (
     <>
-      <Card hoverable={canAddVenues} onClick={onClick}>
+      <Card
+        hoverable={canAddVenues}
+        onClick={onClick}
+        style={canAddVenues ? undefined : { borderColor: token.colorError }}
+      >
         <Meta
           avatar={
             <Avatar
@@ -31,9 +35,13 @@ function CreateVenueCard() {
           }
           title="Create Venue"
           description={
-            canAddVenues
-              ? 'Start setup procedure to create a new Venue'
-              : "You don't have permission to create venues"
+            canAddVenues ? (
+              'Start setup procedure to create a new Venue'
+            ) : (
+              <Typography.Text type="danger">
+                You don&apos;t have permission to create venues
+              </Typography.Text>
+            )
           }
         />
       </Card>
@@ -46,7 +54,7 @@ export default function AdminVenuePage() {
   return (
     <RequirePermission
       resource={{ type: ResourceType.App, id: '*' }}
-      permissions={['venue~list']}
+      permissions={['venue:list']}
     >
       <div
         style={{

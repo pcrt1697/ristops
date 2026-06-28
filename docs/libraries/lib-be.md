@@ -40,7 +40,7 @@ accessed.
 
 ```python
 @router.get("/{location_id}")
-@policy(Policy(BaseResourceResolver(ResourceType.LOCATION), "location~get"))
+@policy(Policy(BaseResourceResolver(ResourceType.LOCATION), "location:get"))
 @neo4j_transactional
 async def get_location(location_id: str): ...
 ```
@@ -63,8 +63,8 @@ signal unrestricted access.
 venue_grants: Annotated[
     ListUserResourceGrantsResponse | None,
     Depends(AuthorizationResourceGrantsFetcher(
-        authz_client_factory, ResourceType.VENUE, "venue~get",
-        override_policies=(Policy(resolve_static_resource("*", ResourceType.APP), "venue~list"),),
+        authz_client_factory, ResourceType.VENUE, "venue:get",
+        override_policies=(Policy(resolve_static_resource("*", ResourceType.APP), "venue:list"),),
     )),
 ]
 ```

@@ -33,7 +33,7 @@ export default function TopBar() {
       type: ResourceType.App,
       id: '*',
     },
-    'app~*',
+    'app:*',
   );
   if (isLoading) return <Spin fullscreen />;
 

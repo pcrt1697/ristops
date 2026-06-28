@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, UTC
 from http import HTTPStatus
-from uuid import uuid5
+from uuid import uuid5, UUID
 
 from fastapi import HTTPException
 
@@ -13,13 +13,19 @@ from ristops_be_authz.domain.role.service import find_role_by_id_or_throw
 from ristops_lib_core.auth.authn import RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME
 from ristops_lib_core.schema.authz import (
     GrantAccessRequest, RevokeAccessRequest, CheckAuthorizationRequest,
-    ResourceType, AuthorizationResource
+    ResourceType, AuthorizationResource, PERMISSION_SEPARATOR
 )
 from ristops_lib_neo4j.engine import get_neo4j_transaction, neo4j_transactional
 
 _logger = logging.getLogger(__name__)
 _SYSTEM_ADMIN_ROLE = "admin"
 _SYSTEM_MEMBER_ROLE = "member"
+
+
+def _scope_wildcard(permission: str) -> str:
+    """Return the scope wildcard for a permission (e.g. "venue:add" -> "venue:*")."""
+    scope = permission.split(PERMISSION_SEPARATOR)[0]
+    return f"{scope}{PERMISSION_SEPARATOR}*"
 
 
 def get_acl_id(user_id: str, resource_type: ResourceType, resource_id: str, role_id: str) -> str:
@@ -128,44 +134,24 @@ async def delete_user_acl(user_id: str) -> None:
     _logger.info(f"Deleted ACL for user {user_id}")
 
 
-async def _ensure_admin_user(admin_id: str) -> None:
-    """Bootstrap the admin User node so the admin grant can resolve it.
-
-    Run before the be-authn seed; be-authn's admin lifecycle event later reconciles
-    (overwrites) this node idempotently.
-    """
-    transaction = get_neo4j_transaction()
-    await transaction.run(
-        """
-        MERGE (u:User {id: $id})
-          ON CREATE SET u.created_at = $created_at
-        SET u.username = $username
-        """,
-        id=admin_id,
-        username=DEFAULT_ADMIN_USERNAME.lower(),
-        created_at=datetime.now(UTC).isoformat(),
-    )
+async def initialize_acl_seed() -> UUID:
+    """ Clear admin ACL and upsert root resource. """
+    admin_id = uuid5(RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME)
+    await delete_user_acl(str(admin_id))
+    await find_or_create_root()
+    return admin_id
 
 
-@neo4j_transactional
-async def setup_admin_acl() -> None:
+async def assign_admin_role(admin_id: UUID) -> None:
     """ Create ACL for admin user. """
-
-    admin_id = str(uuid5(RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME))
-    _logger.info(f"Setting up ACL for admin {admin_id}")
-
-    await delete_user_acl(admin_id)
     request = GrantAccessRequest(
-        user_id=admin_id,
+        user_id=str(admin_id),
         role_id=_SYSTEM_ADMIN_ROLE,
         resource=AuthorizationResource(
             resource_id="*",
             resource_type=ResourceType.APP,
         ),
     )
-    _logger.info(f"Creating root resource...")
-    await find_or_create_root()
-    await _ensure_admin_user(admin_id)
     acl = await grant_access(request)
     _logger.info(f"ACL setup completed for admin, created entry {acl.id}")
 
@@ -181,7 +167,7 @@ async def check_acl_authorization(request: CheckAuthorizationRequest) -> bool:
             "resource_type": grant.resource.resource_type.value,
             "resource_id": grant.resource.resource_id,
             "permission": permission,
-            "scope": permission.split("~")[0],  # e.g. "order" from "order~listItems"
+            "scope_wildcard": _scope_wildcard(permission),  # e.g. "order:*" from "order:listItems"
         }
         for grant in request.grants
         for permission in grant.permissions
@@ -201,10 +187,10 @@ async def check_acl_authorization(request: CheckAuthorizationRequest) -> bool:
             }
 
         // follow the acl to the role and check if the role grants the permission
-        // supports exact match, scope wildcard (e.g. orderItem.*) and full wildcard (*)
+        // supports exact match, scope wildcard (e.g. orderItem:*) and full wildcard (*)
         MATCH (acl)-[:WITH_ROLE]->(:Role)-[:GRANTS]->(p:Permission)
         WHERE p.id = check.permission
-           OR p.id = check.scope + '~*'
+           OR p.id = check.scope_wildcard
            OR p.id = '*'
 
         // aggregate results — true only if every single check passed

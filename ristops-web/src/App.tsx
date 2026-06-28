@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/routing/ProtectedRoute.tsx';
 import UserLoginPage from './pages/user/UserLoginPage.tsx';
 import HomePage from './pages/HomePage.tsx';
@@ -12,6 +12,9 @@ import NotFoundPage from './pages/NotFoundPage.tsx';
 import { GlobalErrorProvider } from './context/error.provider.tsx';
 import AdminVenuePage from './pages/admin/AdminVenuePage.tsx';
 import AdminAclPage from './pages/admin/AdminAclPage.tsx';
+import AppTab from './components/acl/AppTab.tsx';
+import RolesTab from './components/acl/RolesTab.tsx';
+import PermissionsTab from './components/acl/PermissionsTab.tsx';
 
 export default function App() {
   return (
@@ -27,10 +30,12 @@ export default function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/profile" element={<UserProfilePage />} />
                 <Route path="/admin/venues" element={<AdminVenuePage />} />
-                <Route
-                  path="/admin/access-control"
-                  element={<AdminAclPage />}
-                />
+                <Route path="/admin/access-control" element={<AdminAclPage />}>
+                  <Route index element={<Navigate to="app" replace />} />
+                  <Route path="app" element={<AppTab />} />
+                  <Route path="roles" element={<RolesTab />} />
+                  <Route path="permissions" element={<PermissionsTab />} />
+                </Route>
                 <Route path="/venues/:venueId" element={<VenueLayout />}>
                   <Route path="orders" element={<div>Orders</div>} />
                   <Route

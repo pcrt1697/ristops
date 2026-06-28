@@ -17,7 +17,7 @@ roles_router = APIRouter(
     "/{role_id}",
     response_model=RoleResponse,
 )
-@policy(Policy(resolve_static_resource("*", ResourceType.APP), "role~get"))
+@policy(Policy(resolve_static_resource("*", ResourceType.APP), "role:get"))
 @neo4j_transactional
 async def get_role(
         role_id: Annotated[str, Path(description="User ID")],

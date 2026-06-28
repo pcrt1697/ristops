@@ -25,7 +25,7 @@ resource_router = APIRouter(
     response_model=AclResponse,
     status_code=HTTPStatus.CREATED,
 )
-@policy(Policy(resolve_path_resource, "acl~add"))
+@policy(Policy(resolve_path_resource, "acl:add"))
 @neo4j_transactional
 async def grant_resource_access(
         resource_type: Annotated[ResourceType, Path(description="Resource type")],
@@ -55,7 +55,7 @@ async def grant_resource_access(
     "/{resource_type}/{resource_id}/acl",
     status_code=HTTPStatus.NO_CONTENT,
 )
-@policy(Policy(resolve_path_resource, "acl~remove"))
+@policy(Policy(resolve_path_resource, "acl:remove"))
 @neo4j_transactional
 async def revoke_resource_access(
         resource_type: Annotated[ResourceType, Path(description="Resource type")],
@@ -79,9 +79,9 @@ async def revoke_resource_access(
     "/{resource_type}/{resource_id}/users",
     response_model=Page[ResourceUserGrantsResponse],
 )
-@policy(Policy(resolve_path_resource, "acl~list"))
+@policy(Policy(resolve_path_resource, "acl:list"))
 @neo4j_transactional
-async def grant_resource_access(
+async def list_resource_users(
         resource_type: Annotated[ResourceType, Path(description="Resource type")],
         resource_id: Annotated[str, Path(description="Resource identifier")],
         query: Annotated[ResourceUserSearchQuery, Query()],
