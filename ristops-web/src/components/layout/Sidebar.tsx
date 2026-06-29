@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Button, Layout, Menu, theme, Typography } from 'antd';
+import { Button, Layout, Menu, type MenuProps, theme, Typography } from 'antd';
 import {
-  HomeOutlined,
-  VerticalLeftOutlined,
-  VerticalRightOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  SafetyCertificateOutlined,
+  ShopOutlined,
 } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useCan } from '../../domain/auth/auth.hooks.ts';
+import { ResourceType } from '../../services/graphql/graphql.ts';
 import logo from '../../assets/ristops-logo-icon.png';
 
 const { Sider } = Layout;
@@ -17,80 +20,94 @@ export default function Sidebar() {
   const location = useLocation();
   const { token } = theme.useToken();
 
-  const topItems = [
-    {
-      key: '/',
-      icon: <HomeOutlined />,
-      label: 'Home',
-      onClick: () => void navigate('/'),
-    },
-  ];
+  const { isAllowed: canManageApp } = useCan(
+    { type: ResourceType.App, id: '*' },
+    'app:*',
+  );
+
+  const items: MenuProps['items'] = [];
+  if (location.pathname.startsWith('/admin') && canManageApp) {
+    items.push(
+      {
+        key: '/admin/venues',
+        icon: <ShopOutlined />,
+        label: 'Venues',
+        onClick: () => void navigate('/admin/venues'),
+      },
+      {
+        key: '/admin/access-control',
+        icon: <SafetyCertificateOutlined />,
+        label: 'Access Control',
+        onClick: () => void navigate('/admin/access-control'),
+      },
+    );
+  }
+
+  // Highlight the item whose path is a prefix of the current location.
+  const selectedKey = items
+    .map((item) => item?.key)
+    .filter((key): key is string => typeof key === 'string')
+    .find((key) => location.pathname.startsWith(key));
 
   return (
-    <div style={{ position: 'relative' }}>
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        collapsedWidth={60}
-        trigger={null}
-        theme="light"
-        style={{
-          overflow: 'auto',
-          height: 'calc(100vh - 32px)',
-          position: 'sticky',
-          insetInlineStart: 0,
-          top: 16,
-          scrollbarWidth: 'thin',
-          scrollbarGutter: 'stable',
-          borderRadius: token.borderRadiusLG,
-        }}
-      >
+    <Sider
+      collapsible
+      collapsed={collapsed}
+      onCollapse={setCollapsed}
+      collapsedWidth={60}
+      trigger={null}
+      theme="light"
+      style={{
+        height: 'calc(100vh - 32px)',
+        position: 'sticky',
+        insetInlineStart: 0,
+        top: 16,
+        overflow: 'hidden',
+        borderRadius: token.borderRadiusLG,
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div
-          style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+          role="button"
+          onClick={() => void navigate('/')}
+          style={{
+            height: 64,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            paddingLeft: collapsed ? 0 : 20,
+            gap: 10,
+            cursor: 'pointer',
+            borderBottom: `1px solid ${token.colorSplit}`,
+          }}
         >
-          <div
-            style={{
-              height: 64,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: collapsed ? 'center' : 'flex-start',
-              paddingLeft: collapsed ? 0 : 20,
-              gap: 10,
-              borderBottom: `1px solid ${token.colorSplit}`,
-            }}
-          >
-            <img src={logo} alt="RistOps" style={{ height: 24, width: 24 }} />
-            {!collapsed && (
-              <Text strong style={{ fontSize: 16 }}>
-                RistOps
-              </Text>
-            )}
-          </div>
-
-          <Menu
-            mode="inline"
-            selectedKeys={[location.pathname]}
-            items={topItems}
-            style={{ borderInlineEnd: 0, flex: 1 }}
-          />
+          <img src={logo} alt="RistOps" style={{ height: 24, width: 24 }} />
+          {!collapsed && (
+            <Text strong style={{ fontSize: 16 }}>
+              RistOps
+            </Text>
+          )}
         </div>
-      </Sider>
 
-      <Button
-        shape="circle"
-        size="small"
-        icon={collapsed ? <VerticalRightOutlined /> : <VerticalLeftOutlined />}
-        onClick={() => setCollapsed(!collapsed)}
-        style={{
-          position: 'absolute',
-          right: -12,
-          top: 20,
-          zIndex: 1,
-          boxShadow: token.boxShadowSecondary,
-          background: token.colorBgContainer,
-          borderColor: token.colorBorderSecondary,
-        }}
-      />
-    </div>
+        <Menu
+          mode="inline"
+          selectedKeys={selectedKey ? [selectedKey] : []}
+          items={items}
+          style={{ flex: 1, overflow: 'auto', borderInlineEnd: 0 }}
+        />
+
+        <Button
+          type="text"
+          block
+          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          onClick={() => setCollapsed(!collapsed)}
+          style={{
+            height: 48,
+            borderTop: `1px solid ${token.colorSplit}`,
+            borderRadius: 0,
+          }}
+        />
+      </div>
+    </Sider>
   );
 }

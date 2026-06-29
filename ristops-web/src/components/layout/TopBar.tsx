@@ -11,7 +11,6 @@ import {
   LogoutOutlined,
   MenuOutlined,
   SafetyCertificateOutlined,
-  ShopOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -37,30 +36,14 @@ export default function TopBar() {
   );
   if (isLoading) return <Spin fullscreen />;
 
-  const adminItems: MenuProps['items'] = [];
-  if (canManageApp) {
-    adminItems.push({
-      key: '/admin/venues',
-      icon: <ShopOutlined />,
-      label: 'Venues',
-      onClick: () => void navigate('/admin/venues'),
-    });
-    adminItems.push({
-      key: '/admin/access-control',
-      icon: <SafetyCertificateOutlined />,
-      label: 'Access Control',
-      onClick: () => void navigate('/admin/access-control'),
-    });
-  }
-
   const items: MenuProps['items'] = [];
-  if (adminItems.length > 0) {
+  if (canManageApp) {
     items.push(
       {
-        key: 'administration',
+        key: '/admin',
+        icon: <SafetyCertificateOutlined />,
         label: 'Administration',
-        type: 'group',
-        children: adminItems,
+        onClick: () => void navigate('/admin/access-control'),
       },
       { type: 'divider' },
     );
