@@ -1,6 +1,5 @@
 from datetime import datetime
 from enum import StrEnum
-from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -42,7 +41,7 @@ class AuthorizationGrant(BaseModel):
 
 
 class CheckAuthorizationRequest(BaseModel):
-    user_id: UUID = Field(description="Identifier of the user associated with the request")
+    user_id: str = Field(description="Identifier of the user associated with the request")
     grants: list[AuthorizationGrant]
 
 

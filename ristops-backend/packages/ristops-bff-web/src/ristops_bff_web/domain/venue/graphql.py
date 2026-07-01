@@ -95,6 +95,7 @@ class CreateVenueInput:
         description="Address of the venue.",
     )
     description: str | None = strawberry.field(
+        default=None,
         description="Description of the venue.",
     )
 

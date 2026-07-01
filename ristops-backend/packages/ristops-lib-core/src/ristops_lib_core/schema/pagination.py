@@ -57,7 +57,6 @@ class SearchQuery(PaginationParams):
     sort: list[str] = Field(
         default_factory=list,
         description="Repeatable. Prefix a field with '-' for descending.",
-        min_length=1,
     )
 
     sort_field_enum: ClassVar[type[StrEnum]]

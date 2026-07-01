@@ -142,7 +142,7 @@ async def delete_resource(resource_type: ResourceType, resource_id: str) -> None
 
 
 async def on_resource_event(_: str, payload: StreamPayload) -> None:
-    event = resource_lifecycle_event_adapter.validate_json(payload)
+    event = resource_lifecycle_event_adapter.validate_json(payload["data"])
     async with neo4j_transaction_provider.context():
         if event.operation == LifecycleOperationType.CREATED:
             _event: ResourceCreatedLifecycleEvent = event

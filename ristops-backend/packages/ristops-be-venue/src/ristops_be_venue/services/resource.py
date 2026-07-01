@@ -51,9 +51,11 @@ async def _publish_resource_lifecycle_event(
 ) -> None:
     """Publish a resource lifecycle event to the resource lifecycle stream."""
     settings = ResourceLifecycleProducerSettings.get()
+    # The event carries a nested `resources` list, which Redis stream fields can't hold;
+    # serialize the whole event as JSON under a single field and parse it on the consumer.
     await redis_client.redis.xadd(
         settings.stream,
-        event.model_dump(mode="json", exclude_none=True),
+        {"data": event.model_dump_json()},
         maxlen=10_000,
         approximate=True,
     )

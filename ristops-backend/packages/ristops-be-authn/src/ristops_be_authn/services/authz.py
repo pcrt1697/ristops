@@ -42,7 +42,7 @@ async def _publish_user_lifecycle_event(info: AppMember, operation: LifecycleOpe
     settings = UserLifecycleProducerSettings.get()
     await redis_client.redis.xadd(
         settings.stream,
-        event.model_dump(mode="json", exclude_none=True),
+        event.model_dump(exclude_none=True),
         maxlen=10_000,
         approximate=True,
     )
