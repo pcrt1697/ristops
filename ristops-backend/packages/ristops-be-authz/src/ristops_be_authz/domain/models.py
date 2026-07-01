@@ -23,6 +23,7 @@ class RoleNode(BaseModel):
     id: str = Field(description="Role ID")
     name: str = Field(description="Role name")
     description: str = Field(description="Role description")
+    scope: str = Field(description="Resource type this role can be assigned to")
 
 
 class PermissionNode(BaseModel):
@@ -53,6 +54,7 @@ class AclNode(BaseModel):
 
     id: str = Field(description="Acl ID")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Acl creation time")
+    expires_at: datetime | None = Field(default=None, description="Optional grant expiry time")
 
 
 NODES = (

@@ -130,12 +130,16 @@ async def list_permissions(query: str | None) -> list[str]:
 async def grant_access(grant_input: dict[str, Any]) -> dict[str, Any]:
     resource_type = grant_input["resource_type"]
     resource_id = grant_input["resource_id"]
+    body = {
+        "user_id": grant_input["user_id"],
+        "role_id": grant_input["role_id"],
+    }
+    expires_at = grant_input.get("expires_at")
+    if expires_at is not None:
+        body["expires_at"] = expires_at.isoformat()
     response = await authz_client.client.post(
         url=f"resources/{resource_type}/{resource_id}/acl",
-        json={
-            "user_id": grant_input["user_id"],
-            "role_id": grant_input["role_id"],
-        },
+        json=body,
     )
     return acl_transformer.get_json(response)
 

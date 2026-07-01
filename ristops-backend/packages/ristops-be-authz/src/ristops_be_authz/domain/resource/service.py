@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, UTC
 from http import HTTPStatus
 
 from fastapi import HTTPException
@@ -166,16 +167,19 @@ _RESOURCE_USER_SORT_EXPR = {
 # role/permission ids are compared case-insensitively via toLower().
 _RESOURCE_USERS_BASE = """
 MATCH (target:Resource {resource_type: $resource_type, resource_id: $resource_id})
-MATCH (target)-[:BELONGS_TO*0..]->(:Resource)<-[:ON]-(:Acl)<-[:HAS_ACCESS]-(u:User)
+MATCH (target)-[:BELONGS_TO*0..]->(:Resource)<-[:ON]-(acl0:Acl)<-[:HAS_ACCESS]-(u:User)
+WHERE (acl0.expires_at IS NULL OR datetime(acl0.expires_at) > datetime($now))
 WITH DISTINCT target, u
 WHERE ($username IS NULL OR u.username CONTAINS $username)
   AND ($display_name IS NULL OR u.display_name CONTAINS $display_name)
   AND EXISTS {
     MATCH (u)-[:HAS_ACCESS]->(acl:Acl)-[:ON]->(src:Resource)
     WHERE (target)-[:BELONGS_TO*0..]->(src)
+      AND (acl.expires_at IS NULL OR datetime(acl.expires_at) > datetime($now))
     MATCH (acl)-[:WITH_ROLE]->(role:Role)
     WHERE ($role_id IS NULL OR toLower(role.id) CONTAINS $role_id)
       AND ($role_name IS NULL OR toLower(role.name) CONTAINS $role_name)
+      AND ($scope IS NULL OR role.scope = $scope)
       AND ($permission IS NULL OR EXISTS {
             MATCH (role)-[:GRANTS]->(p:Permission)
             WHERE toLower(p.id) CONTAINS $permission
@@ -194,12 +198,14 @@ _RESOURCE_USERS_PAGE = _RESOURCE_USERS_BASE + """
 CALL (u, target) {
     MATCH (u)-[:HAS_ACCESS]->(acl:Acl)-[:ON]->(src:Resource)
     WHERE (target)-[:BELONGS_TO*0..]->(src)
+      AND (acl.expires_at IS NULL OR datetime(acl.expires_at) > datetime($now))
     MATCH (acl)-[:WITH_ROLE]->(role:Role)
     RETURN
         collect({
             resource: {resource_id: src.resource_id, resource_type: src.resource_type},
             role_id: role.id,
-            assigned_at: acl.created_at
+            assigned_at: acl.created_at,
+            expires_at: acl.expires_at
         }) AS grants
 }
 WITH u, grants
@@ -243,8 +249,10 @@ async def search_resource_users(
         "display_name": query.display_name.lower() if query.display_name else None,
         "role_id": query.role_id.lower() if query.role_id else None,
         "role_name": query.role_name.lower() if query.role_name else None,
+        "scope": query.scope.value if query.scope else None,
         "permission": permission,
         "permission_scope_wildcard": permission_scope_wildcard,
+        "now": datetime.now(UTC).isoformat(),
         "skip": query.page * query.page_size,
         "limit": query.page_size,
     }

@@ -87,8 +87,11 @@ async def list_user_roles(user_id: str, resource_type: str, resource_id: str) ->
     result = await transaction.run(
         """
         MATCH (u:User {id: $user_id})-[:HAS_ACCESS]->(acl:Acl)-[:ON]->(r:Resource)
-        WHERE (r.resource_type = $resource_type AND r.resource_id = $resource_id)
-           OR EXISTS { MATCH (r)<-[:BELONGS_TO*]-(target:Resource {resource_type: $resource_type, resource_id: $resource_id}) }
+        WHERE (acl.expires_at IS NULL OR datetime(acl.expires_at) > datetime($now))
+          AND (
+            (r.resource_type = $resource_type AND r.resource_id = $resource_id)
+            OR EXISTS { MATCH (r)<-[:BELONGS_TO*]-(target:Resource {resource_type: $resource_type, resource_id: $resource_id}) }
+          )
         MATCH (acl)-[:WITH_ROLE]->(role:Role)
         RETURN role.id AS role_id,
                r.resource_type AS resource_type,
@@ -97,6 +100,7 @@ async def list_user_roles(user_id: str, resource_type: str, resource_id: str) ->
         user_id=user_id,
         resource_type=resource_type,
         resource_id=resource_id,
+        now=datetime.now(UTC).isoformat(),
     )
     records = await result.data()
     return [
@@ -117,6 +121,7 @@ async def list_user_resources(user_id: str, resource_type: ResourceType, permiss
     result = await transaction.run(
         """
         MATCH (u:User {id: $user_id})-[:HAS_ACCESS]->(acl:Acl)-[:ON]->(r:Resource)
+        WHERE (acl.expires_at IS NULL OR datetime(acl.expires_at) > datetime($now))
         MATCH (target:Resource {resource_type: $resource_type})-[:BELONGS_TO*0..]->(r)
         MATCH (acl)-[:WITH_ROLE]->(role:Role)-[:GRANTS]->(p:Permission)
         WHERE p.id IN $permissions
@@ -128,6 +133,7 @@ async def list_user_resources(user_id: str, resource_type: ResourceType, permiss
         user_id=user_id,
         resource_type=resource_type,
         permissions=permissions,
+        now=datetime.now(UTC).isoformat(),
     )
     records = await result.data()
     return [

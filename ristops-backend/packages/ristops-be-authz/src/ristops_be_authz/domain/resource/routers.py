@@ -8,7 +8,7 @@ from ristops_be_authz.domain.resource.schema import ResourceUserSearchQuery
 from ristops_be_authz.domain.resource.service import search_resource_users
 from ristops_lib_be.authz.policy import policy, Policy, resolve_path_resource
 from ristops_lib_core.schema.authz import (
-    ResourceType, AuthorizationResource, GrantAccessRequest, GrantRoleRequest,
+    ResourceType, AuthorizationResource, GrantRoleRequest,
     RevokeAccessRequest, AclResponse, ResourceUserGrantsResponse
 )
 from ristops_lib_core.schema.pagination import Page
@@ -33,21 +33,26 @@ async def grant_resource_access(
         body: GrantRoleRequest,
 ) -> AclResponse:
     """Grant a role to a user on the resource."""
-    request = GrantAccessRequest(
+    resource = AuthorizationResource(
+        resource_id=resource_id,
+        resource_type=resource_type,
+    )
+    acl = await grant_access(
         user_id=body.user_id,
         role_id=body.role_id,
         resource=AuthorizationResource(
             resource_id=resource_id,
             resource_type=resource_type,
         ),
+        expires_at=body.expires_at,
     )
-    acl = await grant_access(request)
     return AclResponse(
         id=acl.id,
         created_at=acl.created_at,
-        user_id=request.user_id,
-        role_id=request.role_id,
-        resource=request.resource,
+        user_id=body.user_id,
+        role_id=body.role_id,
+        resource=resource,
+        expires_at=acl.expires_at,
     )
 
 

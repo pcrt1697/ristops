@@ -24,7 +24,7 @@ import {
 } from '../../services/graphql/graphql.ts';
 import { useDebounced } from '../../commons/hooks.ts';
 import { matchOption, orNull } from '../../commons/utils.ts';
-import AssignRoleModal from './AssignRoleModal.tsx';
+import AssignAppRoleModal from './AssignAppRoleModal.tsx';
 import RevokeAppRoleModal from './RevokeAppRoleModal.tsx';
 
 const APP_RESOURCE = { type: ResourceType.App, id: '*' };
@@ -42,6 +42,7 @@ export default function AppTab() {
   const displayName = searchParams.get('displayName') ?? '';
   const roleName = searchParams.get('roleName') ?? '';
   const permission = searchParams.get('permission') ?? '';
+  const scope = searchParams.get('scope') ?? '';
   const page = Number(searchParams.get('page')) || 0;
 
   // A filter change resets pagination; page changes keep the filters.
@@ -71,6 +72,7 @@ export default function AppTab() {
   const debDisplayName = useDebounced(displayName);
   const debRoleName = useDebounced(roleName);
   const debPermission = useDebounced(permission);
+  const debScope = useDebounced(scope);
 
   const { isAllowed, isLoading: isLoadingCan } = useCan(
     APP_RESOURCE,
@@ -89,6 +91,7 @@ export default function AppTab() {
         displayName: orNull(debDisplayName),
         roleName: orNull(debRoleName),
         permission: orNull(debPermission),
+        scope: debScope ? (debScope as ResourceType) : null,
       },
     },
     isAllowed,
@@ -98,6 +101,12 @@ export default function AppTab() {
   const permissionOptions = [...(permsData?.listPermissions.permissions ?? [])]
     .sort()
     .map((p) => ({ value: p }));
+  const scopeOptions = Object.entries(ResourceType).map(([label, value]) => ({
+    label,
+    value,
+  }));
+
+  const onChange = (p: number) => setPage(p - 1);
 
   if (isLoadingCan) return <Spin />;
   if (!isAllowed)
@@ -195,6 +204,14 @@ export default function AppTab() {
             showSearch={{ filterOption: matchOption }}
             style={{ width: 200 }}
           />
+          <Select
+            placeholder="Role scope"
+            allowClear
+            value={scope || undefined}
+            options={scopeOptions}
+            onChange={(v) => setFilter('scope')(v ?? '')}
+            style={{ width: 160 }}
+          />
         </Flex>
         {canAssign && (
           <Button
@@ -216,10 +233,13 @@ export default function AppTab() {
           pageSize: PAGE_SIZE,
           total: data?.searchResourceGrants.total ?? 0,
           showSizeChanger: false,
-          onChange: (p) => setPage(p - 1),
+          onChange,
         }}
       />
-      <AssignRoleModal open={assignOpen} onClose={() => setAssignOpen(false)} />
+      <AssignAppRoleModal
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+      />
       <RevokeAppRoleModal
         key={revokeTarget?.user.id ?? 'none'}
         target={revokeTarget}

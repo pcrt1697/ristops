@@ -227,6 +227,7 @@ class Role:
     name: str = strawberry.field(description="Name of the role.")
     description: str = strawberry.field(description="Description of the role.")
     permissions: list[str] = strawberry.field(description="List of permissions granted by the role.")
+    scope: ResourceType = strawberry.field(description="Resource type this role can be assigned to.")
 
     @classmethod
     def from_dict(cls, obj: dict[str, Any]) -> "Role":
@@ -235,6 +236,7 @@ class Role:
             name=obj["name"],
             description=obj["description"],
             permissions=obj["permissions"],
+            scope=obj["scope"],
         )
 
 
@@ -284,6 +286,10 @@ class ListRolesInput:
     permission: str | None = strawberry.field(
         default=None,
         description="Filter by permission using `contains` operator.",
+    )
+    scope: ResourceType | None = strawberry.field(
+        default=None,
+        description="Filter by the resource type the role can be assigned to.",
     )
 
 
@@ -341,6 +347,10 @@ class GrantAccessInput:
     )
     resource_type: ResourceType = strawberry.field(
         description="Resource type.",
+    )
+    expires_at: datetime | None = strawberry.field(
+        default=None,
+        description="Optional expiry; the grant is ignored once this time passes.",
     )
 
 
@@ -471,6 +481,10 @@ class RoleGrant:
     role_id: strawberry.Private[str]
     resource: AuthorizationResource = strawberry.field(description="Resource the role is granted on.")
     assigned_at: datetime = strawberry.field(description="Assignment date.")
+    expires_at: datetime | None = strawberry.field(
+        default=None,
+        description="Optional grant expiry time.",
+    )
     role: Role = strawberry.field(
         description="Role granted on the resource.",
         resolver=_resolve_role,
@@ -478,6 +492,7 @@ class RoleGrant:
 
     @classmethod
     def from_dict(cls, obj: dict[str, Any]) -> "RoleGrant":
+        expires_at = obj.get("expires_at")
         return RoleGrant(
             role_id=obj["role_id"],
             resource=AuthorizationResource(
@@ -485,6 +500,7 @@ class RoleGrant:
                 resource_type=obj["resource"]["resource_type"],
             ),
             assigned_at=datetime.fromisoformat(obj["assigned_at"]),
+            expires_at=datetime.fromisoformat(expires_at) if expires_at else None,
         )
 
 
@@ -527,6 +543,10 @@ class ResourceGrantsFilterInput:
         default=None,
         description="Filter by role name using `contains` operator.",
     )
+    scope: ResourceType | None = strawberry.field(
+        default=None,
+        description="Filter by the scope (resource type) of the roles the user holds.",
+    )
 
 
 @strawberry.enum(description="Fields a resource grants search may be sorted by.")
@@ -568,6 +588,10 @@ class ResourceGrantsQueryParams(SearchQueryParams):
             self._set_filter("permission", self._filter.permission)
             self._set_filter("role_id", self._filter.role_id)
             self._set_filter("role_name", self._filter.role_name)
+            self._set_filter(
+                "scope",
+                self._filter.scope.value if self._filter.scope else None,
+            )
 
 
 @strawberry.type

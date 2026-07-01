@@ -19,6 +19,7 @@ query ListRoles($input: ListRolesInput!) {
     listRoles(input: $input) {
         roles {
             id
+            scope
             name
             description
             permissions
@@ -50,6 +51,7 @@ query SearchResourceGrants($input: SearchResourceGrantsInput!) {
                     resourceType
                 }
                 assignedAt
+                expiresAt
             }
         }
         total

@@ -3,6 +3,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
+from ristops_lib_core.schema.authz import ResourceType
 from ristops_lib_core.schema.pagination import SearchQuery
 
 
@@ -36,6 +37,10 @@ class ResourceUserSearchFilter(BaseModel):
     role_name: str | None = Field(
         default=None,
         description="Filter by role name using `contains` operator.",
+    )
+    scope: ResourceType | None = Field(
+        default=None,
+        description="Filter by the scope (resource type) of the roles the user holds.",
     )
 
 

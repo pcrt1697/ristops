@@ -54,16 +54,14 @@ class AuthorizationResponse(BaseModel):
     is_authorized: bool = Field(description="Indicates whether the user is authorized to access the resource")
 
 
-class GrantAccessRequest(BaseModel):
-    user_id: str = Field(description="ID of the user to grant access to")
-    role_id: str = Field(description="Role used to grant access to resource")
-    resource: AuthorizationResource = Field(description="Resource to grant access on")
-
-
 class GrantRoleRequest(BaseModel):
     """Body for granting a role on a resource; the resource comes from the path."""
     user_id: str = Field(description="ID of the user to grant the role to")
     role_id: str = Field(description="Role to grant on the resource")
+    expires_at: datetime | None = Field(
+        default=None,
+        description="Optional expiry; the grant is ignored once this time passes",
+    )
 
 
 class RevokeAccessRequest(BaseModel):
@@ -72,24 +70,18 @@ class RevokeAccessRequest(BaseModel):
     resource: AuthorizationResource = Field(description="Resource to revoke access on")
 
 
-class CreateAuthorizationResourceRequest(BaseModel):
-    resources: list[AuthorizationResource] = Field(description="List of resources to create")
-
-
-class AuthorizationUserResponse(BaseModel):
-    user_id: str = Field(description="User identifier")
-
-
 class AclResponse(BaseModel):
     id: str = Field(description="Acl ID")
     created_at: datetime = Field(description="Acl creation time")
     user_id: str = Field(description="ID of the user the access was granted to")
     role_id: str = Field(description="ID of the role granted on the resource")
     resource: AuthorizationResource = Field(description="Resource the access was granted on")
+    expires_at: datetime | None = Field(default=None, description="Optional grant expiry time")
 
 
 class RoleResponse(BaseModel):
     id: str = Field(description="Role identifier")
+    scope: ResourceType = Field(description="Resource type this role can be assigned to")
     name: str = Field(description="Role name")
     description: str = Field(description="Role description")
     permissions: list[str] = Field(description="Permissions granted by the role")
@@ -123,6 +115,10 @@ class ListRolesQuery(BaseModel):
     role_id: str | None = Field(default=None, description="Filter by role id using `contains` operator")
     role_name: str | None = Field(default=None, description="Filter by role name using `contains` operator")
     permission: str | None = Field(default=None, description="Filter by permission name using `contains` operator")
+    scope: ResourceType | None = Field(
+        default=None,
+        description="Filter by the resource type the role can be assigned to"
+    )
 
 
 class ListRolesResponse(BaseModel):
@@ -143,6 +139,7 @@ class RoleGrant(BaseModel):
     resource: AuthorizationResource = Field(description="Resource to which the role is granted")
     role_id: str = Field(description="ID of the role granted on the resource")
     assigned_at: datetime = Field(description="Assignment date")
+    expires_at: datetime | None = Field(default=None, description="Optional grant expiry time")
 
 
 class ResourceUserGrantsResponse(BaseModel):

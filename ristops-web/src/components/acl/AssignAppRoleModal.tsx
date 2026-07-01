@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Form, message, Modal, Select } from 'antd';
+import { DatePicker, Form, message, Modal, Select } from 'antd';
+import type { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 import {
   useGrantAccess,
   useListRoles,
@@ -14,9 +16,13 @@ interface AssignRoleModalProps {
   onClose: () => void;
 }
 
-export default function AssignRoleModal({ open, onClose }: AssignRoleModalProps) {
+export default function AssignAppRoleModal({
+  open,
+  onClose,
+}: AssignRoleModalProps) {
   const [userId, setUserId] = useState<string>();
   const [roleId, setRoleId] = useState<string>();
+  const [expiresAt, setExpiresAt] = useState<Dayjs | null>(null);
   const [userSearch, setUserSearch] = useState('');
   const debouncedUserSearch = useDebounced(userSearch);
 
@@ -28,7 +34,7 @@ export default function AssignRoleModal({ open, onClose }: AssignRoleModalProps)
     },
     open,
   );
-  const { data: rolesData } = useListRoles({}, open);
+  const { data: rolesData } = useListRoles({ scope: ResourceType.App }, open);
   const grant = useGrantAccess();
 
   const memberOptions = (membersData?.searchMembers.items ?? []).map((m) => ({
@@ -43,6 +49,7 @@ export default function AssignRoleModal({ open, onClose }: AssignRoleModalProps)
   const reset = () => {
     setUserId(undefined);
     setRoleId(undefined);
+    setExpiresAt(null);
     setUserSearch('');
   };
 
@@ -59,6 +66,7 @@ export default function AssignRoleModal({ open, onClose }: AssignRoleModalProps)
         roleId,
         resourceType: ResourceType.App,
         resourceId: '*',
+        expiresAt: expiresAt ? expiresAt.toISOString() : null,
       },
       {
         onSuccess: () => {
@@ -99,6 +107,18 @@ export default function AssignRoleModal({ open, onClose }: AssignRoleModalProps)
             options={roleOptions}
             onChange={setRoleId}
             showSearch={{ filterOption: matchOption }}
+            style={{ width: '100%' }}
+          />
+        </Form.Item>
+        <Form.Item
+          label="Expires at"
+          help="Leave empty for a permanent grant"
+        >
+          <DatePicker
+            showTime
+            value={expiresAt}
+            onChange={setExpiresAt}
+            disabledDate={(d) => d.isBefore(dayjs(), 'day')}
             style={{ width: '100%' }}
           />
         </Form.Item>

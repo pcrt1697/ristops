@@ -249,6 +249,62 @@ cleanly between grant and revoke.
 
 ---
 
+### Time-bounded ACL grants (`expires_at`)
+
+**Context:** Some access is inherently temporary — trial/probation staff, contractors,
+delegated access. The ReBAC model is purely additive (grants + wildcards + downward
+inheritance) with no deny mechanism, so "revoke access after a date" cannot be expressed by
+grants alone, especially when the access is inherited from an ancestor resource.
+
+**Decision:** Add an optional `expires_at` timestamp to the `Acl` node. A grant whose
+`expires_at` is in the past is treated as absent. Every authorization *and* listing query
+filters expired grants with `(acl.expires_at IS NULL OR datetime(acl.expires_at) > datetime($now))`.
+`expires_at` is set on every grant (not only `ON CREATE`), so re-granting the same
+(user, resource, role) updates the expiry. Expired nodes are left in place and filtered at
+query time rather than actively purged.
+
+**Why:** Time-bounding is the additive-model-friendly way to express temporary access — an
+expired grant simply stops counting, with no deny layer. Filtering at read time keeps
+correctness without requiring a background cleanup job.
+
+**Trade-off:** The filter must be applied in *every* ACL-traversing query (the authorization
+check and all listings); missing one silently leaks access. Timestamps are compared via Neo4j
+`datetime()` rather than lexicographic string comparison, to avoid format-dependent bugs.
+Expired nodes linger until re-granted or cleaned up (housekeeping only, not correctness).
+
+**Status:** Accepted
+
+---
+
+### Role assignment scope
+
+**Context:** Roles are global nodes granted on resources. Some roles only make sense on
+certain resource types — venue roles (owner, manager) must not be assignable to `app/*`, and
+app roles (admin, developer) must not be assignable to a venue. Nothing prevented a
+nonsensical or dangerous assignment (e.g. a venue role granted at app level).
+
+**Decision:** Add a single `scope: ResourceType` field to each role declaring the resource
+type it may be assigned to. `grant_access` rejects a grant whose resource type ≠ the role's
+scope, and `listRoles` accepts a `scope` filter so the assign UI only offers roles valid for
+the target resource. Existing roles: `admin`/`developer` → `app`, `member` → `user` (it is
+auto-granted on each user's own `USER` resource), venue roles → `venue`.
+
+**Why a single scope, not a list:** access inherits downward via `BELONGS_TO`, so a role is
+granted at its canonical level (e.g. a venue role on the venue) and cascades to sub-resources
+automatically — there is no need to assign the same role at multiple levels. App-wide variants
+are modelled as separate app-scoped roles. A single scope is sufficient and forward-compatible:
+widening to a list later is a non-breaking change.
+
+**Enforcement:** validated server-side in `grant_access`, not only filtered in the frontend,
+so a crafted request cannot assign a role outside its scope.
+
+**Note:** a role's *scope* (which resource type it attaches to) is a different concept from a
+*permission's* scope (the prefix before `:` in an id like `venue:add`).
+
+**Status:** Accepted
+
+---
+
 ### Redis Streams for async service-to-service messaging
 
 **Context:** Services need to publish and consume events asynchronously

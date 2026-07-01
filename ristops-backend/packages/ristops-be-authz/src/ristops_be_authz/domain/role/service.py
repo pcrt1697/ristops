@@ -35,6 +35,7 @@ async def find_role(role_id: str) -> RoleResponse:
         RETURN r.id AS id,
                r.name AS name,
                r.description AS description,
+               r.scope AS scope,
                collect(DISTINCT p.id) AS permissions
         """,
         id=role_id,
@@ -46,6 +47,7 @@ async def find_role(role_id: str) -> RoleResponse:
         id=record["id"],
         name=record["name"],
         description=record["description"],
+        scope=record["scope"],
         permissions=record["permissions"],
     )
 
@@ -64,6 +66,7 @@ async def list_roles(query: ListRolesQuery) -> list[RoleResponse]:
         MATCH (r:Role)
         WHERE ($role_id IS NULL OR toLower(r.id) CONTAINS $role_id)
           AND ($role_name IS NULL OR toLower(r.name) CONTAINS $role_name)
+          AND ($scope IS NULL OR r.scope = $scope)
           AND ($permission IS NULL OR EXISTS {
                 MATCH (r)-[:GRANTS]->(p:Permission)
                 WHERE toLower(p.id) CONTAINS $permission
@@ -74,11 +77,13 @@ async def list_roles(query: ListRolesQuery) -> list[RoleResponse]:
         RETURN r.id          AS id,
                r.name        AS name,
                r.description AS description,
+               r.scope       AS scope,
                collect(DISTINCT perm.id) AS permissions
         ORDER BY r.name
         """,
         role_id=query.role_id.lower() if query.role_id else None,
         role_name=query.role_name.lower() if query.role_name else None,
+        scope=query.scope.value if query.scope else None,
         permission=permission,
         permission_scope_wildcard=permission_scope_wildcard,
     )
