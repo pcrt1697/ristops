@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
 import type {
   PaginationInput,
+  UpdateVenueInput,
   VenueFilterInput,
   VenueSortFieldSortInput,
 } from '../../services/graphql/graphql.ts';
@@ -29,6 +30,7 @@ export function useVenue(id: string | null | undefined) {
     queryKey: ['venue.get', id],
     queryFn: () => venueApi.getVenue(id as string),
     enabled: !!id,
+    retry: false,
   });
 }
 
@@ -44,6 +46,41 @@ export function useCreateVenue() {
     },
     onError: () => {
       void message.error('Could not create the venue');
+    },
+  });
+}
+
+export function useUpdateVenue(id: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UpdateVenueInput) => venueApi.updateVenue(id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['venue.get', id] });
+      void queryClient.invalidateQueries({ queryKey: ['venue.search'] });
+    },
+    onError: () => {
+      void message.error('Could not update the venue');
+    },
+  });
+}
+
+export function useDeleteVenue() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { setCurrentVenueId } = useCurrentVenue();
+
+  return useMutation({
+    mutationFn: (id: string) => venueApi.deleteVenue(id),
+    onSuccess: (_data, id) => {
+      // Leave the venue section and drop its cached queries.
+      setCurrentVenueId(null);
+      queryClient.removeQueries({ queryKey: ['venue.get', id] });
+      void queryClient.invalidateQueries({ queryKey: ['venue.search'] });
+      void navigate('/');
+    },
+    onError: () => {
+      void message.error('Could not delete the venue');
     },
   });
 }

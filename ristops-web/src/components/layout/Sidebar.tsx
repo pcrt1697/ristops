@@ -9,6 +9,18 @@ interface SidebarProps {
   items: MenuProps['items'];
 }
 
+/** Collect the keys of all items, recursing into group/submenu children. */
+function collectKeys(items: MenuProps['items']): string[] {
+  const keys: string[] = [];
+  for (const item of items ?? []) {
+    if (!item) continue;
+    if (typeof item.key === 'string') keys.push(item.key);
+    if ('children' in item && item.children)
+      keys.push(...collectKeys(item.children));
+  }
+  return keys;
+}
+
 /** Presentational sidebar shell: renders the given menu items with a collapse toggle. */
 export default function Sidebar({ items }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -16,9 +28,7 @@ export default function Sidebar({ items }: SidebarProps) {
   const { token } = theme.useToken();
 
   // Highlight the most specific (longest) item path that prefixes the location.
-  const selectedKey = (items ?? [])
-    .map((item) => item?.key)
-    .filter((key): key is string => typeof key === 'string')
+  const selectedKey = collectKeys(items)
     .filter((key) => location.pathname.startsWith(key))
     .sort((a, b) => b.length - a.length)[0];
 

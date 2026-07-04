@@ -33,8 +33,14 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: authNApi.login,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['auth.getMe'] });
+    onSuccess: async () => {
+      // Await a real refetch (the query is inactive on /login, so the default
+      // active-only invalidate wouldn't refetch it): navigating before getMe is
+      // authenticated makes ProtectedRoute read stale state and bounce to /login.
+      await queryClient.invalidateQueries({
+        queryKey: ['auth.getMe'],
+        refetchType: 'all',
+      });
       void navigate('/');
     },
     onError(error: ServiceError) {
@@ -54,7 +60,9 @@ export function useLogout() {
   return useMutation({
     mutationFn: authNApi.logout,
     onSuccess: () => {
-      queryClient.setQueryData(['auth.getMe'], null);
+      // Drop all cached data (getMe, myRoles/permissions, venue-scoped queries)
+      // so the next user to log in on this tab never reads the previous session.
+      queryClient.clear();
       void navigate('/login');
     },
     onError: (error) => {
@@ -80,8 +88,11 @@ export function useRegister() {
 
   return useMutation({
     mutationFn: authNApi.register,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['auth.getMe'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['auth.getMe'],
+        refetchType: 'all',
+      });
       void navigate('/');
     },
   });
@@ -153,7 +164,10 @@ export function useCan(
   const { data, isLoading } = useQuery({
     queryKey: ['auth.myRoles', resource.type, resource.id],
     queryFn: () => authZApi.listMyGrants(resource.type, resource.id),
-    staleTime: Infinity,
+    // Not Infinity: grants can change server-side (e.g. an admin assigns a new
+    // role). A finite window lets the default focus/mount refetch pick up new
+    // permissions without forcing the user to log in again.
+    staleTime: 5 * 60 * 1000,
   });
 
   const isAllowed =

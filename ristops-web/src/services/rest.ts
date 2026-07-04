@@ -13,10 +13,12 @@ export async function restClient<T>(
   if (!response.ok) {
     const error = new Error(`HTTP error: ${response.status}`) as Error & {
       status: number;
-      traceId?: string;
+      correlationId?: string;
+      requestId?: string;
     };
     error.status = response.status;
-    error.traceId = response.headers.get('x-trace-id') ?? undefined;
+    error.correlationId = response.headers.get('x-correlation-id') ?? undefined;
+    error.requestId = response.headers.get('x-request-id') ?? undefined;
     throw error;
   }
   if (

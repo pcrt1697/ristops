@@ -69,7 +69,7 @@ MERGE (:Role {id: "venue.manager", name: "Venue Manager", description: "Role wit
 // Assign permissions to venue manager role
 MATCH (r:Role {id: "venue.manager"})
 MATCH (p:Permission)
-WHERE p.id IN ("venue:get", "venue:edit", "acl:list", "acl:remove", "acl:add")
+WHERE p.id IN ["venue:get", "venue:edit", "acl:list", "acl:remove", "acl:add"]
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Venue Member role --

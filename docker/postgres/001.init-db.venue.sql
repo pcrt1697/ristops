@@ -10,3 +10,4 @@ create table ristops_venue.venues (
   updated_at timestamp with time zone default now() not null,
   primary key (id)
 );
+create index ix_ristops_venue_venues_name on ristops_venue.venues (name);

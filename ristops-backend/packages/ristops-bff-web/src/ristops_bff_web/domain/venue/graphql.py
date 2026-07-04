@@ -5,7 +5,9 @@ from typing import Any
 
 import strawberry
 
-from ristops_bff_web.domain.venue.service import find_venue, create_venue, update_venue, search_venues
+from ristops_bff_web.domain.venue.service import (
+    find_venue, create_venue, update_venue, delete_venue, search_venues,
+)
 from ristops_bff_web.graphql.pagination import Page, PaginationInput, SearchQueryParams, SortInput
 from ristops_bff_web.graphql.types import EntityId
 
@@ -36,6 +38,14 @@ async def resolve_update_venue(
 ) -> Venue:
     venue = await update_venue(venue_id, strawberry.asdict(_input))
     return Venue.from_dict(venue)
+
+
+async def resolve_delete_venue(
+        venue_id: EntityId
+) -> bool:
+    """Delete a venue by ID. Returns True when the deletion succeeds."""
+    await delete_venue(venue_id)
+    return True
 
 
 async def resolve_search_venues(
@@ -184,4 +194,8 @@ class VenueMutation:
     update_venue = strawberry.mutation(
         resolver=resolve_update_venue,
         description="Update venue data",
+    )
+    delete_venue = strawberry.mutation(
+        resolver=resolve_delete_venue,
+        description="Delete a venue.",
     )

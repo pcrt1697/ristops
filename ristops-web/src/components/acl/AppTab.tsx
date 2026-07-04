@@ -42,7 +42,6 @@ export default function AppTab() {
   const displayName = searchParams.get('displayName') ?? '';
   const roleName = searchParams.get('roleName') ?? '';
   const permission = searchParams.get('permission') ?? '';
-  const scope = searchParams.get('scope') ?? '';
   const page = Number(searchParams.get('page')) || 0;
 
   // A filter change resets pagination; page changes keep the filters.
@@ -72,7 +71,6 @@ export default function AppTab() {
   const debDisplayName = useDebounced(displayName);
   const debRoleName = useDebounced(roleName);
   const debPermission = useDebounced(permission);
-  const debScope = useDebounced(scope);
 
   const { isAllowed, isLoading: isLoadingCan } = useCan(
     APP_RESOURCE,
@@ -91,7 +89,6 @@ export default function AppTab() {
         displayName: orNull(debDisplayName),
         roleName: orNull(debRoleName),
         permission: orNull(debPermission),
-        scope: debScope ? (debScope as ResourceType) : null,
       },
     },
     isAllowed,
@@ -101,11 +98,6 @@ export default function AppTab() {
   const permissionOptions = [...(permsData?.listPermissions.permissions ?? [])]
     .sort()
     .map((p) => ({ value: p }));
-  const scopeOptions = Object.entries(ResourceType).map(([label, value]) => ({
-    label,
-    value,
-  }));
-
   const onChange = (p: number) => setPage(p - 1);
 
   if (isLoadingCan) return <Spin />;
@@ -203,14 +195,6 @@ export default function AppTab() {
             onChange={(v) => setFilter('permission')(v ?? '')}
             showSearch={{ filterOption: matchOption }}
             style={{ width: 200 }}
-          />
-          <Select
-            placeholder="Role scope"
-            allowClear
-            value={scope || undefined}
-            options={scopeOptions}
-            onChange={(v) => setFilter('scope')(v ?? '')}
-            style={{ width: 160 }}
           />
         </Flex>
         {canAssign && (

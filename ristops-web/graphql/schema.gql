@@ -195,6 +195,12 @@ type Mutation {
     """Venue information to update."""
     input: UpdateVenueInput!
   ): Venue!
+
+  """Delete a venue."""
+  deleteVenue(
+    """Entity identifier."""
+    id: ID!
+  ): Boolean!
 }
 
 """Pagination parameters."""

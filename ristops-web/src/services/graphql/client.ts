@@ -14,8 +14,10 @@ const client = new GraphQLClient(`${RISTOPS_BFF_URL}/api/graphql`, {
         (gqlError?.extensions?.['code'] as number) ??
         response.response.status ??
         500;
-      error.traceId =
-        (gqlError?.extensions?.['traceId'] as string) ?? undefined;
+      error.correlationId =
+        (gqlError?.extensions?.['correlationId'] as string) ?? undefined;
+      error.requestId =
+        (gqlError?.extensions?.['requestId'] as string) ?? undefined;
       throw error;
     }
   },

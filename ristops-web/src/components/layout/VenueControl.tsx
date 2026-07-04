@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Avatar, Flex, theme, Typography } from 'antd';
 import { DownOutlined, ShopOutlined } from '@ant-design/icons';
 import { useCurrentVenue, useVenue } from '../../domain/venue/venue.hooks.ts';
 import { initials } from '../../commons/utils.ts';
+import type { ServiceError } from '../../services/common.ts';
 import VenueDrawer from './VenueDrawer.tsx';
 
 const { Text } = Typography;
@@ -10,9 +11,16 @@ const { Text } = Typography;
 export default function VenueControl() {
   const [open, setOpen] = useState(false);
   const { token } = theme.useToken();
-  const { currentVenueId } = useCurrentVenue();
-  const { data } = useVenue(currentVenueId);
+  const { currentVenueId, setCurrentVenueId } = useCurrentVenue();
+  const { data, error } = useVenue(currentVenueId);
   const venue = data?.venue;
+
+  // Self-heal: a stored venue that no longer exists (e.g. after a reseed) clears itself.
+  useEffect(() => {
+    if (currentVenueId && (error as ServiceError | null)?.status === 404) {
+      setCurrentVenueId(null);
+    }
+  }, [currentVenueId, error, setCurrentVenueId]);
 
   return (
     <>

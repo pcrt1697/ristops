@@ -44,3 +44,10 @@ async def update_venue(venue_id: str | UUID, update_venue_input: dict[str, Any])
         json=update_venue_input,
     )
     return venue_transformer.get_json(response)
+
+
+async def delete_venue(venue_id: str | UUID) -> None:
+    """Delete a venue by ID via the venue service."""
+    await venue_client.client.delete(
+        url=f"venues/{venue_id}",
+    )

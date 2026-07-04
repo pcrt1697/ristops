@@ -47,3 +47,7 @@ mutation UpdateVenue($id: ID!, $input: UpdateVenueInput!) {
         updatedAt
     }
 }
+
+mutation DeleteVenue($id: ID!) {
+    deleteVenue(id: $id)
+}

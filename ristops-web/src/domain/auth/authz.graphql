@@ -10,6 +10,7 @@ query ListMyGrants($input: ListGrantsInput!) {
                 name
                 description
                 permissions
+                scope
             }
         }
     }
@@ -45,6 +46,9 @@ query SearchResourceGrants($input: SearchResourceGrantsInput!) {
                 role {
                     id
                     name
+                    description
+                    permissions
+                    scope
                 }
                 resource {
                     resourceId

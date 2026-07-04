@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Callable, Awaitable, Any, AsyncGenerator
 
 from fastapi import HTTPException
-from httpx import AsyncClient, Request, Response, Headers
+from httpx import AsyncClient, QueryParams, Request, Response, Headers
 
 from ristops_lib_core.context import APP_CONTEXT, ContextHeader, ContextKey
 
@@ -34,6 +34,19 @@ async def inject_auth_header(request: Request) -> None:
     token = APP_CONTEXT.get(ContextKey.JWT)
     if token is not None:
         request.headers["Authorization"] = f"Bearer {token}"
+
+
+async def drop_empty_query_params(request: Request) -> None:
+    """Drop empty-valued query params from outgoing requests.
+
+    httpx serializes ``None`` query params as empty strings (e.g. ``?scope=``) instead of
+    omitting them, which breaks validation of optional typed params (enums) on the callee.
+    An empty filter carries no meaning, so we strip it here for every inter-service call.
+    """
+    params = request.url.params
+    kept = QueryParams([(k, v) for k, v in params.multi_items() if v != ""])
+    if kept != params:
+        request.url = request.url.copy_with(query=str(kept).encode())
 
 
 async def raise_for_status(response: Response) -> None:
@@ -74,7 +87,9 @@ class HttpClient:
         self._hooks: dict[str, list[Callable]] = deepcopy(hooks or {})
         if "request" not in self._hooks:
             self._hooks["request"] = []
-        self._hooks["request"].extend([inject_trace_headers, inject_auth_header])
+        self._hooks["request"].extend(
+            [inject_trace_headers, inject_auth_header, drop_empty_query_params]
+        )
         if "response" not in self._hooks:
             self._hooks["response"] = []
         self._hooks["response"].append(raise_for_status)

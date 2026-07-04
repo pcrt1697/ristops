@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { Alert, Layout, theme } from 'antd';
 import { matchPath, Outlet, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar.tsx';
 import VenueSidebar from './VenueSidebar.tsx';
 import { useGlobalError } from '../../context/error.hooks.ts';
+import { useCurrentVenue } from '../../domain/venue/venue.hooks.ts';
 import TopBar from './TopBar.tsx';
 
 const { Content } = Layout;
@@ -10,6 +12,7 @@ const { Content } = Layout;
 export default function AppLayout() {
   const { error, setError } = useGlobalError();
   const { pathname } = useLocation();
+  const { currentVenueId, setCurrentVenueId } = useCurrentVenue();
   const {
     token: { colorBgContainer, colorBgLayout, borderRadiusLG },
   } = theme.useToken();
@@ -23,6 +26,13 @@ export default function AppLayout() {
   );
   const venueId = venueMatch?.params.venueId;
   const showSidebar = isAdmin || !!venueId;
+
+  // VenueLayout sets the active venue on entry; this clears it on Home and Admin
+  // so the topbar shows no venue there. Other routes (e.g. Profile) keep it.
+  const isHome = pathname === '/';
+  useEffect(() => {
+    if ((isHome || isAdmin) && currentVenueId) setCurrentVenueId(null);
+  }, [isHome, isAdmin, currentVenueId, setCurrentVenueId]);
 
   return (
     <Layout

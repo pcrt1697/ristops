@@ -12,12 +12,13 @@ import NotFoundPage from './pages/NotFoundPage.tsx';
 import { GlobalErrorProvider } from './context/error.provider.tsx';
 import { CurrentVenueProvider } from './domain/venue/venue.provider.tsx';
 import AdminVenuePage from './pages/admin/AdminVenuePage.tsx';
-import AdminAclPage from './pages/admin/AdminAclPage.tsx';
 import AppTab from './components/acl/AppTab.tsx';
 import RolesTab from './components/acl/RolesTab.tsx';
 import PermissionsTab from './components/acl/PermissionsTab.tsx';
 import VenueHomePage from './pages/venue/VenueHomePage.tsx';
-import VenueAclPage from './pages/venue/VenueAclPage.tsx';
+import VenueStaffPage from './pages/venue/VenueStaffPage.tsx';
+import VenueSettingsPage from './pages/venue/VenueSettingsPage.tsx';
+import VenueHoursPage from './pages/venue/VenueHoursPage.tsx';
 
 export default function App() {
   return (
@@ -36,16 +37,27 @@ export default function App() {
                   <Route path="/admin/venues" element={<AdminVenuePage />} />
                   <Route
                     path="/admin/access-control"
-                    element={<AdminAclPage />}
-                  >
-                    <Route index element={<Navigate to="app" replace />} />
-                    <Route path="app" element={<AppTab />} />
-                    <Route path="roles" element={<RolesTab />} />
-                    <Route path="permissions" element={<PermissionsTab />} />
-                  </Route>
+                    element={
+                      <Navigate to="/admin/access-control/app" replace />
+                    }
+                  />
+                  <Route
+                    path="/admin/access-control/app"
+                    element={<AppTab />}
+                  />
+                  <Route
+                    path="/admin/access-control/roles"
+                    element={<RolesTab />}
+                  />
+                  <Route
+                    path="/admin/access-control/permissions"
+                    element={<PermissionsTab />}
+                  />
                   <Route path="/venues/:venueId" element={<VenueLayout />}>
                     <Route index element={<VenueHomePage />} />
-                    <Route path="access-control" element={<VenueAclPage />} />
+                    <Route path="settings" element={<VenueSettingsPage />} />
+                    <Route path="hours" element={<VenueHoursPage />} />
+                    <Route path="staff" element={<VenueStaffPage />} />
                   </Route>
                 </Route>
                 <Route path="*" element={<NotFoundPage />} />

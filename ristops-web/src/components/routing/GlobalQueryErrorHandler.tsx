@@ -15,10 +15,12 @@ export default function GlobalQueryErrorHandler() {
         const error = event.query.state.error as ServiceError;
         if (error.status === 401) {
           void navigate('/login');
-        } else {
+        } else if (error.status !== 404) {
+          // 404s mean "not found" and are handled by the caller (e.g. clearing a
+          // stale selection); they aren't unexpected failures worth a global toast.
           setError(
-            error.traceId
-              ? `Something went wrong. Trace ID: ${error.traceId}`
+            error.requestId
+              ? `Something went wrong. Request ID: ${error.requestId}`
               : 'Something went wrong, please try again.',
           );
         }

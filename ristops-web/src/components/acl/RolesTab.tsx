@@ -1,70 +1,20 @@
 import { useState } from 'react';
-import {
-  AutoComplete,
-  Card,
-  Drawer,
-  Flex,
-  Result,
-  Select,
-  Spin,
-  Typography,
-} from 'antd';
+import { AutoComplete, Card, Flex, Result, Select, Spin } from 'antd';
 import { useCan, useListRoles } from '../../domain/auth/auth.hooks.ts';
-import {
-  formatPermissionId,
-  PERMISSION_DESCRIPTIONS,
-} from '../../domain/auth/permissions.ts';
 import type { ListRolesInput, Role } from '../../services/graphql/graphql.ts';
 import { ResourceType } from '../../services/graphql/graphql.ts';
 import { useDebounced, useSearchParamState } from '../../commons/hooks.ts';
 import { matchOption, orNull } from '../../commons/utils.ts';
+import { formatScope, ROLE_SCOPES } from '../../domain/auth/authz.utils.ts';
+import RoleDetailDrawer from './RoleDetailDrawer.tsx';
+import RoleScopeTag from './RoleScopeTag.tsx';
 
 const { Meta } = Card;
-const { Text, Title } = Typography;
-
-function PermissionRow({ id }: { id: string }) {
-  return (
-    <Card size="small">
-      <Meta
-        title={id}
-        description={PERMISSION_DESCRIPTIONS[id] ?? formatPermissionId(id)}
-      />
-    </Card>
-  );
-}
-
-function RoleDrawer({
-  role,
-  onClose,
-}: {
-  role: Role | null;
-  onClose: () => void;
-}) {
-  return (
-    <Drawer
-      title={role?.name}
-      open={role !== null}
-      onClose={onClose}
-      size={360}
-    >
-      {role && (
-        <Flex vertical gap={4}>
-          <Text type="secondary" style={{ marginBottom: 16 }}>
-            {role.description}
-          </Text>
-          <Title level={4}>Permissions</Title>
-          {role.permissions.sort().map((p) => (
-            <PermissionRow key={p} id={p} />
-          ))}
-        </Flex>
-      )}
-    </Drawer>
-  );
-}
 
 export default function RolesTab() {
   const [roleName, setRoleName] = useSearchParamState('roleName');
   const [permission, setPermission] = useSearchParamState('permission');
+  const [scope, setScope] = useSearchParamState('scope');
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const debouncedRoleName = useDebounced(roleName);
   const debouncedPermission = useDebounced(permission);
@@ -77,6 +27,7 @@ export default function RolesTab() {
   const query: ListRolesInput = {
     roleName: orNull(debouncedRoleName),
     permission: orNull(debouncedPermission),
+    scope: scope ? (scope as ResourceType) : null,
   };
   const { data, isLoading } = useListRoles(query, isAllowed);
 
@@ -86,6 +37,10 @@ export default function RolesTab() {
   const permissionOptions = [...new Set(roles.flatMap((r) => r.permissions))]
     .map((p) => ({ value: p }))
     .sort();
+  const scopeOptions = ROLE_SCOPES.map((s) => ({
+    label: formatScope(s),
+    value: s,
+  }));
 
   if (isLoadingCan) return <Spin />;
   if (!isAllowed)
@@ -104,6 +59,14 @@ export default function RolesTab() {
           onChange={setRoleName}
           showSearch={{ filterOption: matchOption }}
           style={{ width: 200 }}
+        />
+        <Select
+          placeholder="Scope"
+          allowClear
+          value={scope || undefined}
+          options={scopeOptions}
+          onChange={(v) => setScope(v ?? '')}
+          style={{ width: 160 }}
         />
         <Select
           placeholder="Permission"
@@ -127,12 +90,23 @@ export default function RolesTab() {
               style={{ width: 280 }}
               onClick={() => setSelectedRole(role)}
             >
-              <Meta title={role.name} description={role.description} />
+              <Meta
+                title={
+                  <Flex align="center" justify="space-between" gap={8}>
+                    <span>{role.name}</span>
+                    <RoleScopeTag scope={role.scope} />
+                  </Flex>
+                }
+                description={role.description}
+              />
             </Card>
           ))}
         </Flex>
       )}
-      <RoleDrawer role={selectedRole} onClose={() => setSelectedRole(null)} />
+      <RoleDetailDrawer
+        role={selectedRole}
+        onClose={() => setSelectedRole(null)}
+      />
     </>
   );
 }

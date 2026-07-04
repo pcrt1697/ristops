@@ -1,6 +1,7 @@
 import {
   CreateVenueDocument,
   type CreateVenueInput,
+  DeleteVenueDocument,
   GetVenueDocument,
   type PaginationInput,
   SearchVenuesDocument,
@@ -23,4 +24,5 @@ export const venueApi = {
     gqlRequest(CreateVenueDocument, { input }),
   updateVenue: (id: string, input: UpdateVenueInput) =>
     gqlRequest(UpdateVenueDocument, { id, input }),
+  deleteVenue: (id: string) => gqlRequest(DeleteVenueDocument, { id }),
 };
