@@ -43,4 +43,6 @@ class BackendServiceSettings(BaseServiceSettings):
         env_prefix=ENVVARS_PREFIX + "BE_",
     )
 
+    authn_url: str
     authz_url: str
+    venue_url: str

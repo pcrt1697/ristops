@@ -60,10 +60,13 @@ export function useLogout() {
   return useMutation({
     mutationFn: authNApi.logout,
     onSuccess: () => {
+      void navigate('/login');
       // Drop all cached data (getMe, myRoles/permissions, venue-scoped queries)
       // so the next user to log in on this tab never reads the previous session.
-      queryClient.clear();
-      void navigate('/login');
+      // Deferred until after the redirect unmounts the authenticated layout:
+      // clearing while its queries (e.g. the current venue) are still active
+      // would retrigger them, firing a wasted backend call at logout.
+      setTimeout(() => queryClient.clear(), 0);
     },
     onError: (error) => {
       console.log('logout error', error);

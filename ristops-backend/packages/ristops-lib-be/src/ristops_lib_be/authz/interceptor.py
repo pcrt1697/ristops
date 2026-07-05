@@ -101,6 +101,7 @@ class AuthZInterceptor:
         )
         is_authorized = await self._authorizer(authz_request)
         if not is_authorized:
+            _logger.error("Authorization failed for request: %s", authz_request)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User is not authorized to perform this action",

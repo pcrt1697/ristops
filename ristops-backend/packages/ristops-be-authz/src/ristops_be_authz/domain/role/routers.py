@@ -3,8 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query
 
 from ristops_be_authz.domain.role.service import find_role, list_roles
-from ristops_lib_be.authz.policy import policy, Policy, resolve_static_resource
-from ristops_lib_core.schema.authz import RoleResponse, ResourceType, ListRolesResponse, ListRolesQuery
+from ristops_lib_be.authz.policy import policy
+from ristops_lib_core.schema.authz import RoleResponse, ListRolesResponse, ListRolesQuery
 from ristops_lib_neo4j.engine import neo4j_transactional
 
 roles_router = APIRouter(
@@ -17,7 +17,7 @@ roles_router = APIRouter(
     "/{role_id}",
     response_model=RoleResponse,
 )
-@policy(Policy(resolve_static_resource("*", ResourceType.APP), "role:get"))
+@policy()
 @neo4j_transactional
 async def get_role(
         role_id: Annotated[str, Path(description="User ID")],

@@ -1,0 +1,31 @@
+{
+  "users": [
+    { "username": "the_headless", "email": "the_headless@stark.ristops.com", "display_name": "Eddard Stark" },
+    { "username": "young_wolf", "email": "young_wolf@stark.ristops.com", "display_name": "Robb Stark" },
+    { "username": "lady_catelyn", "email": "lady_catelyn@stark.ristops.com", "display_name": "Catelyn Stark" },
+    { "username": "little_bird", "email": "little_bird@stark.ristops.com", "display_name": "Sansa Stark" },
+    { "username": "faceless_girl", "email": "faceless_girl@stark.ristops.com", "display_name": "Arya Stark" },
+    { "username": "hot_pie_baker", "email": "hot_pie_baker@stark.ristops.com", "display_name": "Hot Pie" },
+
+    { "username": "the_conqueror", "email": "the_conqueror@targaryen.ristops.com", "display_name": "Aegon the Conqueror" },
+    { "username": "mother_of_dragons", "email": "mother_of_dragons@targaryen.ristops.com", "display_name": "Daenerys Targaryen" },
+    { "username": "the_last_dragon", "email": "the_last_dragon@targaryen.ristops.com", "display_name": "Rhaegar Targaryen" },
+    { "username": "the_beggar_king", "email": "the_beggar_king@targaryen.ristops.com", "display_name": "Viserys Targaryen" },
+    { "username": "maester_aemon", "email": "maester_aemon@targaryen.ristops.com", "display_name": "Aemon Targaryen" },
+    { "username": "strong_belwas", "email": "strong_belwas@targaryen.ristops.com", "display_name": "Strong Belwas" },
+
+    { "username": "the_great_lion", "email": "the_great_lion@lannister.ristops.com", "display_name": "Tywin Lannister" },
+    { "username": "the_kingslayer", "email": "the_kingslayer@lannister.ristops.com", "display_name": "Jaime Lannister" },
+    { "username": "queen_regent", "email": "queen_regent@lannister.ristops.com", "display_name": "Cersei Lannister" },
+    { "username": "lord_tyrion", "email": "lord_tyrion@lannister.ristops.com", "display_name": "Tyrion Lannister" },
+    { "username": "podrick_squire", "email": "podrick_squire@lannister.ristops.com", "display_name": "Podrick Payne" },
+    { "username": "shae_kitchen", "email": "shae_kitchen@lannister.ristops.com", "display_name": "Shae" },
+
+    { "username": "the_old_bear", "email": "the_old_bear@nightswatch.ristops.com", "display_name": "Jeor Mormont" },
+    { "username": "lord_commander", "email": "lord_commander@nightswatch.ristops.com", "display_name": "Jon Snow" },
+    { "username": "first_ranger", "email": "first_ranger@nightswatch.ristops.com", "display_name": "Benjen Stark" },
+    { "username": "samwell_slayer", "email": "samwell_slayer@nightswatch.ristops.com", "display_name": "Samwell Tarly" },
+    { "username": "grenn_aurochs", "email": "grenn_aurochs@nightswatch.ristops.com", "display_name": "Grenn" },
+    { "username": "three_finger_hobb", "email": "three_finger_hobb@nightswatch.ristops.com", "display_name": "Three-Finger Hobb" }
+  ]
+}

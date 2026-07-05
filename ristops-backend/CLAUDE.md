@@ -21,6 +21,10 @@ ristops seed-authz
 # Generate SQL DDL for a service
 ristops sql-database generate-ddl be-authn
 
+# Reset a database (DESTRUCTIVE, schema only — reseed separately)
+ristops sql-database nuke be-authn   # drop + recreate tables (SQL services)
+ristops nuke-authz                   # delete all nodes (authz/Neo4j)
+
 # Run the CLI debugger
 python scripts/run_command.py <args>
 ```

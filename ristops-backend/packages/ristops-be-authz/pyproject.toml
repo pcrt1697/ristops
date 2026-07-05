@@ -18,6 +18,7 @@ ristops = "ristops_lib_core.cli.entrypoint:main"
 [project.entry-points."ristops.cli.commands"]
 start = "ristops_lib_core.cli.start:start"
 seed-authz = "ristops_be_authz.cli.seed:seed"
+nuke-authz = "ristops_be_authz.cli.nuke:nuke"
 
 [project.entry-points."ristops.cli.commands.start"]
 be-authz = "ristops_be_authz.app:create_app"

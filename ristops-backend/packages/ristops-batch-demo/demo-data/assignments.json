@@ -1,0 +1,27 @@
+{
+  "assignments": [
+    { "venue": "stark", "role_id": "venue.owner", "usernames": ["the_headless"] },
+    { "venue": "stark", "role_id": "venue.manager", "usernames": ["young_wolf", "lady_catelyn"] },
+    { "venue": "stark", "role_id": "venue.bartender", "usernames": ["little_bird", "lord_commander"] },
+    { "venue": "stark", "role_id": "venue.chef", "usernames": ["hot_pie_baker"] },
+    { "venue": "stark", "role_id": "venue.server", "usernames": ["faceless_girl"] },
+
+    { "venue": "targaryen", "role_id": "venue.owner", "usernames": ["the_conqueror"] },
+    { "venue": "targaryen", "role_id": "venue.manager", "usernames": ["mother_of_dragons", "the_last_dragon", "lord_commander"] },
+    { "venue": "targaryen", "role_id": "venue.bartender", "usernames": ["the_beggar_king"] },
+    { "venue": "targaryen", "role_id": "venue.chef", "usernames": ["strong_belwas"] },
+    { "venue": "targaryen", "role_id": "venue.server", "usernames": ["maester_aemon"] },
+
+    { "venue": "lannister", "role_id": "venue.owner", "usernames": ["the_great_lion"] },
+    { "venue": "lannister", "role_id": "venue.manager", "usernames": ["the_kingslayer", "queen_regent"] },
+    { "venue": "lannister", "role_id": "venue.bartender", "usernames": ["lord_tyrion"] },
+    { "venue": "lannister", "role_id": "venue.chef", "usernames": ["shae_kitchen"] },
+    { "venue": "lannister", "role_id": "venue.server", "usernames": ["podrick_squire"] },
+
+    { "venue": "nightswatch", "role_id": "venue.owner", "usernames": ["the_old_bear"] },
+    { "venue": "nightswatch", "role_id": "venue.manager", "usernames": ["lord_commander", "first_ranger"] },
+    { "venue": "nightswatch", "role_id": "venue.bartender", "usernames": ["samwell_slayer"] },
+    { "venue": "nightswatch", "role_id": "venue.chef", "usernames": ["three_finger_hobb"] },
+    { "venue": "nightswatch", "role_id": "venue.server", "usernames": ["grenn_aurochs"] }
+  ]
+}

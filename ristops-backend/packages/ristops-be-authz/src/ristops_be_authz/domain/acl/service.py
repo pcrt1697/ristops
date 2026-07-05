@@ -191,9 +191,14 @@ async def check_acl_authorization(request: CheckAuthorizationRequest) -> bool:
         // iterate over each permission check
         UNWIND $checks AS check
 
-        // find acl entries for the user on the target resource
-        // or any ancestor resource in the hierarchy (BELONGS_TO*), excluding expired grants
-        MATCH (u:User {id: $user_id})-[:HAS_ACCESS]->(acl:Acl)-[:ON]->(r:Resource)
+        // find acl entries for the user on the target resource or any ancestor
+        // resource in the hierarchy (BELONGS_TO*) whose role grants the permission.
+        // OPTIONAL MATCH keeps the check as a row even when nothing matches, so an
+        // unmatched check counts as denied instead of being dropped by an inner join
+        // (which would leave the final aggregation empty and evaluate to true).
+        // Permission match supports exact, scope wildcard (e.g. orderItem:*) and full (*).
+        OPTIONAL MATCH (u:User {id: $user_id})-[:HAS_ACCESS]->(acl:Acl)-[:ON]->(r:Resource),
+                       (acl)-[:WITH_ROLE]->(:Role)-[:GRANTS]->(p:Permission)
         WHERE (acl.expires_at IS NULL OR datetime(acl.expires_at) > datetime($now))
           AND (
             (r.resource_type = check.resource_type AND r.resource_id = check.resource_id)
@@ -201,17 +206,13 @@ async def check_acl_authorization(request: CheckAuthorizationRequest) -> bool:
                 MATCH (r)<-[:BELONGS_TO*]-(target:Resource {resource_type: check.resource_type, resource_id: check.resource_id})
             }
           )
+          AND (p.id = check.permission OR p.id = check.scope_wildcard OR p.id = '*')
 
-        // follow the acl to the role and check if the role grants the permission
-        // supports exact match, scope wildcard (e.g. orderItem:*) and full wildcard (*)
-        MATCH (acl)-[:WITH_ROLE]->(:Role)-[:GRANTS]->(p:Permission)
-        WHERE p.id = check.permission
-           OR p.id = check.scope_wildcard
-           OR p.id = '*'
-
-        // aggregate results — true only if every single check passed
+        // a check passes when at least one grant matched; access is granted
+        // only if every check passed
         WITH check, count(p) > 0 AS allowed
-        RETURN all(allowed IN collect(allowed) WHERE allowed = true)
+        WITH collect(allowed) AS results
+        RETURN all(allowed IN results WHERE allowed = true)
         """,
         {
             "user_id": str(request.user_id),

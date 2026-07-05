@@ -43,7 +43,7 @@ MERGE (:Role {id: "member", name: "Member", description: "Base role to let users
 // Assign permissions to member role
 MATCH (r:Role {id: "member"})
 MATCH (p:Permission)
-WHERE p.id IN ["user:get", "user:edit", "user:remove", "role:list", "resource:list", "acl:get"]
+WHERE p.id IN ["user:get", "user:edit", "user:remove", "role:list", "resource:list", "acl:get", "role:get"]
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Developer role --
@@ -72,11 +72,19 @@ MATCH (p:Permission)
 WHERE p.id IN ["venue:get", "venue:edit", "acl:list", "acl:remove", "acl:add"]
 MERGE (r)-[:GRANTS]->(p);
 
-// -- Venue Member role --
-MERGE (:Role {id: "venue.member", name: "Venue Member", description: "Role with base access to the venue", scope: "venue"});
+// -- Venue Bartender role --
+MERGE (:Role {id: "venue.bartender", name: "Venue Bartender", description: "Role with base access to venue orders", scope: "venue"});
 
-// Assign permissions to venue member role
-MATCH (r:Role {id: "venue.member"})
+// Assign permissions to venue bartender role
+MATCH (r:Role {id: "venue.bartender"})
+MATCH (p:Permission {id: "venue:get"})
+MERGE (r)-[:GRANTS]->(p);
+
+// -- Venue Chef role --
+MERGE (:Role {id: "venue.chef", name: "Venue Chef", description: "Role with base access to venue orders", scope: "venue"});
+
+// Assign permissions to venue chef role
+MATCH (r:Role {id: "venue.chef"})
 MATCH (p:Permission {id: "venue:get"})
 MERGE (r)-[:GRANTS]->(p);
 
