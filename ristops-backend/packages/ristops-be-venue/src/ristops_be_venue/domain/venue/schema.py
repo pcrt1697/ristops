@@ -1,10 +1,18 @@
 from enum import StrEnum
 from typing import ClassVar
+from zoneinfo import available_timezones
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ristops_lib_core.pydantic.types import ObjectUUID, CreatedAt, UpdatedAt
 from ristops_lib_core.schema.pagination import SearchQuery
+
+
+def _validate_timezone(value: str | None) -> str | None:
+    """Validate that the given value is a known IANA timezone name, if set."""
+    if value is not None and value not in available_timezones():
+        raise ValueError(f"Unknown IANA timezone: {value}")
+    return value
 
 
 class VenueCreationRequest(BaseModel):
@@ -23,6 +31,11 @@ class VenueCreationRequest(BaseModel):
         description="Optional description of the venue.",
         max_length=1000,
     )
+    timezone: str = Field(
+        description="IANA timezone name of the venue (e.g. 'Europe/Rome').",
+    )
+
+    _validate_timezone = field_validator("timezone")(_validate_timezone)
 
 
 class VenueUpdateRequest(BaseModel):
@@ -43,6 +56,12 @@ class VenueUpdateRequest(BaseModel):
         description="New description of the venue.",
         max_length=1000,
     )
+    timezone: str | None = Field(
+        default=None,
+        description="New IANA timezone name of the venue.",
+    )
+
+    _validate_timezone = field_validator("timezone")(_validate_timezone)
 
 
 class VenueResponse(BaseModel):
@@ -52,6 +71,7 @@ class VenueResponse(BaseModel):
     name: str = Field(description="Name of the venue.")
     address: str = Field(description="Address of the venue.")
     description: str | None = Field(default=None, description="Description of the venue.")
+    timezone: str = Field(description="IANA timezone name of the venue.")
     created_at: CreatedAt
     updated_at: UpdatedAt
 

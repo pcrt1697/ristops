@@ -7,6 +7,7 @@ dependencies = [
     "ristops-be-authn",
     "ristops-be-authz",
     "ristops-be-venue",
+    "ristops-be-reservation",
     "ristops-batch-demo",
     "ristops-lib-core",
     "ristops-lib-be",
@@ -20,6 +21,7 @@ ristops-bff-web = { workspace = true }
 ristops-be-authn = { workspace = true }
 ristops-be-authz = { workspace = true }
 ristops-be-venue = { workspace = true }
+ristops-be-reservation = { workspace = true }
 ristops-batch-demo = { workspace = true }
 ristops-lib-core = { workspace = true }
 ristops-lib-be = { workspace = true }

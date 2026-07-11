@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4, UUID
 
-from sqlalchemy import String, DateTime, func
+from sqlalchemy import String, DateTime, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +27,9 @@ class VenueEntity(Base):
     )
     description: Mapped[str | None] = mapped_column(
         String(1000),
+    )
+    timezone: Mapped[str] = mapped_column(
+        Text(),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

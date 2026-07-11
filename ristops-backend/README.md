@@ -9,6 +9,7 @@ Python uv workspace containing all backend services and shared libraries.
 | [be-authn](packages/ristops-be-authn/README.md)     | User management and JWT issuance    |
 | [be-authz](packages/ristops-be-authz/README.md)     | ACL, role and permission management |
 | [be-venue](packages/ristops-be-venue/README.md)     | Venue registry                      |
+| [be-reservation](packages/ristops-be-reservation/README.md) | Reservation config, tables and reservations |
 | [bff-web](packages/ristops-bff-web/README.md)       | GraphQL BFF for the web frontend    |
 | [batch-demo](packages/ristops-batch-demo/README.md) | Dump demo data                      |
 

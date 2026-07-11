@@ -58,7 +58,8 @@ browser
   └─► bff-web  (GraphQL + REST, Redis session)
         ├─► be-authn   (login, token refresh, user CRUD — PostgreSQL)
         ├─► be-authz   (ACL checks, resource/role management — Neo4j)
-        └─► be-venue   (venue registry — PostgreSQL)
+        ├─► be-venue   (venue registry — PostgreSQL)
+        └─► be-reservation  (reservation config, tables, reservations — PostgreSQL)
 
 be-authn ──Redis stream──► be-authz  (user events)
 any svc  ──Redis stream──► be-authz  (resource events)

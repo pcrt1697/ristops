@@ -25,3 +25,12 @@ class ResourceLifecycleProducerSettings(BaseRedisProducerSettings):
         env_prefix=REDIS_STREAM_PREFIX + "RESOURCE_LC_",
     )
     stream: str = Field("resource:lifecycle", description="Redis stream name for resource lifecycle events")
+
+
+class VenueLifecycleProducerSettings(BaseRedisProducerSettings):
+    """Redis stream producer settings for venue lifecycle events."""
+
+    model_config = SettingsConfigDict(
+        env_prefix=REDIS_STREAM_PREFIX + "VENUE_LC_",
+    )
+    stream: str = Field("venue:lifecycle", description="Redis stream name for venue lifecycle events")

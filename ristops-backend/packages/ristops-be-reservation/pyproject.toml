@@ -1,0 +1,23 @@
+[project]
+name = "ristops-be-reservation"
+version = "0.1.0"
+dependencies = [
+    "fastapi",
+    "ristops-lib-core",
+    "ristops-lib-be",
+    "ristops-lib-sql",
+    "ristops-lib-redis",
+]
+
+[project.scripts]
+ristops = "ristops_lib_core.cli.entrypoint:main"
+
+[project.entry-points."ristops.cli.commands"]
+start = "ristops_lib_core.cli.start:start"
+sql-database = "ristops_lib_sql.cli:sql_database"
+
+[project.entry-points."ristops.cli.commands.start"]
+be-reservation = "ristops_be_reservation.app:create_app"
+
+[project.entry-points."ristops.cli.commands.sql_database.generate_ddl"]
+be-reservation = "ristops_be_reservation.domain:MODELS"

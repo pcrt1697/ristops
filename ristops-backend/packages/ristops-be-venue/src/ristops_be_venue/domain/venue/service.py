@@ -12,6 +12,9 @@ from ristops_be_venue.domain.venue.schema import (
     VenueSearchFilter, VenueSearchQuery,
 )
 from ristops_be_venue.services.resource import publish_resource_created_event, publish_resource_deleted_event
+from ristops_be_venue.services.venue_events import (
+    publish_venue_created_event, publish_venue_updated_event, publish_venue_deleted_event,
+)
 from ristops_lib_core.schema.authz import ResourceType, ListUserResourceGrantsResponse
 from ristops_lib_core.schema.pagination import Page
 from ristops_lib_sql.engine import get_sql_session
@@ -74,6 +77,7 @@ async def create_venue(request: VenueCreationRequest) -> VenueEntity:
         name=request.name,
         address=request.address,
         description=request.description,
+        timezone=request.timezone,
     )
     session.add(venue)
     await session.flush()
@@ -84,6 +88,7 @@ async def create_venue(request: VenueCreationRequest) -> VenueEntity:
         "*",
         ResourceType.APP,
     )
+    await publish_venue_created_event(str(venue.id), venue.timezone)
     _logger.info("Created venue: %s", venue.id)
     return venue
 
@@ -104,10 +109,13 @@ async def update_venue(venue_id: UUID, request: VenueUpdateRequest) -> VenueEnti
         venue.address = request.address
     if "description" in fields_to_update:
         venue.description = request.description
+    if "timezone" in fields_to_update and request.timezone is not None:
+        venue.timezone = request.timezone
 
     session = get_sql_session()
     await session.flush()
     await session.refresh(venue)
+    await publish_venue_updated_event(str(venue.id), venue.timezone)
     _logger.info("Updated venue: %s", venue.id)
     return venue
 
@@ -118,6 +126,7 @@ async def remove_venue(venue_id: UUID) -> None:
     session = get_sql_session()
     await session.delete(venue)
     await publish_resource_deleted_event(str(venue_id), ResourceType.VENUE)
+    await publish_venue_deleted_event(str(venue_id))
     _logger.info("Deleted venue: %s", venue_id)
 
 

@@ -31,6 +31,7 @@ class DemoVenue(BaseModel):
     name: str = Field(description="Venue name.")
     address: str = Field(description="Venue address.")
     description: str | None = Field(default=None, description="Venue description.")
+    timezone: str = Field(description="IANA timezone name of the venue.")
 
 
 class DemoVenues(BaseModel):

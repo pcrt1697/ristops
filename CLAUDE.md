@@ -34,6 +34,7 @@ ristops/
       ristops-be-authn/    # Auth backend (users, JWT issuance, PostgreSQL)
       ristops-be-authz/    # AuthZ backend (ACL/roles/resources in Neo4j, Redis stream consumer)
       ristops-be-venue/    # Venue registry (PostgreSQL)
+      ristops-be-reservation/  # Reservation config, tables, reservations (PostgreSQL)
       ristops-bff-web/     # BFF for web (Strawberry GraphQL, Redis sessions)
       ristops-batch-demo/  # Batch processing demo
   ristops-web/             # Frontend (React + TypeScript, Vite)

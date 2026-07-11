@@ -8,6 +8,7 @@ members = [
     "ristops-batch-demo",
     "ristops-be-authn",
     "ristops-be-authz",
+    "ristops-be-reservation",
     "ristops-be-venue",
     "ristops-bff-web",
     "ristops-lib-be",
@@ -534,6 +535,7 @@ dependencies = [
     { name = "ristops-batch-demo" },
     { name = "ristops-be-authn" },
     { name = "ristops-be-authz" },
+    { name = "ristops-be-reservation" },
     { name = "ristops-be-venue" },
     { name = "ristops-bff-web" },
     { name = "ristops-lib-be" },
@@ -548,6 +550,7 @@ requires-dist = [
     { name = "ristops-batch-demo", editable = "packages/ristops-batch-demo" },
     { name = "ristops-be-authn", editable = "packages/ristops-be-authn" },
     { name = "ristops-be-authz", editable = "packages/ristops-be-authz" },
+    { name = "ristops-be-reservation", editable = "packages/ristops-be-reservation" },
     { name = "ristops-be-venue", editable = "packages/ristops-be-venue" },
     { name = "ristops-bff-web", editable = "packages/ristops-bff-web" },
     { name = "ristops-lib-be", editable = "packages/ristops-lib-be" },
@@ -612,6 +615,27 @@ requires-dist = [
     { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
     { name = "ristops-lib-neo4j", editable = "packages/ristops-lib-neo4j" },
     { name = "ristops-lib-redis", editable = "packages/ristops-lib-redis" },
+]
+
+[[package]]
+name = "ristops-be-reservation"
+version = "0.1.0"
+source = { editable = "packages/ristops-be-reservation" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "ristops-lib-be" },
+    { name = "ristops-lib-core" },
+    { name = "ristops-lib-redis" },
+    { name = "ristops-lib-sql" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi" },
+    { name = "ristops-lib-be", editable = "packages/ristops-lib-be" },
+    { name = "ristops-lib-core", editable = "packages/ristops-lib-core" },
+    { name = "ristops-lib-redis", editable = "packages/ristops-lib-redis" },
+    { name = "ristops-lib-sql", editable = "packages/ristops-lib-sql" },
 ]
 
 [[package]]

@@ -6,6 +6,7 @@
   - [be-authn](services/be-authn.md)
   - [be-authz](services/be-authz.md)
   - [be-venue](services/be-venue.md)
+  - [be-reservation](services/be-reservation.md)
   - [bff-web](services/bff-web.md)
 
 - **Libraries**

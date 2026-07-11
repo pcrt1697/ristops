@@ -83,6 +83,7 @@ class DemoSeeder:
                     "name": venue.name,
                     "address": venue.address,
                     "description": venue.description,
+                    "timezone": venue.timezone,
                 },
             )
             venue_id = response.json()["id"]

@@ -4,25 +4,29 @@
       "key": "stark",
       "name": "House Stark",
       "address": "Winterfell, The North, Westeros",
-      "description": "The ancient seat of the Kings in the North, a granite fortress warmed by hot springs beneath its walls. Its motto, 'Winter is Coming', greets every guest who braves the long road north."
+      "description": "The ancient seat of the Kings in the North, a granite fortress warmed by hot springs beneath its walls. Its motto, 'Winter is Coming', greets every guest who braves the long road north.",
+      "timezone": "Europe/London"
     },
     {
       "key": "targaryen",
       "name": "House Targaryen",
       "address": "Dragonstone, Blackwater Bay, Westeros",
-      "description": "A brooding island citadel of carved dragons and black stone, once home to the last dragonlords of Valyria. 'Fire and Blood' is served here, under the shadow of the Dragonmont."
+      "description": "A brooding island citadel of carved dragons and black stone, once home to the last dragonlords of Valyria. 'Fire and Blood' is served here, under the shadow of the Dragonmont.",
+      "timezone": "Europe/London"
     },
     {
       "key": "lannister",
       "name": "House Lannister",
       "address": "Casterly Rock, The Westerlands, Westeros",
-      "description": "A colossal stronghold hewn from a mountain above Lannisport, rich with gold and pride. As they say, a Lannister always pays his debts — 'Hear Me Roar!'"
+      "description": "A colossal stronghold hewn from a mountain above Lannisport, rich with gold and pride. As they say, a Lannister always pays his debts — 'Hear Me Roar!'",
+      "timezone": "Europe/Madrid"
     },
     {
       "key": "nightswatch",
       "name": "The Night's Watch",
       "address": "Castle Black, The Wall, The North",
-      "description": "The black brotherhood that guards the realms of men from atop a seven-hundred-foot wall of ice. Those who take the black swear to hold no lands and win no glory — 'And now my watch begins.'"
+      "description": "The black brotherhood that guards the realms of men from atop a seven-hundred-foot wall of ice. Those who take the black swear to hold no lands and win no glory — 'And now my watch begins.'",
+      "timezone": "Europe/Madrid"
     }
   ]
 }
