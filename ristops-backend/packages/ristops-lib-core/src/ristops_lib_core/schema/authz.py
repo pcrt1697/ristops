@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 class ResourceType(StrEnum):
     APP = 'app'
     VENUE = 'venue'
+    SERVICE = 'service'
     PERMISSION = 'permission'
     ROLE = 'role'
     ACL = 'acl'

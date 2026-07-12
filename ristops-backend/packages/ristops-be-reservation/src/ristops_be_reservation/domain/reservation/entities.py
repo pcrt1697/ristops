@@ -44,7 +44,7 @@ class ReservationEntity(Base):
         Integer,
         doc="Number of people",
     )
-    arrives_at: Mapped[time] = mapped_column(
+    arrival_time: Mapped[time] = mapped_column(
         Time,
         doc="Time of arrival",
     )

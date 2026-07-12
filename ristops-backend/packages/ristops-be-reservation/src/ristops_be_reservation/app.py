@@ -4,6 +4,7 @@ from typing import AsyncGenerator, Any
 
 from fastapi import FastAPI, APIRouter, Depends
 
+from ristops_be_reservation.domain.service.routers import service_router
 from ristops_be_reservation.domain.venue.service import on_venue_event
 from ristops_be_reservation.services.authz import is_authorized
 from ristops_be_reservation.services.http import authn_client, authz_client
@@ -64,7 +65,7 @@ def create_app() -> FastAPI:
     app.router.dependencies.append(Depends(authz_dependency))
 
     api_router = APIRouter(prefix="/api")
-    # TODO: include reservation routers
+    api_router.include_router(service_router)
     app.include_router(api_router)
 
     public_registry = PublicRoutesRegistry(app)

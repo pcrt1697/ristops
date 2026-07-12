@@ -1,6 +1,9 @@
 import logging
+from http import HTTPStatus
+from uuid import UUID
 
-from sqlalchemy import update
+from fastapi import HTTPException
+from sqlalchemy import update, select, ScalarResult
 from sqlalchemy.dialects.postgresql import insert
 
 from ristops_be_reservation.domain.venue.entities import VenueEntity
@@ -10,6 +13,18 @@ from ristops_lib_redis.engine import StreamPayload
 from ristops_lib_sql.engine import get_sql_session, sql_session_provider
 
 _logger = logging.getLogger(__name__)
+
+
+async def find_venue_or_throw(venue_id: UUID) -> VenueEntity:
+    """Return the local venue read-model for the given ID, or raise HTTP 404."""
+    session = get_sql_session()
+    result: ScalarResult[VenueEntity] = await session.scalars(
+        select(VenueEntity).where(VenueEntity.id == venue_id).limit(1)
+    )
+    venue = result.one_or_none()
+    if venue is None:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Venue not found")
+    return venue
 
 
 async def upsert_venue(venue_id: str, timezone: str, active: bool) -> None:

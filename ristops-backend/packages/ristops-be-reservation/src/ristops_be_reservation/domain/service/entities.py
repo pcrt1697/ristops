@@ -50,6 +50,11 @@ class ServiceEntity(Base):
         String(1000),
         doc="Description of the service",
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+        doc="When the service was soft-deleted; null while active",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -65,6 +70,9 @@ class ServiceOpeningEntity(Base):
     """SQLAlchemy entity for service openings."""
 
     __tablename__ = "service_openings"
+    __table_args__ = make_table_args(
+        UniqueConstraint("service_id", "weekday", name="uq_service_opening_service_weekday"),
+    )
 
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -80,15 +88,6 @@ class ServiceOpeningEntity(Base):
     weekday: Mapped[Weekday] = mapped_column(
         Enum(Weekday),
         doc="Day of the week this opening applies to",
-    )
-    validity_start: Mapped[str] = mapped_column(
-        String(4),
-        doc="Start of the validity period, as month and day (MMDD)",
-    )
-    validity_end: Mapped[str] = mapped_column(
-        String(4),
-        doc="End of the validity period, as month and day (MMDD); "
-            "wraps across the year when validity_start is greater than validity_end",
     )
     capacity: Mapped[int] = mapped_column(
         Integer,

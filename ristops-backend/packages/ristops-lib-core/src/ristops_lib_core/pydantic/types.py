@@ -24,3 +24,11 @@ UpdatedAt = Annotated[
         description="Date and time when the object was updated.",
     )
 ]
+
+DeletedAt = Annotated[
+    datetime | None,
+    Field(
+        default=None,
+        description="Date and time when the object was deleted; null while active.",
+    )
+]

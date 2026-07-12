@@ -1,13 +1,14 @@
 from typing import Callable, Any, Generic, TypeVar
 
 from pydantic import BaseModel
-from sqlalchemy import ScalarResult, select, ColumnElement, UnaryExpression, func
+from sqlalchemy import ScalarResult, select, ColumnElement, UnaryExpression, func, Select
 from sqlalchemy.orm import DeclarativeBase, Mapped
 
-from ristops_lib_core.schema.pagination import Page, SearchQuery, SortClause, SortDirection
+from ristops_lib_core.schema.pagination import Page, SearchQuery, SortableQuery, SortClause, SortDirection
 from ristops_lib_sql.engine import get_sql_session
 
-TQuery = TypeVar("TQuery", bound=SearchQuery)
+TQuery = TypeVar("TQuery", bound=SortableQuery)
+TPagedQuery = TypeVar("TPagedQuery", bound=SearchQuery)
 TScope = TypeVar("TScope")
 TEntity = TypeVar("TEntity", bound=DeclarativeBase)
 TResponse = TypeVar("TResponse", bound=BaseModel)
@@ -43,7 +44,10 @@ class BaseSortParser(Generic[TEntity]):
 
 
 class SearchQueryExecutor(Generic[TQuery, TScope, TEntity, TResponse]):
-    """Executes a paginated, filtered, and sorted search query against a SQLAlchemy model."""
+    """Executes a filtered and sorted search query against a SQLAlchemy model. Not paginated.
+
+    See `PaginatedSearchQueryExecutor` for the paginated counterpart, which composes this class.
+    """
 
     def __init__(
             self,
@@ -53,14 +57,67 @@ class SearchQueryExecutor(Generic[TQuery, TScope, TEntity, TResponse]):
             sort_parser: Callable[[list[SortClause]], list[UnaryExpression]] | None = None,
             model_mapper: Callable[[TEntity], TResponse] | None = None,
     ) -> None:
-        self._model_class = entity_class
-        self._response_class = response_class
+        self.entity_class = entity_class
         self._build_condition = condition_builder
         self._parse_sort = sort_parser if sort_parser is not None else BaseSortParser(entity_class)
         self._map_item: Callable[[TEntity], TResponse] = model_mapper if model_mapper is not None else BaseModelMapper(
             response_class)
 
-    async def execute(self, query: TQuery, scope: TScope) -> Page[TResponse]:
+    def build_conditions(self, query: TQuery, scope: TScope) -> list[ColumnElement[bool]]:
+        """Build the WHERE conditions for the query, from the user filter and the given scope."""
+        return self._build_condition(query, scope)
+
+    def build_statement(
+            self,
+            query: TQuery,
+            scope: TScope,
+            conditions: list[ColumnElement[bool]] | None = None,
+    ) -> Select:
+        """Build the base SELECT statement (WHERE + ORDER BY), without offset/limit."""
+        conditions = conditions if conditions is not None else self.build_conditions(query, scope)
+        stmt = select(self.entity_class).where(*conditions)
+        sort_clauses = query.get_sort_clauses()
+        if sort_clauses:
+            stmt = stmt.order_by(*self._parse_sort(sort_clauses))
+        return stmt
+
+    def map_items(self, entities: list[TEntity]) -> list[TResponse]:
+        """Map a list of ORM entities to their response models."""
+        return [self._map_item(entity) for entity in entities]
+
+    async def execute(self, query: TQuery, scope: TScope) -> list[TResponse]:
+        """
+        Execute the search and return the matching response models. Not paginated.
+
+        :param query: Search query defined by the user.
+        :param scope: Scope that defines additional filters forced by the application (e.g. authorization filters).
+        """
+        session = get_sql_session()
+        stmt = self.build_statement(query, scope)
+        result: ScalarResult[TEntity] = await session.scalars(stmt)
+        return self.map_items(result.all())
+
+
+class PaginatedSearchQueryExecutor(Generic[TPagedQuery, TScope, TEntity, TResponse]):
+    """Executes a paginated, filtered, and sorted search query against a SQLAlchemy model.
+
+    Composes a `SearchQueryExecutor` for condition-building, sorting, and mapping, and adds
+    offset/limit and a total count on top.
+    """
+
+    def __init__(
+            self,
+            entity_class: type[TEntity],
+            response_class: type[TResponse],
+            condition_builder: Callable[[TPagedQuery, TScope], list[ColumnElement[bool]]],
+            sort_parser: Callable[[list[SortClause]], list[UnaryExpression]] | None = None,
+            model_mapper: Callable[[TEntity], TResponse] | None = None,
+    ) -> None:
+        self._executor: SearchQueryExecutor[TPagedQuery, TScope, TEntity, TResponse] = SearchQueryExecutor(
+            entity_class, response_class, condition_builder, sort_parser, model_mapper,
+        )
+
+    async def execute(self, query: TPagedQuery, scope: TScope) -> Page[TResponse]:
         """
         Execute the search and return a paginated page of response models.
 
@@ -68,22 +125,17 @@ class SearchQueryExecutor(Generic[TQuery, TScope, TEntity, TResponse]):
         :param scope: Scope that defines additional filters forced by the application (e.g. authorization filters).
         """
         session = get_sql_session()
-        where_conditions = self._build_condition(query, scope)
-
-        stmt = select(self._model_class).where(*where_conditions)
-        sort_clauses = query.get_sort_clauses()
-        if sort_clauses:
-            order_by = self._parse_sort(sort_clauses)
-            stmt = stmt.order_by(*order_by)
+        conditions = self._executor.build_conditions(query, scope)
+        stmt = self._executor.build_statement(query, scope, conditions)
 
         offset = query.page * query.page_size
         stmt = stmt.offset(offset).limit(query.page_size)
 
         total_items = await session.scalar(
-            select(func.count()).select_from(self._model_class).where(*where_conditions)
+            select(func.count()).select_from(self._executor.entity_class).where(*conditions)
         )
         result: ScalarResult[TEntity] = await session.scalars(stmt)
-        items = [self._map_item(item) for item in result.all()]
+        items = self._executor.map_items(result.all())
         return Page.create(
             items=items,
             total=total_items or 0,

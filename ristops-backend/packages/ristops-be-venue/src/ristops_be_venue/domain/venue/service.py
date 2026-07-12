@@ -18,7 +18,7 @@ from ristops_be_venue.services.venue_events import (
 from ristops_lib_core.schema.authz import ResourceType, ListUserResourceGrantsResponse
 from ristops_lib_core.schema.pagination import Page
 from ristops_lib_sql.engine import get_sql_session
-from ristops_lib_sql.search import SearchQueryExecutor
+from ristops_lib_sql.search import PaginatedSearchQueryExecutor
 
 _logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def _build_venue_conditions(
     return where_conditions
 
 
-search_query_executor = SearchQueryExecutor[
+search_query_executor = PaginatedSearchQueryExecutor[
     VenueSearchQuery,
     VenueSearchScope,
     VenueEntity,

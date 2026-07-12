@@ -5,7 +5,7 @@ from fastapi import APIRouter, Path, Query
 from ristops_be_authz.domain.acl.service import check_acl_authorization
 from ristops_be_authz.domain.user.service import list_user_roles, list_user_resources
 from ristops_lib_be.authz.policy import (
-    policy, Policy, BaseResourceResolver, resolve_path_attribute
+    policy, Policy, BaseResourceResolver
 )
 from ristops_lib_core.schema.authz import (
     ResourceType,
@@ -14,7 +14,7 @@ from ristops_lib_core.schema.authz import (
 )
 from ristops_lib_neo4j.engine import neo4j_transactional
 
-_user_path_resolver = BaseResourceResolver(ResourceType.USER, resolver=resolve_path_attribute)
+_user_path_resolver = BaseResourceResolver(ResourceType.USER)
 user_router = APIRouter(
     prefix="/users",
     tags=["users"],

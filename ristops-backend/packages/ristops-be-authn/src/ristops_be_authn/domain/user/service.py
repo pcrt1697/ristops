@@ -22,7 +22,7 @@ from ristops_lib_core.context import APP_CONTEXT, ContextKey
 from ristops_lib_core.schema.pagination import Page
 from ristops_lib_core.schema.user import MemberResponse, AppMember
 from ristops_lib_sql.engine import get_sql_session
-from ristops_lib_sql.search import SearchQueryExecutor
+from ristops_lib_sql.search import PaginatedSearchQueryExecutor
 
 _logger = logging.getLogger(__name__)
 _admin_id = uuid5(RISTOPS_NAMESPACE_UUID, DEFAULT_ADMIN_USERNAME)
@@ -197,7 +197,7 @@ def _build_member_conditions(query: MemberSearchQuery, _scope: None) -> list[Col
     return conditions
 
 
-_member_search_executor = SearchQueryExecutor[MemberSearchQuery, None, UserEntity, MemberResponse](
+_member_search_executor = PaginatedSearchQueryExecutor[MemberSearchQuery, None, UserEntity, MemberResponse](
     entity_class=UserEntity,
     response_class=MemberResponse,
     condition_builder=_build_member_conditions,
