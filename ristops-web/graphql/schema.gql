@@ -196,11 +196,31 @@ type Mutation {
     input: UpdateVenueInput!
   ): Venue!
 
-  """Delete a venue."""
-  deleteVenue(
+  """Activate a venue: owner action, valid from PENDING or CLOSED."""
+  activateVenue(
     """Entity identifier."""
     id: ID!
-  ): Boolean!
+  ): Venue!
+
+  """
+  Close a venue: owner action, valid only from ACTIVE. Soft — no data is lost.
+  """
+  closeVenue(
+    """Entity identifier."""
+    id: ID!
+  ): Venue!
+
+  """Disable a venue: app-admin action, valid from PENDING or ACTIVE."""
+  disableVenue(
+    """Entity identifier."""
+    id: ID!
+  ): Venue!
+
+  """Re-enable a venue: app-admin action, valid only from DISABLED."""
+  enableVenue(
+    """Entity identifier."""
+    id: ID!
+  ): Venue!
 }
 
 """Pagination parameters."""
@@ -322,6 +342,7 @@ input ResourceGrantsFilterInput {
 enum ResourceType {
   APP
   VENUE
+  SERVICE
   PERMISSION
   ROLE
   ACL
@@ -512,6 +533,9 @@ type Venue {
   """Description of the venue."""
   description: String
 
+  """Current lifecycle status of the venue."""
+  status: VenueStatus!
+
   """Creation date."""
   createdAt: DateTime!
 
@@ -569,4 +593,12 @@ input VenueSortFieldSortInput {
 
   """Sort direction."""
   direction: SortDirection! = ASC
+}
+
+"""Lifecycle status of a venue."""
+enum VenueStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+  CLOSED
 }

@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import ClassVar
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ristops_be_reservation.domain.models import Weekday
 from ristops_lib_core.pydantic.types import ObjectUUID, CreatedAt, UpdatedAt, DeletedAt
@@ -61,6 +61,12 @@ class ServiceResponse(BaseModel):
     updated_at: UpdatedAt
 
 
+class ServicesResponse(BaseModel):
+    """Response body listing services."""
+
+    services: list[ServiceResponse]
+
+
 class ServiceSortField(StrEnum):
     """Fields a service search may be sorted by."""
 
@@ -69,8 +75,8 @@ class ServiceSortField(StrEnum):
     CREATED_AT = "created_at"
 
 
-class ServiceSearchFilter(BaseModel):
-    """Filter parameters for service search, exposed as `filter.<field>` query params."""
+class ServiceListFilter(BaseModel):
+    """Filter parameters for listing services, exposed as `filter.<field>` query params."""
 
     venue_id: UUID = Field(
         description="Filter by venue ID.",
@@ -85,8 +91,8 @@ class ServiceSearchFilter(BaseModel):
     )
 
 
-class ServiceSearchQuery(SortableQuery, ServiceSearchFilter):
-    """Full service search query: sort and filter combined. Not paginated."""
+class ServiceListQuery(SortableQuery, ServiceListFilter):
+    """Full service list query: sort and filter combined. Not paginated."""
 
     sort_field_enum: ClassVar[type[StrEnum]] = ServiceSortField
 
@@ -119,13 +125,33 @@ class ServiceOpeningResponse(BaseModel):
     updated_at: UpdatedAt
 
 
-class ServiceOpeningOverrideUpsertRequest(BaseModel):
-    """A single opening override within a bulk upsert request."""
+class ServiceOpeningsUpsertRequest(BaseModel):
+    """Request body for replacing the full set of openings for a service. Openings are
+    configured as a whole set at setup time, so this stays a bulk, list-replace operation
+    (unlike overrides/closings, which are one-off special cases created individually)."""
 
-    id: UUID | None = Field(
-        default=None,
-        description="Identifier of an existing override to update; omit to create a new one.",
+    openings: list[ServiceOpeningUpsertRequest] = Field(
+        description="The complete set of openings to apply. Openings for weekdays not "
+                    "included here are removed.",
     )
+
+    @model_validator(mode="after")
+    def _validate_no_duplicate_weekdays(self) -> "ServiceOpeningsUpsertRequest":
+        weekdays = {opening.weekday for opening in self.openings}
+        if len(self.openings) != len(weekdays):
+            raise ValueError("Duplicate weekday in openings list")
+        return self
+
+
+class ServiceOpeningsResponse(BaseModel):
+    """Response body listing a service's openings."""
+
+    openings: list[ServiceOpeningResponse]
+
+
+class ServiceOpeningOverrideCreateRequest(BaseModel):
+    """Request body for creating a new opening override."""
+
     date_start: date = Field(description="First date of the override period (inclusive).")
     date_end: date = Field(description="Last date of the override period (inclusive).")
     capacity: int = Field(description="Overridden maximum number of reservable seats.", gt=0)
@@ -134,6 +160,31 @@ class ServiceOpeningOverrideUpsertRequest(BaseModel):
     description: str | None = Field(
         default=None,
         description="Description of this override.",
+        max_length=1000,
+    )
+
+
+class ServiceOpeningOverrideUpdateRequest(BaseModel):
+    """Request body for updating an opening override. Unset fields are not modified."""
+
+    date_start: date | None = Field(
+        default=None,
+        description="New first date of the override period (inclusive).",
+    )
+    date_end: date | None = Field(
+        default=None,
+        description="New last date of the override period (inclusive).",
+    )
+    capacity: int | None = Field(
+        default=None,
+        description="New overridden maximum number of reservable seats.",
+        gt=0,
+    )
+    start_time: time | None = Field(default=None, description="New overridden opening time.")
+    end_time: time | None = Field(default=None, description="New overridden closing time.")
+    description: str | None = Field(
+        default=None,
+        description="New description of this override.",
         max_length=1000,
     )
 
@@ -153,18 +204,38 @@ class ServiceOpeningOverrideResponse(BaseModel):
     updated_at: UpdatedAt
 
 
-class ServiceClosingUpsertRequest(BaseModel):
-    """A single closing within a bulk upsert request."""
+class ServiceOpeningOverridesResponse(BaseModel):
+    """Response body listing a service's opening overrides."""
 
-    id: UUID | None = Field(
-        default=None,
-        description="Identifier of an existing closing to update; omit to create a new one.",
-    )
+    opening_overrides: list[ServiceOpeningOverrideResponse]
+
+
+class ServiceClosingCreateRequest(BaseModel):
+    """Request body for creating a new closing."""
+
     date_start: date = Field(description="First date of the closing period (inclusive).")
     date_end: date = Field(description="Last date of the closing period (inclusive).")
     description: str | None = Field(
         default=None,
         description="Description of this closing.",
+        max_length=1000,
+    )
+
+
+class ServiceClosingUpdateRequest(BaseModel):
+    """Request body for updating a closing. Unset fields are not modified."""
+
+    date_start: date | None = Field(
+        default=None,
+        description="New first date of the closing period (inclusive).",
+    )
+    date_end: date | None = Field(
+        default=None,
+        description="New last date of the closing period (inclusive).",
+    )
+    description: str | None = Field(
+        default=None,
+        description="New description of this closing.",
         max_length=1000,
     )
 
@@ -179,3 +250,9 @@ class ServiceClosingResponse(BaseModel):
     description: str | None = Field(default=None, description="Description of this closing.")
     created_at: CreatedAt
     updated_at: UpdatedAt
+
+
+class ServiceClosingsResponse(BaseModel):
+    """Response body listing a service's closings."""
+
+    closings: list[ServiceClosingResponse]

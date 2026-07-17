@@ -14,15 +14,6 @@ class ResourceType(StrEnum):
     USER = 'user'
 
 
-class PermissionAction(StrEnum):
-    GET = 'get'
-    LIST = 'list'
-    ADD = 'add'
-    EDIT = 'edit'
-    REMOVE = 'remove'
-    MANAGE = '*'
-
-
 # Separator between a permission's scope and action (e.g. "venue:add").
 PERMISSION_SEPARATOR = ":"
 

@@ -38,7 +38,7 @@ member_router = APIRouter(
 )
 @policy()
 @sql_transactional
-async def search_member(
+async def get_members(
         query: Annotated[MemberSearchQuery, Query()],
 ) -> Page[MemberResponse]:
     """Search members: the public view of users. Any authenticated user may call this."""

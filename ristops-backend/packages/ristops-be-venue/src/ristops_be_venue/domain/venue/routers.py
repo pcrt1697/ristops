@@ -5,15 +5,19 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from fastapi.params import Path, Depends
 
+from ristops_be_venue.domain.models import VenueActionType
 from ristops_be_venue.domain.venue.schema import (
-    VenueCreationRequest, VenueUpdateRequest, VenueResponse, VenueSearchQuery,
+    VenueCreationRequest, VenueUpdateRequest, VenueResponse, VenueSearchQuery, VenueActionRequest,
 )
 from ristops_be_venue.domain.venue.service import (
-    create_venue, find_venue_or_throw, update_venue, remove_venue, search_venue, VenueSearchScope,
+    create_venue, find_venue_or_throw, update_venue, search_venue, VenueSearchScope,
+    dispatch_venue_action,
 )
 from ristops_be_venue.services.authz import authz_client_factory
 from ristops_lib_be.authz.client import AuthorizationResourceGrantsFetcher
-from ristops_lib_be.authz.policy import policy, BaseResourceResolver, Policy, resolve_static_resource
+from ristops_lib_be.authz.policy import (
+    policy, BaseResourceResolver, Policy, resolve_static_resource, resolve_permission_from_body_field,
+)
 from ristops_lib_core.exception import ErrorResponse
 from ristops_lib_core.schema.authz import ResourceType, ListUserResourceGrantsResponse
 from ristops_lib_core.schema.pagination import Page
@@ -32,7 +36,7 @@ venue_router = APIRouter(
 )
 @policy()
 @sql_transactional
-async def list_venues(
+async def get_venues(
         query: Annotated[VenueSearchQuery, Query()],
         venue_grants: Annotated[
             ListUserResourceGrantsResponse,
@@ -102,17 +106,34 @@ async def update(
     return VenueResponse.model_validate(venue, from_attributes=True)
 
 
-@venue_router.delete(
-    "/{venue_id}",
-    status_code=HTTPStatus.NO_CONTENT,
-    responses={
-        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
+_venue_action_permission_resolver = resolve_permission_from_body_field(
+    "action_type",
+    {
+        VenueActionType.ACTIVATE: "venue:activate",
+        VenueActionType.CLOSE: "venue:close",
+        VenueActionType.DISABLE: "venue:disable",
+        VenueActionType.ENABLE: "venue:enable",
     },
 )
-@policy(Policy(_venue_path_resolver, "venue:remove"))
+
+
+@venue_router.post(
+    "/{venue_id}/actions",
+    response_model=VenueResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue status does not allow this transition"},
+        HTTPStatus.BAD_REQUEST: {"model": ErrorResponse, "description": "Unknown action_type"},
+    },
+)
+@policy(Policy(_venue_path_resolver, permissions_resolver=_venue_action_permission_resolver))
 @sql_transactional
-async def delete(
+async def perform_action(
         venue_id: Annotated[UUID, Path(description="Venue ID")],
-) -> None:
-    """Delete a venue by ID."""
-    await remove_venue(venue_id)
+        request: VenueActionRequest,
+) -> VenueResponse:
+    """Perform a lifecycle action on a venue: activate/close (owner) or disable/enable
+    (app-admin). The required permission depends on `action_type`; the venue's current status
+    determines whether the specific transition is valid (409 otherwise)."""
+    venue = await dispatch_venue_action(request.action_type, venue_id)
+    return VenueResponse.model_validate(venue, from_attributes=True)

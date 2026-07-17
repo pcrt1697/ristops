@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
-import { Descriptions, Spin } from 'antd';
+import { Descriptions, Space, Spin, Tag } from 'antd';
 import { useVenue } from '../../domain/venue/venue.hooks.ts';
+import { statusTagColor } from '../../domain/venue/venue.utils.ts';
 
 export default function VenueHomePage() {
   const { venueId } = useParams<{ venueId: string }>();
@@ -11,7 +12,15 @@ export default function VenueHomePage() {
   if (!venue) return null;
 
   return (
-    <Descriptions title={venue.name} column={1}>
+    <Descriptions
+      title={
+        <Space>
+          {venue.name}
+          <Tag color={statusTagColor[venue.status]}>{venue.status}</Tag>
+        </Space>
+      }
+      column={1}
+    >
       <Descriptions.Item label="Address">{venue.address}</Descriptions.Item>
       <Descriptions.Item label="Description">
         {venue.description ?? '—'}

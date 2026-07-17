@@ -6,16 +6,20 @@ from fastapi import APIRouter, Query
 from fastapi.params import Path
 
 from ristops_be_reservation.domain.service.schema import (
-    ServiceCreationRequest, ServiceResponse, ServiceSearchQuery,
-    ServiceOpeningUpsertRequest, ServiceOpeningResponse,
-    ServiceOpeningOverrideUpsertRequest, ServiceOpeningOverrideResponse,
-    ServiceClosingUpsertRequest, ServiceClosingResponse,
+    ServiceCreationRequest, ServiceResponse, ServicesResponse, ServiceListQuery,
+    ServiceOpeningsUpsertRequest, ServiceOpeningsResponse, ServiceOpeningResponse,
+    ServiceOpeningOverrideCreateRequest, ServiceOpeningOverrideUpdateRequest,
+    ServiceOpeningOverrideResponse, ServiceOpeningOverridesResponse,
+    ServiceClosingCreateRequest, ServiceClosingUpdateRequest, ServiceClosingResponse,
+    ServiceClosingsResponse,
 )
 from ristops_be_reservation.domain.service.service import (
-    create_service, find_service_or_throw, remove_service, search_services,
+    create_service, find_service_or_throw, remove_service, list_services,
     upsert_service_openings, list_service_openings,
-    upsert_service_opening_overrides, list_service_opening_overrides,
-    upsert_service_closings, list_service_closings,
+    create_service_opening_override, update_service_opening_override,
+    remove_service_opening_override, list_service_opening_overrides,
+    create_service_closing, update_service_closing,
+    remove_service_closing, list_service_closings,
 )
 from ristops_lib_be.authz.policy import (
     policy, BaseResourceResolver, Policy, resolve_body_attribute, resolve_query_attribute,
@@ -37,16 +41,17 @@ service_router = APIRouter(
 
 @service_router.get(
     "",
-    response_model=list[ServiceResponse],
+    response_model=ServicesResponse,
 )
 @policy(Policy(_venue_query_resolver, "service:list"))
 @sql_transactional
-async def search(
-        query: Annotated[ServiceSearchQuery, Query()],
-) -> list[ServiceResponse]:
+async def get_services(
+        query: Annotated[ServiceListQuery, Query()],
+) -> ServicesResponse:
     """Return services for a venue matching the given filters, sorted per the query.
     Not paginated. Authorized against the venue."""
-    return await search_services(query)
+    services = await list_services(query)
+    return ServicesResponse(services=services)
 
 
 @service_router.post(
@@ -55,6 +60,7 @@ async def search(
     status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
 @policy(Policy(_venue_body_resolver, "service:add"))
@@ -94,6 +100,7 @@ async def get(
     status_code=HTTPStatus.NO_CONTENT,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
 @policy(Policy(_service_path_resolver, "service:remove"))
@@ -107,128 +114,211 @@ async def delete(
 
 @service_router.put(
     "/{service_id}/openings",
-    response_model=list[ServiceOpeningResponse],
+    response_model=ServiceOpeningsResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
-        HTTPStatus.BAD_REQUEST: {"model": ErrorResponse, "description": "Duplicate weekday in openings list"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.UNPROCESSABLE_ENTITY: {
+            "model": ErrorResponse, "description": "Duplicate weekday in openings list",
+        },
     },
 )
 @policy(Policy(_service_path_resolver, "service:edit"))
 @sql_transactional
 async def upsert_openings(
         service_id: Annotated[UUID, Path(description="Service ID")],
-        request: list[ServiceOpeningUpsertRequest],
-) -> list[ServiceOpeningResponse]:
+        request: ServiceOpeningsUpsertRequest,
+) -> ServiceOpeningsResponse:
     """Replace the full set of openings for a service with the given list: openings for
     weekdays present in the list are created or updated, openings for weekdays absent from
     the list are deleted. Authorized against the service itself."""
     openings = await upsert_service_openings(service_id, request)
-    return [ServiceOpeningResponse.model_validate(opening, from_attributes=True) for opening in openings]
+    return ServiceOpeningsResponse(
+        openings=[ServiceOpeningResponse.model_validate(opening, from_attributes=True) for opening in openings]
+    )
 
 
 @service_router.get(
     "/{service_id}/openings",
-    response_model=list[ServiceOpeningResponse],
+    response_model=ServiceOpeningsResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
     },
 )
 @policy(Policy(_service_path_resolver, "service:get"))
 @sql_transactional
-async def list_openings(
+async def get_service_openings(
         service_id: Annotated[UUID, Path(description="Service ID")],
         include_deleted: Annotated[
             bool, Query(description="Return openings even if the service has been deleted")
         ] = False,
-) -> list[ServiceOpeningResponse]:
+) -> ServiceOpeningsResponse:
     """Return all openings for a service. Authorized against the service itself."""
     openings = await list_service_openings(service_id, include_deleted=include_deleted)
-    return [ServiceOpeningResponse.model_validate(opening, from_attributes=True) for opening in openings]
+    return ServiceOpeningsResponse(
+        openings=[ServiceOpeningResponse.model_validate(opening, from_attributes=True) for opening in openings]
+    )
 
 
-@service_router.put(
+@service_router.post(
     "/{service_id}/opening-overrides",
-    response_model=list[ServiceOpeningOverrideResponse],
+    response_model=ServiceOpeningOverrideResponse,
+    status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
-        HTTPStatus.BAD_REQUEST: {
-            "model": ErrorResponse, "description": "Duplicate or unknown id in opening overrides list",
-        },
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
 @policy(Policy(_service_path_resolver, "service:edit"))
 @sql_transactional
-async def upsert_opening_overrides(
+async def create_opening_override(
         service_id: Annotated[UUID, Path(description="Service ID")],
-        request: list[ServiceOpeningOverrideUpsertRequest],
-) -> list[ServiceOpeningOverrideResponse]:
-    """Replace the full set of opening overrides for a service with the given list: items
-    with an id update the matching row, items without an id are created, and existing rows
-    absent from the list are deleted. Authorized against the service itself."""
-    overrides = await upsert_service_opening_overrides(service_id, request)
-    return [
-        ServiceOpeningOverrideResponse.model_validate(override, from_attributes=True) for override in overrides
-    ]
+        request: ServiceOpeningOverrideCreateRequest,
+) -> ServiceOpeningOverrideResponse:
+    """Create a new opening override for a service. Authorized against the service itself."""
+    override = await create_service_opening_override(service_id, request)
+    return ServiceOpeningOverrideResponse.model_validate(override, from_attributes=True)
+
+
+@service_router.patch(
+    "/{service_id}/opening-overrides/{override_id}",
+    response_model=ServiceOpeningOverrideResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Opening override not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+    },
+)
+@policy(Policy(_service_path_resolver, "service:edit"))
+@sql_transactional
+async def update_opening_override(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        override_id: Annotated[UUID, Path(description="Opening override ID")],
+        request: ServiceOpeningOverrideUpdateRequest,
+) -> ServiceOpeningOverrideResponse:
+    """Update an opening override. Only fields present in the request body are modified.
+    Authorized against the service itself."""
+    override = await update_service_opening_override(service_id, override_id, request)
+    return ServiceOpeningOverrideResponse.model_validate(override, from_attributes=True)
+
+
+@service_router.delete(
+    "/{service_id}/opening-overrides/{override_id}",
+    status_code=HTTPStatus.NO_CONTENT,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Opening override not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+    },
+)
+@policy(Policy(_service_path_resolver, "service:edit"))
+@sql_transactional
+async def delete_opening_override(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        override_id: Annotated[UUID, Path(description="Opening override ID")],
+) -> None:
+    """Delete an opening override. Authorized against the service itself."""
+    await remove_service_opening_override(service_id, override_id)
 
 
 @service_router.get(
     "/{service_id}/opening-overrides",
-    response_model=list[ServiceOpeningOverrideResponse],
+    response_model=ServiceOpeningOverridesResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
     },
 )
 @policy(Policy(_service_path_resolver, "service:get"))
 @sql_transactional
-async def list_opening_overrides(
+async def get_service_opening_overrides(
         service_id: Annotated[UUID, Path(description="Service ID")],
         include_deleted: Annotated[
             bool, Query(description="Return opening overrides even if the service has been deleted")
         ] = False,
-) -> list[ServiceOpeningOverrideResponse]:
+) -> ServiceOpeningOverridesResponse:
     """Return all opening overrides for a service. Authorized against the service itself."""
     overrides = await list_service_opening_overrides(service_id, include_deleted=include_deleted)
-    return [
-        ServiceOpeningOverrideResponse.model_validate(override, from_attributes=True) for override in overrides
-    ]
+    return ServiceOpeningOverridesResponse(
+        opening_overrides=[
+            ServiceOpeningOverrideResponse.model_validate(override, from_attributes=True) for override in overrides
+        ]
+    )
 
 
-@service_router.put(
+@service_router.post(
     "/{service_id}/closings",
-    response_model=list[ServiceClosingResponse],
+    response_model=ServiceClosingResponse,
+    status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
-        HTTPStatus.BAD_REQUEST: {"model": ErrorResponse, "description": "Duplicate or unknown id in closings list"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
 @policy(Policy(_service_path_resolver, "service:edit"))
 @sql_transactional
-async def upsert_closings(
+async def create_closing(
         service_id: Annotated[UUID, Path(description="Service ID")],
-        request: list[ServiceClosingUpsertRequest],
-) -> list[ServiceClosingResponse]:
-    """Replace the full set of closings for a service with the given list: items with an id
-    update the matching row, items without an id are created, and existing rows absent from
-    the list are deleted. Authorized against the service itself."""
-    closings = await upsert_service_closings(service_id, request)
-    return [ServiceClosingResponse.model_validate(closing, from_attributes=True) for closing in closings]
+        request: ServiceClosingCreateRequest,
+) -> ServiceClosingResponse:
+    """Create a new closing for a service. Authorized against the service itself."""
+    closing = await create_service_closing(service_id, request)
+    return ServiceClosingResponse.model_validate(closing, from_attributes=True)
+
+
+@service_router.patch(
+    "/{service_id}/closings/{closing_id}",
+    response_model=ServiceClosingResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Closing not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+    },
+)
+@policy(Policy(_service_path_resolver, "service:edit"))
+@sql_transactional
+async def update_closing(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        closing_id: Annotated[UUID, Path(description="Closing ID")],
+        request: ServiceClosingUpdateRequest,
+) -> ServiceClosingResponse:
+    """Update a closing. Only fields present in the request body are modified. Authorized
+    against the service itself."""
+    closing = await update_service_closing(service_id, closing_id, request)
+    return ServiceClosingResponse.model_validate(closing, from_attributes=True)
+
+
+@service_router.delete(
+    "/{service_id}/closings/{closing_id}",
+    status_code=HTTPStatus.NO_CONTENT,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Closing not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+    },
+)
+@policy(Policy(_service_path_resolver, "service:edit"))
+@sql_transactional
+async def delete_closing(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        closing_id: Annotated[UUID, Path(description="Closing ID")],
+) -> None:
+    """Delete a closing. Authorized against the service itself."""
+    await remove_service_closing(service_id, closing_id)
 
 
 @service_router.get(
     "/{service_id}/closings",
-    response_model=list[ServiceClosingResponse],
+    response_model=ServiceClosingsResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
     },
 )
 @policy(Policy(_service_path_resolver, "service:get"))
 @sql_transactional
-async def list_closings(
+async def get_service_closings(
         service_id: Annotated[UUID, Path(description="Service ID")],
         include_deleted: Annotated[
             bool, Query(description="Return closings even if the service has been deleted")
         ] = False,
-) -> list[ServiceClosingResponse]:
+) -> ServiceClosingsResponse:
     """Return all closings for a service. Authorized against the service itself."""
     closings = await list_service_closings(service_id, include_deleted=include_deleted)
-    return [ServiceClosingResponse.model_validate(closing, from_attributes=True) for closing in closings]
+    return ServiceClosingsResponse(
+        closings=[ServiceClosingResponse.model_validate(closing, from_attributes=True) for closing in closings]
+    )

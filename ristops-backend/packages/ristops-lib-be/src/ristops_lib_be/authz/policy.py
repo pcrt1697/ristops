@@ -1,7 +1,8 @@
 import logging
+from http import HTTPStatus
 from typing import Callable, Awaitable, Protocol
 
-from fastapi import Request
+from fastapi import Request, HTTPException
 
 from ristops_lib_core.schema.authz import (
     AuthorizationGrant, AuthorizationResource,
@@ -17,6 +18,9 @@ class PolicyInterface(Protocol):
         ...
 
 
+PermissionsResolver = Callable[[Request], Awaitable[list[str]]]
+
+
 class Policy:
     """ ACL grant resource definition. """
 
@@ -24,21 +28,28 @@ class Policy:
             self,
             resource_resolver: ResourceResolver,
             *permissions: str,
+            permissions_resolver: PermissionsResolver | None = None,
     ) -> None:
         self._resource_resolver = resource_resolver
         self._permissions = list(permissions)
+        self._permissions_resolver = permissions_resolver
         self._name = str(self)
 
     async def __call__(self, request: Request) -> AuthorizationGrant:
         _logger.debug("Parsing policy %s", self._name)
         resource = await self._resource_resolver(request)
+        permissions = (
+            await self._permissions_resolver(request)
+            if self._permissions_resolver is not None
+            else self._permissions
+        )
         _logger.debug(
-            "Policy %s resolved to resource %s of type %s",
-            self._name, resource.resource_id, resource.resource_type
+            "Policy %s resolved to resource %s of type %s, permissions %s",
+            self._name, resource.resource_id, resource.resource_type, permissions
         )
         return AuthorizationGrant(
             resource=resource,
-            permissions=self._permissions,
+            permissions=permissions,
         )
 
     def __str__(self):
@@ -111,3 +122,25 @@ async def resolve_path_resource(request: Request) -> AuthorizationResource:
         resource_id=request.path_params["resource_id"],
         resource_type=ResourceType(request.path_params["resource_type"]),
     )
+
+
+def resolve_permission_from_body_field(field_name: str, mapping: dict[str, str]) -> PermissionsResolver:
+    """Build a `permissions_resolver` that reads `field_name` from the request body and maps its
+    value to a single required permission via `mapping`. Raises 400 on an unmapped value.
+
+    Lets one route require a different permission per request, based on request content, rather
+    than a fixed permission list decided at route-decoration time (e.g. a single "perform this
+    action" endpoint whose action type determines who may call it).
+    """
+
+    async def _resolver(request: Request) -> list[str]:
+        value = await resolve_body_attribute(request, field_name)
+        permission = mapping.get(value)
+        if permission is None:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail=f"Unknown {field_name}: {value}",
+            )
+        return [permission]
+
+    return _resolver

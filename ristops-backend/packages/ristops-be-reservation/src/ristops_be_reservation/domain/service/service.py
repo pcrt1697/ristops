@@ -1,19 +1,22 @@
 import logging
 from datetime import datetime, UTC
 from http import HTTPStatus
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select, ScalarResult, ColumnElement
+from sqlalchemy import select, delete, ScalarResult, ColumnElement
 
 from ristops_be_reservation.domain.service.entities import (
     ServiceEntity, ServiceOpeningEntity, ServiceOpeningOverrideEntity, ServiceClosingEntity,
 )
 from ristops_be_reservation.domain.service.schema import (
-    ServiceCreationRequest, ServiceResponse, ServiceSearchQuery, ServiceOpeningUpsertRequest,
-    ServiceOpeningOverrideUpsertRequest, ServiceClosingUpsertRequest,
+    ServiceCreationRequest, ServiceResponse, ServiceListQuery, ServiceOpeningsUpsertRequest,
+    ServiceOpeningOverrideCreateRequest, ServiceOpeningOverrideUpdateRequest,
+    ServiceClosingCreateRequest, ServiceClosingUpdateRequest,
 )
-from ristops_be_reservation.domain.venue.service import find_venue_or_throw
+from ristops_be_reservation.domain.venue.service import (
+    find_venue_or_throw, check_venue_accepts_config_changes, ensure_venue_accepts_config_changes,
+)
 from ristops_be_reservation.services.resource import publish_resource_created_event, publish_resource_deleted_event
 from ristops_lib_core.schema.authz import ResourceType
 from ristops_lib_sql.engine import get_sql_session
@@ -24,10 +27,10 @@ _logger = logging.getLogger(__name__)
 
 async def create_service(request: ServiceCreationRequest) -> ServiceEntity:
     """Create a new service under a venue."""
-    await find_venue_or_throw(request.venue_id)
+    venue = await find_venue_or_throw(request.venue_id)
+    check_venue_accepts_config_changes(venue)
     session = get_sql_session()
     service = ServiceEntity(
-        id=uuid4(),
         venue_id=request.venue_id,
         name=request.name,
         description=request.description,
@@ -68,7 +71,7 @@ async def find_service_or_throw(service_id: UUID, include_deleted: bool = False)
     return service
 
 
-def _build_service_conditions(query: ServiceSearchQuery, scope: None) -> list[ColumnElement[bool]]:
+def _build_service_conditions(query: ServiceListQuery, scope: None) -> list[ColumnElement[bool]]:
     """Build the WHERE conditions from the user filter."""
     conditions = [ServiceEntity.venue_id == query.venue_id]
     if query.name is not None:
@@ -78,7 +81,7 @@ def _build_service_conditions(query: ServiceSearchQuery, scope: None) -> list[Co
     return conditions
 
 
-_service_search_executor: SearchQueryExecutor[ServiceSearchQuery, None, ServiceEntity, ServiceResponse] = (
+_service_list_executor: SearchQueryExecutor[ServiceListQuery, None, ServiceEntity, ServiceResponse] = (
     SearchQueryExecutor(
         entity_class=ServiceEntity,
         response_class=ServiceResponse,
@@ -87,61 +90,48 @@ _service_search_executor: SearchQueryExecutor[ServiceSearchQuery, None, ServiceE
 )
 
 
-async def search_services(query: ServiceSearchQuery) -> list[ServiceResponse]:
+async def list_services(query: ServiceListQuery) -> list[ServiceResponse]:
     """Return services matching the given filters, sorted per the query. Not paginated."""
-    return await _service_search_executor.execute(query, None)
+    return await _service_list_executor.execute(query, None)
 
 
 async def upsert_service_openings(
         service_id: UUID,
-        requests: list[ServiceOpeningUpsertRequest],
+        request: ServiceOpeningsUpsertRequest,
 ) -> list[ServiceOpeningEntity]:
-    """Replace the full set of openings for a service with the given list.
+    """Replace the full set of openings for a service: existing openings are dropped and the
+    submitted list is inserted fresh.
 
-    Reconciled by weekday, the natural key now that openings are periodless (unique per
-    (service_id, weekday)): submitted weekdays are created or updated in place, and any
-    existing opening whose weekday is absent from the list is deleted.
+    No diff/reconcile-in-place, unlike overrides/closings' per-item CRUD — an opening's `id`
+    carries no identity anything else references, so there's nothing to preserve across a
+    replace. Duplicate weekdays in the request are rejected at the schema layer
+    (`ServiceOpeningsUpsertRequest`).
     """
-    await find_service_or_throw(service_id)
-
-    weekdays = [request.weekday for request in requests]
-    if len(weekdays) != len(set(weekdays)):
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail="Duplicate weekday in openings list",
-        )
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
 
     session = get_sql_session()
-    existing_result: ScalarResult[ServiceOpeningEntity] = await session.scalars(
-        select(ServiceOpeningEntity).where(ServiceOpeningEntity.service_id == service_id)
+    await session.execute(
+        delete(ServiceOpeningEntity).where(ServiceOpeningEntity.service_id == service_id)
     )
-    existing_by_weekday = {opening.weekday: opening for opening in existing_result.all()}
 
-    submitted_weekdays = set(weekdays)
-    for weekday, opening in existing_by_weekday.items():
-        if weekday not in submitted_weekdays:
-            await session.delete(opening)
-
-    openings = []
-    for request in requests:
-        opening = existing_by_weekday.get(request.weekday)
-        if opening is None:
-            opening = ServiceOpeningEntity(
-                id=uuid4(),
-                service_id=service_id,
-                weekday=request.weekday,
-            )
-            session.add(opening)
-        opening.capacity = request.capacity
-        opening.start_time = request.start_time
-        opening.end_time = request.end_time
-        opening.description = request.description
-        openings.append(opening)
+    openings = [
+        ServiceOpeningEntity(
+            service_id=service_id,
+            weekday=item.weekday,
+            capacity=item.capacity,
+            start_time=item.start_time,
+            end_time=item.end_time,
+            description=item.description,
+        )
+        for item in request.openings
+    ]
+    session.add_all(openings)
 
     await session.flush()
     for opening in openings:
         await session.refresh(opening)
-    _logger.info("Upserted %d openings for service %s", len(openings), service_id)
+    _logger.info("Replaced openings for service %s with %d entries", service_id, len(openings))
     return openings
 
 
@@ -155,61 +145,88 @@ async def list_service_openings(service_id: UUID, include_deleted: bool = False)
     return list(result.all())
 
 
-async def upsert_service_opening_overrides(
+async def find_service_opening_override_or_throw(
         service_id: UUID,
-        requests: list[ServiceOpeningOverrideUpsertRequest],
-) -> list[ServiceOpeningOverrideEntity]:
-    """Replace the full set of opening overrides for a service with the given list.
+        override_id: UUID,
+) -> ServiceOpeningOverrideEntity:
+    """Return the opening override with the given ID under the given service, or raise HTTP 404."""
+    session = get_sql_session()
+    result: ScalarResult[ServiceOpeningOverrideEntity] = await session.scalars(
+        select(ServiceOpeningOverrideEntity).where(
+            ServiceOpeningOverrideEntity.id == override_id,
+            ServiceOpeningOverrideEntity.service_id == service_id,
+        ).limit(1)
+    )
+    override = result.one_or_none()
+    if override is None:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Opening override not found")
+    return override
 
-    Reconciled by id, since overrides have no natural business key (a service may have many,
-    non-overlapping date ranges): items with an id update the matching existing row, items
-    without an id are created, and existing rows whose id is absent from the list are deleted.
-    """
-    await find_service_or_throw(service_id)
 
-    ids = [request.id for request in requests if request.id is not None]
-    if len(ids) != len(set(ids)):
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail="Duplicate id in opening overrides list",
-        )
+async def create_service_opening_override(
+        service_id: UUID,
+        request: ServiceOpeningOverrideCreateRequest,
+) -> ServiceOpeningOverrideEntity:
+    """Create a new opening override for a service. Overrides are one-off special cases, so
+    unlike openings this is a plain create, not a bulk reconcile."""
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
+    session = get_sql_session()
+    override = ServiceOpeningOverrideEntity(
+        service_id=service_id,
+        date_start=request.date_start,
+        date_end=request.date_end,
+        capacity=request.capacity,
+        start_time=request.start_time,
+        end_time=request.end_time,
+        description=request.description,
+    )
+    session.add(override)
+    await session.flush()
+    await session.refresh(override)
+    _logger.info("Created opening override %s for service %s", override.id, service_id)
+    return override
+
+
+async def update_service_opening_override(
+        service_id: UUID,
+        override_id: UUID,
+        request: ServiceOpeningOverrideUpdateRequest,
+) -> ServiceOpeningOverrideEntity:
+    """Update an opening override. Only fields present in the request body are modified."""
+    override = await find_service_opening_override_or_throw(service_id, override_id)
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
+    fields_to_update = request.model_fields_set
+
+    if "date_start" in fields_to_update and request.date_start is not None:
+        override.date_start = request.date_start
+    if "date_end" in fields_to_update and request.date_end is not None:
+        override.date_end = request.date_end
+    if "capacity" in fields_to_update and request.capacity is not None:
+        override.capacity = request.capacity
+    if "start_time" in fields_to_update and request.start_time is not None:
+        override.start_time = request.start_time
+    if "end_time" in fields_to_update and request.end_time is not None:
+        override.end_time = request.end_time
+    if "description" in fields_to_update:
+        override.description = request.description
 
     session = get_sql_session()
-    existing_result: ScalarResult[ServiceOpeningOverrideEntity] = await session.scalars(
-        select(ServiceOpeningOverrideEntity).where(ServiceOpeningOverrideEntity.service_id == service_id)
-    )
-    existing_by_id = {override.id: override for override in existing_result.all()}
-
-    submitted_ids = set(ids)
-    for existing_id, override in existing_by_id.items():
-        if existing_id not in submitted_ids:
-            await session.delete(override)
-
-    overrides = []
-    for request in requests:
-        if request.id is not None:
-            override = existing_by_id.get(request.id)
-            if override is None:
-                raise HTTPException(
-                    status_code=HTTPStatus.BAD_REQUEST,
-                    detail=f"Opening override {request.id} not found for this service",
-                )
-        else:
-            override = ServiceOpeningOverrideEntity(id=uuid4(), service_id=service_id)
-            session.add(override)
-        override.date_start = request.date_start
-        override.date_end = request.date_end
-        override.capacity = request.capacity
-        override.start_time = request.start_time
-        override.end_time = request.end_time
-        override.description = request.description
-        overrides.append(override)
-
     await session.flush()
-    for override in overrides:
-        await session.refresh(override)
-    _logger.info("Upserted %d opening overrides for service %s", len(overrides), service_id)
-    return overrides
+    await session.refresh(override)
+    _logger.info("Updated opening override %s for service %s", override_id, service_id)
+    return override
+
+
+async def remove_service_opening_override(service_id: UUID, override_id: UUID) -> None:
+    """Delete an opening override. Raises HTTP 404 if not found."""
+    override = await find_service_opening_override_or_throw(service_id, override_id)
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
+    session = get_sql_session()
+    await session.delete(override)
+    _logger.info("Deleted opening override %s for service %s", override_id, service_id)
 
 
 async def list_service_opening_overrides(
@@ -225,58 +242,76 @@ async def list_service_opening_overrides(
     return list(result.all())
 
 
-async def upsert_service_closings(
+async def find_service_closing_or_throw(service_id: UUID, closing_id: UUID) -> ServiceClosingEntity:
+    """Return the closing with the given ID under the given service, or raise HTTP 404."""
+    session = get_sql_session()
+    result: ScalarResult[ServiceClosingEntity] = await session.scalars(
+        select(ServiceClosingEntity).where(
+            ServiceClosingEntity.id == closing_id,
+            ServiceClosingEntity.service_id == service_id,
+        ).limit(1)
+    )
+    closing = result.one_or_none()
+    if closing is None:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Closing not found")
+    return closing
+
+
+async def create_service_closing(
         service_id: UUID,
-        requests: list[ServiceClosingUpsertRequest],
-) -> list[ServiceClosingEntity]:
-    """Replace the full set of closings for a service with the given list.
+        request: ServiceClosingCreateRequest,
+) -> ServiceClosingEntity:
+    """Create a new closing for a service. Closings are one-off special cases, so unlike
+    openings this is a plain create, not a bulk reconcile."""
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
+    session = get_sql_session()
+    closing = ServiceClosingEntity(
+        service_id=service_id,
+        date_start=request.date_start,
+        date_end=request.date_end,
+        description=request.description,
+    )
+    session.add(closing)
+    await session.flush()
+    await session.refresh(closing)
+    _logger.info("Created closing %s for service %s", closing.id, service_id)
+    return closing
 
-    Reconciled by id, since closings have no natural business key: items with an id update the
-    matching existing row, items without an id are created, and existing rows whose id is
-    absent from the list are deleted.
-    """
-    await find_service_or_throw(service_id)
 
-    ids = [request.id for request in requests if request.id is not None]
-    if len(ids) != len(set(ids)):
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail="Duplicate id in closings list",
-        )
+async def update_service_closing(
+        service_id: UUID,
+        closing_id: UUID,
+        request: ServiceClosingUpdateRequest,
+) -> ServiceClosingEntity:
+    """Update a closing. Only fields present in the request body are modified."""
+    closing = await find_service_closing_or_throw(service_id, closing_id)
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
+    fields_to_update = request.model_fields_set
+
+    if "date_start" in fields_to_update and request.date_start is not None:
+        closing.date_start = request.date_start
+    if "date_end" in fields_to_update and request.date_end is not None:
+        closing.date_end = request.date_end
+    if "description" in fields_to_update:
+        closing.description = request.description
 
     session = get_sql_session()
-    existing_result: ScalarResult[ServiceClosingEntity] = await session.scalars(
-        select(ServiceClosingEntity).where(ServiceClosingEntity.service_id == service_id)
-    )
-    existing_by_id = {closing.id: closing for closing in existing_result.all()}
-
-    submitted_ids = set(ids)
-    for existing_id, closing in existing_by_id.items():
-        if existing_id not in submitted_ids:
-            await session.delete(closing)
-
-    closings = []
-    for request in requests:
-        if request.id is not None:
-            closing = existing_by_id.get(request.id)
-            if closing is None:
-                raise HTTPException(
-                    status_code=HTTPStatus.BAD_REQUEST,
-                    detail=f"Closing {request.id} not found for this service",
-                )
-        else:
-            closing = ServiceClosingEntity(id=uuid4(), service_id=service_id)
-            session.add(closing)
-        closing.date_start = request.date_start
-        closing.date_end = request.date_end
-        closing.description = request.description
-        closings.append(closing)
-
     await session.flush()
-    for closing in closings:
-        await session.refresh(closing)
-    _logger.info("Upserted %d closings for service %s", len(closings), service_id)
-    return closings
+    await session.refresh(closing)
+    _logger.info("Updated closing %s for service %s", closing_id, service_id)
+    return closing
+
+
+async def remove_service_closing(service_id: UUID, closing_id: UUID) -> None:
+    """Delete a closing. Raises HTTP 404 if not found."""
+    closing = await find_service_closing_or_throw(service_id, closing_id)
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
+    session = get_sql_session()
+    await session.delete(closing)
+    _logger.info("Deleted closing %s for service %s", closing_id, service_id)
 
 
 async def list_service_closings(service_id: UUID, include_deleted: bool = False) -> list[ServiceClosingEntity]:
@@ -292,6 +327,7 @@ async def list_service_closings(service_id: UUID, include_deleted: bool = False)
 async def remove_service(service_id: UUID) -> None:
     """Soft-delete the service with the given ID. Raises HTTP 404 if not found."""
     service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
     service.deleted_at = datetime.now(UTC)
     session = get_sql_session()
     await session.flush()

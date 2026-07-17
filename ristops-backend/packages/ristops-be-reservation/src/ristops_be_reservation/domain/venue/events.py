@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from ristops_be_reservation.domain.venue.models import VenueStatus
 from ristops_lib_be.events import BaseEvent, LifecycleOperationType
 
 
@@ -11,8 +12,7 @@ class VenueLifecycleEvent(BaseEvent):
     operation: Literal[
         LifecycleOperationType.CREATED,
         LifecycleOperationType.UPDATED,
-        LifecycleOperationType.DELETED,
     ]
     id: str = Field(description="Venue identifier")
-    timezone: str | None = Field(default=None, description="IANA timezone name of the venue")
-    active: bool = Field(description="Whether the venue is active")
+    timezone: str = Field(description="IANA timezone name of the venue")
+    status: VenueStatus = Field(description="Current lifecycle status of the venue")

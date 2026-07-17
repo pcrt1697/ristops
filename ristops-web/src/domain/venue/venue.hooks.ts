@@ -65,22 +65,66 @@ export function useUpdateVenue(id: string) {
   });
 }
 
-export function useDeleteVenue() {
-  const navigate = useNavigate();
+// Status actions (activate/close/disable/enable) never remove the venue or drop it from
+// context — unlike the old hard-delete, CLOSED preserves everything so the owner can reopen.
+// So these just invalidate the cache, matching useUpdateVenue's pattern, not useDeleteVenue's.
+
+export function useActivateVenue() {
   const queryClient = useQueryClient();
-  const { setCurrentVenueId } = useCurrentVenue();
 
   return useMutation({
-    mutationFn: (id: string) => venueApi.deleteVenue(id),
+    mutationFn: (id: string) => venueApi.activateVenue(id),
     onSuccess: (_data, id) => {
-      // Leave the venue section and drop its cached queries.
-      setCurrentVenueId(null);
-      queryClient.removeQueries({ queryKey: ['venue.get', id] });
+      void queryClient.invalidateQueries({ queryKey: ['venue.get', id] });
       void queryClient.invalidateQueries({ queryKey: ['venue.search'] });
-      void navigate('/');
     },
     onError: () => {
-      void message.error('Could not delete the venue');
+      void message.error('Could not activate the venue');
+    },
+  });
+}
+
+export function useCloseVenue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => venueApi.closeVenue(id),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({ queryKey: ['venue.get', id] });
+      void queryClient.invalidateQueries({ queryKey: ['venue.search'] });
+    },
+    onError: () => {
+      void message.error('Could not close the venue');
+    },
+  });
+}
+
+export function useDisableVenue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => venueApi.disableVenue(id),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({ queryKey: ['venue.get', id] });
+      void queryClient.invalidateQueries({ queryKey: ['venue.search'] });
+    },
+    onError: () => {
+      void message.error('Could not disable the venue');
+    },
+  });
+}
+
+export function useEnableVenue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => venueApi.enableVenue(id),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({ queryKey: ['venue.get', id] });
+      void queryClient.invalidateQueries({ queryKey: ['venue.search'] });
+    },
+    onError: () => {
+      void message.error('Could not enable the venue');
     },
   });
 }

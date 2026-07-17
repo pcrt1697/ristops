@@ -86,7 +86,7 @@ async def revoke_resource_access(
 )
 @policy(Policy(resolve_path_resource, "acl:list"))
 @neo4j_transactional
-async def list_resource_users(
+async def get_resource_users(
         resource_type: Annotated[ResourceType, Path(description="Resource type")],
         resource_id: Annotated[str, Path(description="Resource identifier")],
         query: Annotated[ResourceUserSearchQuery, Query()],

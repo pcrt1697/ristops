@@ -9,18 +9,23 @@ import {
   Modal,
   Space,
   Spin,
+  Tag,
   theme,
   Typography,
 } from 'antd';
 import { EditOutlined } from '@ant-design/icons';
 import { useParams } from 'react-router-dom';
 import {
-  useDeleteVenue,
+  useActivateVenue,
+  useCloseVenue,
+  useDisableVenue,
+  useEnableVenue,
   useUpdateVenue,
   useVenue,
 } from '../../domain/venue/venue.hooks.ts';
 import { useCan } from '../../domain/auth/auth.hooks.ts';
-import { ResourceType } from '../../services/graphql/graphql.ts';
+import { statusTagColor } from '../../domain/venue/venue.utils.ts';
+import { ResourceType, VenueStatus } from '../../services/graphql/graphql.ts';
 
 const { Text } = Typography;
 
@@ -38,13 +43,19 @@ export default function VenueSettingsPage() {
 
   const resource = { type: ResourceType.Venue, id: venueId };
   const { isAllowed: canEdit } = useCan(resource, 'venue:edit');
-  const { isAllowed: canDelete } = useCan(resource, 'venue:remove');
+  const { isAllowed: canActivate } = useCan(resource, 'venue:activate');
+  const { isAllowed: canClose } = useCan(resource, 'venue:close');
+  const { isAllowed: canDisable } = useCan(resource, 'venue:disable');
+  const { isAllowed: canEnable } = useCan(resource, 'venue:enable');
 
   const { mutate: updateVenue, isPending: isUpdating } = useUpdateVenue(venueId);
-  const { mutate: deleteVenue, isPending: isDeleting } = useDeleteVenue();
+  const { mutate: activateVenue, isPending: isActivating } = useActivateVenue();
+  const { mutate: closeVenue, isPending: isClosing } = useCloseVenue();
+  const { mutate: disableVenue, isPending: isDisabling } = useDisableVenue();
+  const { mutate: enableVenue, isPending: isEnabling } = useEnableVenue();
 
   const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
   const [confirmName, setConfirmName] = useState('');
   const [form] = Form.useForm<VenueFormValues>();
 
@@ -76,9 +87,9 @@ export default function VenueSettingsPage() {
     );
   };
 
-  const closeDelete = () => {
+  const closeCloseModal = () => {
     setConfirmName('');
-    setDeleteOpen(false);
+    setCloseOpen(false);
   };
 
   return (
@@ -103,31 +114,79 @@ export default function VenueSettingsPage() {
         <Descriptions.Item label="Description">
           {venue.description ?? '—'}
         </Descriptions.Item>
+        <Descriptions.Item label="Status">
+          <Tag color={statusTagColor[venue.status]}>{venue.status}</Tag>
+        </Descriptions.Item>
         <Descriptions.Item label="Created">
           {new Date(venue.createdAt).toLocaleDateString()}
         </Descriptions.Item>
       </Descriptions>
 
-      {canDelete && (
+      {(canActivate || canClose || canDisable || canEnable) && (
         <>
           <Divider titlePlacement="start" style={{ marginTop: 48 }}>
-            <Text type="danger">Danger zone</Text>
+            Status
           </Divider>
           <Card
-            styles={{ body: { display: 'flex', alignItems: 'center', gap: 16 } }}
-            style={{ borderColor: token.colorError }}
+            styles={{
+              body: {
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16,
+                flexWrap: 'wrap',
+              },
+            }}
+            style={{
+              borderColor:
+                venue.status === VenueStatus.Disabled ? token.colorError : undefined,
+            }}
           >
             <div style={{ flex: 1 }}>
-              <Text strong>Delete this venue</Text>
+              <Text strong>Manage venue status</Text>
               <br />
               <Text type="secondary">
-                Once deleted, the venue and its access grants are gone. This
-                cannot be undone.
+                Activate, close, disable, or re-enable this venue depending on its
+                current status.
               </Text>
             </div>
-            <Button danger onClick={() => setDeleteOpen(true)}>
-              Delete venue
-            </Button>
+            <Space>
+              {canActivate &&
+                (venue.status === VenueStatus.Pending ||
+                  venue.status === VenueStatus.Closed) && (
+                  <Button
+                    type="primary"
+                    loading={isActivating}
+                    onClick={() => activateVenue(venueId)}
+                  >
+                    {venue.status === VenueStatus.Closed ? 'Reopen' : 'Activate'}
+                  </Button>
+                )}
+              {canClose && venue.status === VenueStatus.Active && (
+                <Button danger onClick={() => setCloseOpen(true)}>
+                  Close venue
+                </Button>
+              )}
+              {canDisable &&
+                (venue.status === VenueStatus.Pending ||
+                  venue.status === VenueStatus.Active) && (
+                  <Button
+                    danger
+                    loading={isDisabling}
+                    onClick={() => disableVenue(venueId)}
+                  >
+                    Disable
+                  </Button>
+                )}
+              {canEnable && venue.status === VenueStatus.Disabled && (
+                <Button
+                  type="primary"
+                  loading={isEnabling}
+                  onClick={() => enableVenue(venueId)}
+                >
+                  Enable
+                </Button>
+              )}
+            </Space>
           </Card>
         </>
       )}
@@ -173,19 +232,20 @@ export default function VenueSettingsPage() {
       </Modal>
 
       <Modal
-        title="Delete venue"
-        open={deleteOpen}
-        onCancel={closeDelete}
-        okText="Delete venue"
+        title="Close venue"
+        open={closeOpen}
+        onCancel={closeCloseModal}
+        okText="Close venue"
         okButtonProps={{
           danger: true,
           disabled: confirmName !== venue.name,
-          loading: isDeleting,
+          loading: isClosing,
         }}
-        onOk={() => deleteVenue(venueId)}
+        onOk={() => closeVenue(venueId)}
       >
         <Text>
-          This action cannot be undone. Type <Text strong>{venue.name}</Text> to
+          The venue will stop accepting new activity. Nothing is deleted — reopen
+          it any time from this page. Type <Text strong>{venue.name}</Text> to
           confirm.
         </Text>
         <Input

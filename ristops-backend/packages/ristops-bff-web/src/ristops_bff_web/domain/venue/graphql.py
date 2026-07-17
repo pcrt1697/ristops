@@ -6,7 +6,7 @@ from typing import Any
 import strawberry
 
 from ristops_bff_web.domain.venue.service import (
-    find_venue, create_venue, update_venue, delete_venue, search_venues,
+    find_venue, create_venue, update_venue, perform_venue_action, search_venues,
 )
 from ristops_bff_web.graphql.pagination import Page, PaginationInput, SearchQueryParams, SortInput
 from ristops_bff_web.graphql.types import EntityId
@@ -40,12 +40,36 @@ async def resolve_update_venue(
     return Venue.from_dict(venue)
 
 
-async def resolve_delete_venue(
+async def resolve_activate_venue(
         venue_id: EntityId
-) -> bool:
-    """Delete a venue by ID. Returns True when the deletion succeeds."""
-    await delete_venue(venue_id)
-    return True
+) -> Venue:
+    """Activate a venue: owner action, valid from PENDING or CLOSED."""
+    venue = await perform_venue_action(venue_id, "activate")
+    return Venue.from_dict(venue)
+
+
+async def resolve_close_venue(
+        venue_id: EntityId
+) -> Venue:
+    """Close a venue: owner action, valid only from ACTIVE. Soft — no data is lost."""
+    venue = await perform_venue_action(venue_id, "close")
+    return Venue.from_dict(venue)
+
+
+async def resolve_disable_venue(
+        venue_id: EntityId
+) -> Venue:
+    """Disable a venue: app-admin action, valid from PENDING or ACTIVE."""
+    venue = await perform_venue_action(venue_id, "disable")
+    return Venue.from_dict(venue)
+
+
+async def resolve_enable_venue(
+        venue_id: EntityId
+) -> Venue:
+    """Re-enable a venue: app-admin action, valid only from DISABLED."""
+    venue = await perform_venue_action(venue_id, "enable")
+    return Venue.from_dict(venue)
 
 
 async def resolve_search_venues(
@@ -57,6 +81,14 @@ async def resolve_search_venues(
     params = VenueQueryParams(_input).build()
     page = await search_venues(params)
     return Page.from_dict(page, Venue.from_dict)
+
+
+@strawberry.enum(description="Lifecycle status of a venue.")
+class VenueStatus(Enum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    DISABLED = "disabled"
+    CLOSED = "closed"
 
 
 @strawberry.type(
@@ -75,6 +107,9 @@ class Venue:
     description: str | None = strawberry.field(
         description="Description of the venue.",
     )
+    status: VenueStatus = strawberry.field(
+        description="Current lifecycle status of the venue.",
+    )
     created_at: datetime = strawberry.field(
         description="Creation date.",
     )
@@ -89,6 +124,7 @@ class Venue:
             name=obj["name"],
             address=obj["address"],
             description=obj.get("description"),
+            status=VenueStatus(obj["status"]),
             created_at=obj["created_at"],
             updated_at=obj["updated_at"],
         )
@@ -195,7 +231,19 @@ class VenueMutation:
         resolver=resolve_update_venue,
         description="Update venue data",
     )
-    delete_venue = strawberry.mutation(
-        resolver=resolve_delete_venue,
-        description="Delete a venue.",
+    activate_venue = strawberry.mutation(
+        resolver=resolve_activate_venue,
+        description="Activate a venue: owner action, valid from PENDING or CLOSED.",
+    )
+    close_venue = strawberry.mutation(
+        resolver=resolve_close_venue,
+        description="Close a venue: owner action, valid only from ACTIVE. Soft — no data is lost.",
+    )
+    disable_venue = strawberry.mutation(
+        resolver=resolve_disable_venue,
+        description="Disable a venue: app-admin action, valid from PENDING or ACTIVE.",
+    )
+    enable_venue = strawberry.mutation(
+        resolver=resolve_enable_venue,
+        description="Re-enable a venue: app-admin action, valid only from DISABLED.",
     )

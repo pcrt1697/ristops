@@ -4,6 +4,7 @@ from zoneinfo import available_timezones
 
 from pydantic import BaseModel, Field, field_validator
 
+from ristops_be_venue.domain.models import VenueStatus, VenueActionType
 from ristops_lib_core.pydantic.types import ObjectUUID, CreatedAt, UpdatedAt
 from ristops_lib_core.schema.pagination import SearchQuery
 
@@ -64,6 +65,12 @@ class VenueUpdateRequest(BaseModel):
     _validate_timezone = field_validator("timezone")(_validate_timezone)
 
 
+class VenueActionRequest(BaseModel):
+    """Request body for performing a lifecycle action on a venue."""
+
+    action_type: VenueActionType = Field(description="The action to perform.")
+
+
 class VenueResponse(BaseModel):
     """Response body representing a venue."""
 
@@ -72,6 +79,7 @@ class VenueResponse(BaseModel):
     address: str = Field(description="Address of the venue.")
     description: str | None = Field(default=None, description="Description of the venue.")
     timezone: str = Field(description="IANA timezone name of the venue.")
+    status: VenueStatus = Field(description="Current lifecycle status of the venue.")
     created_at: CreatedAt
     updated_at: UpdatedAt
 

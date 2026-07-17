@@ -1,7 +1,10 @@
 import {
+  ActivateVenueDocument,
+  CloseVenueDocument,
   CreateVenueDocument,
   type CreateVenueInput,
-  DeleteVenueDocument,
+  DisableVenueDocument,
+  EnableVenueDocument,
   GetVenueDocument,
   type PaginationInput,
   SearchVenuesDocument,
@@ -24,5 +27,8 @@ export const venueApi = {
     gqlRequest(CreateVenueDocument, { input }),
   updateVenue: (id: string, input: UpdateVenueInput) =>
     gqlRequest(UpdateVenueDocument, { id, input }),
-  deleteVenue: (id: string) => gqlRequest(DeleteVenueDocument, { id }),
+  activateVenue: (id: string) => gqlRequest(ActivateVenueDocument, { id }),
+  closeVenue: (id: string) => gqlRequest(CloseVenueDocument, { id }),
+  disableVenue: (id: string) => gqlRequest(DisableVenueDocument, { id }),
+  enableVenue: (id: string) => gqlRequest(EnableVenueDocument, { id }),
 };

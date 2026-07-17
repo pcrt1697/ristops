@@ -5,6 +5,7 @@ query SearchVenues($input: VenueSearchInput!) {
             name
             address
             description
+            status
             createdAt
             updatedAt
         }
@@ -21,6 +22,7 @@ query GetVenue($id: ID!) {
         name
         address
         description
+        status
         createdAt
         updatedAt
     }
@@ -32,6 +34,7 @@ mutation CreateVenue($input: CreateVenueInput!) {
         name
         address
         description
+        status
         createdAt
         updatedAt
     }
@@ -43,11 +46,56 @@ mutation UpdateVenue($id: ID!, $input: UpdateVenueInput!) {
         name
         address
         description
+        status
         createdAt
         updatedAt
     }
 }
 
-mutation DeleteVenue($id: ID!) {
-    deleteVenue(id: $id)
+mutation ActivateVenue($id: ID!) {
+    activateVenue(id: $id) {
+        id
+        name
+        address
+        description
+        status
+        createdAt
+        updatedAt
+    }
+}
+
+mutation CloseVenue($id: ID!) {
+    closeVenue(id: $id) {
+        id
+        name
+        address
+        description
+        status
+        createdAt
+        updatedAt
+    }
+}
+
+mutation DisableVenue($id: ID!) {
+    disableVenue(id: $id) {
+        id
+        name
+        address
+        description
+        status
+        createdAt
+        updatedAt
+    }
+}
+
+mutation EnableVenue($id: ID!) {
+    enableVenue(id: $id) {
+        id
+        name
+        address
+        description
+        status
+        createdAt
+        updatedAt
+    }
 }

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, func, Text, Boolean
+from sqlalchemy import DateTime, func, Text, String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,10 +21,9 @@ class VenueEntity(Base):
         Text(),
         doc="IANA timezone name of the venue",
     )
-    active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        doc="Whether the venue is active; false once be-venue reports it deleted",
+    status: Mapped[str] = mapped_column(
+        String(20),
+        doc="Venue status; validated as an enum at the API layer, stored as plain text",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

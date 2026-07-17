@@ -27,7 +27,7 @@ user_router = APIRouter(
 )
 @policy(Policy(_user_path_resolver, "role:list"))
 @neo4j_transactional
-async def list_roles(
+async def get_user_roles(
         user_id: Annotated[str, Path(description="User ID")],
         resource_id: Annotated[str, Query(description="Resource ID")],
         resource_type: Annotated[str, Query(description="Resource type")],
@@ -43,7 +43,7 @@ async def list_roles(
 )
 @policy(Policy(_user_path_resolver, "resource:list"))
 @neo4j_transactional
-async def list_resources(
+async def get_user_resources(
         user_id: Annotated[str, Path(description="User ID")],
         resource_type: Annotated[ResourceType, Query(description="Resource type")],
         permissions: Annotated[list[str], Query(description="List of permissions")],

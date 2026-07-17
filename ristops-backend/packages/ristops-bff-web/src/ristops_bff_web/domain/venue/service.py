@@ -46,8 +46,10 @@ async def update_venue(venue_id: str | UUID, update_venue_input: dict[str, Any])
     return venue_transformer.get_json(response)
 
 
-async def delete_venue(venue_id: str | UUID) -> None:
-    """Delete a venue by ID via the venue service."""
-    await venue_client.client.delete(
-        url=f"venues/{venue_id}",
+async def perform_venue_action(venue_id: str | UUID, action_type: str) -> dict[str, Any]:
+    """Perform a lifecycle action (activate/close/disable/enable) on a venue."""
+    response = await venue_client.client.post(
+        url=f"venues/{venue_id}/actions",
+        json={"action_type": action_type},
     )
+    return venue_transformer.get_json(response)
