@@ -18,7 +18,7 @@ import PermissionsTab from './components/acl/PermissionsTab.tsx';
 import VenueHomePage from './pages/venue/VenueHomePage.tsx';
 import VenueStaffPage from './pages/venue/VenueStaffPage.tsx';
 import VenueSettingsPage from './pages/venue/VenueSettingsPage.tsx';
-import VenueHoursPage from './pages/venue/VenueHoursPage.tsx';
+import VenueSchedulePage from './pages/venue/VenueSchedulePage.tsx';
 
 export default function App() {
   return (
@@ -56,7 +56,7 @@ export default function App() {
                   <Route path="/venues/:venueId" element={<VenueLayout />}>
                     <Route index element={<VenueHomePage />} />
                     <Route path="settings" element={<VenueSettingsPage />} />
-                    <Route path="hours" element={<VenueHoursPage />} />
+                    <Route path="schedule" element={<VenueSchedulePage />} />
                     <Route path="staff" element={<VenueStaffPage />} />
                   </Route>
                 </Route>

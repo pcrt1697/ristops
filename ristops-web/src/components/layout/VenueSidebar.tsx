@@ -30,10 +30,10 @@ export default function VenueSidebar({ venueId }: { venueId: string }) {
   }
   if (canEdit) {
     manageChildren.push({
-      key: `/venues/${venueId}/hours`,
+      key: `/venues/${venueId}/schedule`,
       icon: <ClockCircleOutlined />,
-      label: 'Opening hours',
-      onClick: go(`/venues/${venueId}/hours`),
+      label: 'Schedule',
+      onClick: go(`/venues/${venueId}/schedule`),
     });
   }
   if (canManageAcl) {
@@ -54,7 +54,12 @@ export default function VenueSidebar({ venueId }: { venueId: string }) {
     },
   ];
   if (manageChildren.length > 0) {
-    items.push({ key: 'manage', type: 'group', label: 'Manage', children: manageChildren });
+    items.push({
+      key: 'manage',
+      type: 'group',
+      label: 'Manage',
+      children: manageChildren,
+    });
   }
 
   return <Sidebar items={items} />;
