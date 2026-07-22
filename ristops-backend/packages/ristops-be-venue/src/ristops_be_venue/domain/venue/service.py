@@ -12,6 +12,7 @@ from ristops_be_venue.domain.venue.schema import (
     VenueCreationRequest, VenueUpdateRequest, VenueResponse,
     VenueSearchFilter, VenueSearchQuery,
 )
+from ristops_be_venue.services.reservation import has_active_service
 from ristops_be_venue.services.resource import publish_resource_created_event
 from ristops_be_venue.services.venue_events import (
     publish_venue_created_event, publish_venue_updated_event,
@@ -131,6 +132,11 @@ async def activate_venue(venue_id: UUID) -> VenueEntity:
             status_code=HTTPStatus.CONFLICT,
             detail=f"Cannot activate a venue with status {venue.status}",
         )
+    if not await has_active_service(venue_id):
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail="Cannot activate a venue with no services configured",
+        )
     return await _set_venue_status(venue, VenueStatus.ACTIVE)
 
 
@@ -159,14 +165,16 @@ async def disable_venue(venue_id: UUID) -> VenueEntity:
 
 
 async def enable_venue(venue_id: UUID) -> VenueEntity:
-    """Re-enable a venue: app-admin action, valid only from DISABLED."""
+    """Re-enable a venue: app-admin action, valid only from DISABLED. Lands on PENDING, not
+    ACTIVE — activation still requires at least one service configured, so the owner must
+    explicitly activate it afterward."""
     venue = await find_venue_or_throw(venue_id)
     if VenueStatus(venue.status) != VenueStatus.DISABLED:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
             detail=f"Cannot enable a venue with status {venue.status}",
         )
-    return await _set_venue_status(venue, VenueStatus.ACTIVE)
+    return await _set_venue_status(venue, VenueStatus.PENDING)
 
 
 async def _set_venue_status(venue: VenueEntity, status: VenueStatus) -> VenueEntity:

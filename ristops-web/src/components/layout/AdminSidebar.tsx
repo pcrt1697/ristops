@@ -2,8 +2,8 @@ import { type MenuProps } from 'antd';
 import {
   AppstoreOutlined,
   KeyOutlined,
-  SafetyCertificateOutlined,
   ShopOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useCan } from '../../domain/auth/auth.hooks.ts';
@@ -47,7 +47,7 @@ export default function AdminSidebar() {
             },
             {
               key: '/admin/access-control/roles',
-              icon: <SafetyCertificateOutlined />,
+              icon: <TeamOutlined />,
               label: 'Roles',
               onClick: go('/admin/access-control/roles'),
             },

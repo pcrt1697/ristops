@@ -12,7 +12,7 @@ from ristops_bff_web.context import ContextExtension
 from ristops_bff_web.domain.auth.routers import auth_router
 from ristops_bff_web.exception import ErrorHandlingExtension
 from ristops_bff_web.graphql.schema import QUERY, MUTATION
-from ristops_bff_web.http import authn_client, authz_client, venue_client
+from ristops_bff_web.http import authn_client, authz_client, venue_client, reservation_client
 from ristops_bff_web.logging import ResolverLoggingExtension
 from ristops_bff_web.session import get_redis_client
 from ristops_bff_web.settings import BackendServiceSettings, BffSettings
@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
                 (authn_client, be_settings.authn_url),
                 (authz_client, be_settings.authz_url),
                 (venue_client, be_settings.venue_url),
+                (reservation_client, be_settings.reservation_url),
         ):
             try:
                 yield

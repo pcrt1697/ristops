@@ -1,0 +1,171 @@
+query ListServiceOpenings($serviceId: ID!, $includeDeleted: Boolean) {
+    serviceOpenings(id: $serviceId, includeDeleted: $includeDeleted) {
+        id
+        serviceId
+        weekday
+        capacity
+        startTime
+        endTime
+        description
+        createdAt
+        updatedAt
+    }
+}
+
+mutation UpsertServiceOpenings($serviceId: ID!, $openings: [OpeningUpsertInput!]!) {
+    upsertServiceOpenings(id: $serviceId, openings: $openings) {
+        id
+        serviceId
+        weekday
+        capacity
+        startTime
+        endTime
+        description
+        createdAt
+        updatedAt
+    }
+}
+
+query SearchOpeningOverrides($serviceId: ID!, $input: OpeningOverrideSearchInput) {
+    serviceOpeningOverrides(id: $serviceId, input: $input) {
+        items {
+            id
+            serviceId
+            dateStart
+            dateEnd
+            weekday
+            capacity
+            startTime
+            endTime
+            description
+            createdAt
+            updatedAt
+        }
+        total
+        page
+        pageSize
+        totalPages
+    }
+}
+
+mutation CreateOpeningOverride($serviceId: ID!, $input: OpeningOverrideCreateInput!) {
+    createOpeningOverride(id: $serviceId, input: $input) {
+        id
+    }
+}
+
+mutation UpdateOpeningOverride($serviceId: ID!, $overrideId: ID!, $input: OpeningOverrideUpdateInput!) {
+    updateOpeningOverride(id: $serviceId, overrideId: $overrideId, input: $input) {
+        id
+    }
+}
+
+mutation DeleteOpeningOverride($serviceId: ID!, $overrideId: ID!) {
+    deleteOpeningOverride(id: $serviceId, overrideId: $overrideId)
+}
+
+query SearchServiceClosings($serviceId: ID!, $input: ServiceClosingSearchInput) {
+    serviceClosings(id: $serviceId, input: $input) {
+        items {
+            id
+            serviceId
+            dateStart
+            dateEnd
+            weekday
+            description
+            createdAt
+            updatedAt
+        }
+        total
+        page
+        pageSize
+        totalPages
+    }
+}
+
+mutation CreateServiceClosing($serviceId: ID!, $input: ServiceClosingCreateInput!) {
+    createServiceClosing(id: $serviceId, input: $input) {
+        id
+    }
+}
+
+mutation UpdateServiceClosing($serviceId: ID!, $closingId: ID!, $input: ServiceClosingUpdateInput!) {
+    updateServiceClosing(id: $serviceId, closingId: $closingId, input: $input) {
+        id
+    }
+}
+
+mutation DeleteServiceClosing($serviceId: ID!, $closingId: ID!) {
+    deleteServiceClosing(id: $serviceId, closingId: $closingId)
+}
+
+query SearchCapacityOverrides($serviceId: ID!, $input: CapacityOverrideSearchInput) {
+    serviceCapacityOverrides(id: $serviceId, input: $input) {
+        items {
+            id
+            serviceId
+            dateStart
+            dateEnd
+            weekday
+            capacityDelta
+            description
+            createdAt
+            updatedAt
+        }
+        total
+        page
+        pageSize
+        totalPages
+    }
+}
+
+mutation CreateCapacityOverride($serviceId: ID!, $input: CapacityOverrideCreateInput!) {
+    createCapacityOverride(id: $serviceId, input: $input) {
+        id
+    }
+}
+
+mutation UpdateCapacityOverride($serviceId: ID!, $capacityOverrideId: ID!, $input: CapacityOverrideUpdateInput!) {
+    updateCapacityOverride(id: $serviceId, capacityOverrideId: $capacityOverrideId, input: $input) {
+        id
+    }
+}
+
+mutation DeleteCapacityOverride($serviceId: ID!, $capacityOverrideId: ID!) {
+    deleteCapacityOverride(id: $serviceId, capacityOverrideId: $capacityOverrideId)
+}
+
+query SearchVenueClosings($venueId: ID!, $input: VenueClosingSearchInput) {
+    venueClosings(id: $venueId, input: $input) {
+        items {
+            id
+            venueId
+            dateStart
+            dateEnd
+            weekday
+            description
+            createdAt
+            updatedAt
+        }
+        total
+        page
+        pageSize
+        totalPages
+    }
+}
+
+mutation CreateVenueClosing($venueId: ID!, $input: VenueClosingCreateInput!) {
+    createVenueClosing(id: $venueId, input: $input) {
+        id
+    }
+}
+
+mutation UpdateVenueClosing($venueId: ID!, $closingId: ID!, $input: VenueClosingUpdateInput!) {
+    updateVenueClosing(id: $venueId, closingId: $closingId, input: $input) {
+        id
+    }
+}
+
+mutation DeleteVenueClosing($venueId: ID!, $closingId: ID!) {
+    deleteVenueClosing(id: $venueId, closingId: $closingId)
+}

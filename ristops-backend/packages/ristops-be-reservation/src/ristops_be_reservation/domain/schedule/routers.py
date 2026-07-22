@@ -8,20 +8,25 @@ from fastapi.params import Path
 from ristops_be_reservation.domain.schedule.schema import (
     OpeningsUpsertRequest, OpeningsResponse, OpeningResponse,
     OpeningOverrideCreateRequest, OpeningOverrideUpdateRequest,
-    OpeningOverrideResponse, OpeningOverridesResponse,
-    ClosingCreateRequest, ClosingUpdateRequest, ClosingResponse,
-    ClosingsResponse,
+    OpeningOverrideResponse, OpeningOverrideSearchQuery,
+    ServiceClosingCreateRequest, ServiceClosingUpdateRequest, ServiceClosingResponse,
+    ServiceClosingSearchQuery,
+    CapacityOverrideCreateRequest, CapacityOverrideUpdateRequest,
+    CapacityOverrideResponse, CapacityOverrideSearchQuery,
 )
 from ristops_be_reservation.domain.schedule.service import (
     upsert_service_openings, list_service_openings,
-    create_service_opening_override, update_service_opening_override,
-    remove_service_opening_override, list_service_opening_overrides,
-    create_service_closing, update_service_closing,
-    remove_service_closing, list_service_closings,
+    create_service_opening_overrides, update_service_opening_override,
+    remove_service_opening_override, search_service_opening_overrides,
+    create_service_closings, update_service_closing,
+    remove_service_closing, search_service_closings,
+    create_service_capacity_overrides, update_service_capacity_override,
+    remove_service_capacity_override, search_service_capacity_overrides,
 )
 from ristops_lib_be.authz.policy import policy, BaseResourceResolver, Policy
 from ristops_lib_core.exception import ErrorResponse
 from ristops_lib_core.schema.authz import ResourceType
+from ristops_lib_core.schema.pagination import Page
 from ristops_lib_sql.engine import sql_transactional
 
 _service_path_resolver = BaseResourceResolver(ResourceType.SERVICE)
@@ -42,7 +47,7 @@ schedule_router = APIRouter(
         },
     },
 )
-@policy(Policy(_service_path_resolver, "service:edit"))
+@policy(Policy(_service_path_resolver, "schedule:edit"))
 @sql_transactional
 async def upsert_openings(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -64,7 +69,7 @@ async def upsert_openings(
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
     },
 )
-@policy(Policy(_service_path_resolver, "service:get"))
+@policy(Policy(_service_path_resolver, "schedule:list"))
 @sql_transactional
 async def get_service_openings(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -81,22 +86,26 @@ async def get_service_openings(
 
 @schedule_router.post(
     "/{service_id}/opening-overrides",
-    response_model=OpeningOverrideResponse,
+    response_model=list[OpeningOverrideResponse],
     status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_service_path_resolver, "service:edit"))
+@policy(Policy(_service_path_resolver, "schedule:edit"))
 @sql_transactional
 async def create_opening_override(
         service_id: Annotated[UUID, Path(description="Service ID")],
         request: OpeningOverrideCreateRequest,
-) -> OpeningOverrideResponse:
-    """Create a new opening override for a service. Authorized against the service itself."""
-    override = await create_service_opening_override(service_id, request)
-    return OpeningOverrideResponse.model_validate(override, from_attributes=True)
+) -> list[OpeningOverrideResponse]:
+    """Create one or more opening overrides for a service — one per weekday in the request
+    (bulk, single transaction). Authorized against the service itself."""
+    overrides = await create_service_opening_overrides(service_id, request)
+    return [
+        OpeningOverrideResponse.model_validate(override, from_attributes=True)
+        for override in overrides
+    ]
 
 
 @schedule_router.patch(
@@ -107,7 +116,7 @@ async def create_opening_override(
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_service_path_resolver, "service:edit"))
+@policy(Policy(_service_path_resolver, "schedule:edit"))
 @sql_transactional
 async def update_opening_override(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -128,7 +137,7 @@ async def update_opening_override(
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_service_path_resolver, "service:edit"))
+@policy(Policy(_service_path_resolver, "schedule:edit"))
 @sql_transactional
 async def delete_opening_override(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -140,67 +149,65 @@ async def delete_opening_override(
 
 @schedule_router.get(
     "/{service_id}/opening-overrides",
-    response_model=OpeningOverridesResponse,
+    response_model=Page[OpeningOverrideResponse],
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
     },
 )
-@policy(Policy(_service_path_resolver, "service:get"))
+@policy(Policy(_service_path_resolver, "schedule:list"))
 @sql_transactional
 async def get_service_opening_overrides(
         service_id: Annotated[UUID, Path(description="Service ID")],
-        include_deleted: Annotated[
-            bool, Query(description="Return opening overrides even if the service has been deleted")
-        ] = False,
-) -> OpeningOverridesResponse:
-    """Return all opening overrides for a service. Authorized against the service itself."""
-    overrides = await list_service_opening_overrides(service_id, include_deleted=include_deleted)
-    return OpeningOverridesResponse(
-        opening_overrides=[
-            OpeningOverrideResponse.model_validate(override, from_attributes=True) for override in overrides
-        ]
-    )
+        query: Annotated[OpeningOverrideSearchQuery, Query()],
+) -> Page[OpeningOverrideResponse]:
+    """Return a paginated, date-range-filtered page of opening overrides for a service.
+    Authorized against the service itself."""
+    return await search_service_opening_overrides(service_id, query)
 
 
 @schedule_router.post(
     "/{service_id}/closings",
-    response_model=ClosingResponse,
+    response_model=list[ServiceClosingResponse],
     status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_service_path_resolver, "service:edit"))
+@policy(Policy(_service_path_resolver, "schedule:edit"))
 @sql_transactional
 async def create_closing(
         service_id: Annotated[UUID, Path(description="Service ID")],
-        request: ClosingCreateRequest,
-) -> ClosingResponse:
-    """Create a new closing for a service. Authorized against the service itself."""
-    closing = await create_service_closing(service_id, request)
-    return ClosingResponse.model_validate(closing, from_attributes=True)
+        request: ServiceClosingCreateRequest,
+) -> list[ServiceClosingResponse]:
+    """Create one or more closings for a service — one per weekday in the request (bulk,
+    single transaction). Authorized against the service itself."""
+    closings = await create_service_closings(service_id, request)
+    return [
+        ServiceClosingResponse.model_validate(closing, from_attributes=True)
+        for closing in closings
+    ]
 
 
 @schedule_router.patch(
     "/{service_id}/closings/{closing_id}",
-    response_model=ClosingResponse,
+    response_model=ServiceClosingResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Closing not found"},
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_service_path_resolver, "service:edit"))
+@policy(Policy(_service_path_resolver, "schedule:edit"))
 @sql_transactional
 async def update_closing(
         service_id: Annotated[UUID, Path(description="Service ID")],
         closing_id: Annotated[UUID, Path(description="Closing ID")],
-        request: ClosingUpdateRequest,
-) -> ClosingResponse:
+        request: ServiceClosingUpdateRequest,
+) -> ServiceClosingResponse:
     """Update a closing. Only fields present in the request body are modified. Authorized
     against the service itself."""
     closing = await update_service_closing(service_id, closing_id, request)
-    return ClosingResponse.model_validate(closing, from_attributes=True)
+    return ServiceClosingResponse.model_validate(closing, from_attributes=True)
 
 
 @schedule_router.delete(
@@ -211,7 +218,7 @@ async def update_closing(
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_service_path_resolver, "service:edit"))
+@policy(Policy(_service_path_resolver, "schedule:edit"))
 @sql_transactional
 async def delete_closing(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -223,21 +230,98 @@ async def delete_closing(
 
 @schedule_router.get(
     "/{service_id}/closings",
-    response_model=ClosingsResponse,
+    response_model=Page[ServiceClosingResponse],
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
     },
 )
-@policy(Policy(_service_path_resolver, "service:get"))
+@policy(Policy(_service_path_resolver, "schedule:list"))
 @sql_transactional
 async def get_service_closings(
         service_id: Annotated[UUID, Path(description="Service ID")],
-        include_deleted: Annotated[
-            bool, Query(description="Return closings even if the service has been deleted")
-        ] = False,
-) -> ClosingsResponse:
-    """Return all closings for a service. Authorized against the service itself."""
-    closings = await list_service_closings(service_id, include_deleted=include_deleted)
-    return ClosingsResponse(
-        closings=[ClosingResponse.model_validate(closing, from_attributes=True) for closing in closings]
-    )
+        query: Annotated[ServiceClosingSearchQuery, Query()],
+) -> Page[ServiceClosingResponse]:
+    """Return a paginated, date-range-filtered page of closings for a service.
+    Authorized against the service itself."""
+    return await search_service_closings(service_id, query)
+
+
+@schedule_router.post(
+    "/{service_id}/capacity-overrides",
+    response_model=list[CapacityOverrideResponse],
+    status_code=HTTPStatus.CREATED,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+    },
+)
+@policy(Policy(_service_path_resolver, "schedule:edit"))
+@sql_transactional
+async def create_capacity_override(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        request: CapacityOverrideCreateRequest,
+) -> list[CapacityOverrideResponse]:
+    """Create one or more capacity overrides for a service — one per weekday in the request
+    (bulk, single transaction). Authorized against the service itself."""
+    capacity_overrides = await create_service_capacity_overrides(service_id, request)
+    return [
+        CapacityOverrideResponse.model_validate(capacity_override, from_attributes=True)
+        for capacity_override in capacity_overrides
+    ]
+
+
+@schedule_router.patch(
+    "/{service_id}/capacity-overrides/{capacity_override_id}",
+    response_model=CapacityOverrideResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Capacity override not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+    },
+)
+@policy(Policy(_service_path_resolver, "schedule:edit"))
+@sql_transactional
+async def update_capacity_override(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        capacity_override_id: Annotated[UUID, Path(description="Capacity override ID")],
+        request: CapacityOverrideUpdateRequest,
+) -> CapacityOverrideResponse:
+    """Update a capacity override. Only fields present in the request body are modified.
+    Authorized against the service itself."""
+    capacity_override = await update_service_capacity_override(service_id, capacity_override_id, request)
+    return CapacityOverrideResponse.model_validate(capacity_override, from_attributes=True)
+
+
+@schedule_router.delete(
+    "/{service_id}/capacity-overrides/{capacity_override_id}",
+    status_code=HTTPStatus.NO_CONTENT,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Capacity override not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+    },
+)
+@policy(Policy(_service_path_resolver, "schedule:edit"))
+@sql_transactional
+async def delete_capacity_override(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        capacity_override_id: Annotated[UUID, Path(description="Capacity override ID")],
+) -> None:
+    """Delete a capacity override. Authorized against the service itself."""
+    await remove_service_capacity_override(service_id, capacity_override_id)
+
+
+@schedule_router.get(
+    "/{service_id}/capacity-overrides",
+    response_model=Page[CapacityOverrideResponse],
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
+    },
+)
+@policy(Policy(_service_path_resolver, "schedule:list"))
+@sql_transactional
+async def get_service_capacity_overrides(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        query: Annotated[CapacityOverrideSearchQuery, Query()],
+) -> Page[CapacityOverrideResponse]:
+    """Return a paginated, date-range-filtered page of capacity overrides for a service.
+    Authorized against the service itself."""
+    return await search_service_capacity_overrides(service_id, query)

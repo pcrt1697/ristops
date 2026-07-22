@@ -6,6 +6,8 @@ create table ristops_venue.venues (
   name varchar(120) not null,
   address varchar(255) not null,
   description varchar(1000),
+  timezone text not null,
+  status varchar(20) not null,
   created_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null,
   primary key (id)

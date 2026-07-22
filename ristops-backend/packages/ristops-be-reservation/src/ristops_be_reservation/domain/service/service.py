@@ -8,7 +8,7 @@ from sqlalchemy import select, ScalarResult, ColumnElement
 
 from ristops_be_reservation.domain.service.entities import ServiceEntity
 from ristops_be_reservation.domain.service.schema import (
-    ServiceCreationRequest, ServiceResponse, ServiceListQuery,
+    ServiceCreationRequest, ServiceUpdateRequest, ServiceResponse, ServiceListQuery,
 )
 from ristops_be_reservation.domain.venue.service import (
     find_venue_or_throw, check_venue_accepts_config_changes, ensure_venue_accepts_config_changes,
@@ -64,6 +64,33 @@ async def find_service_or_throw(service_id: UUID, include_deleted: bool = False)
     service = result.one_or_none()
     if service is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Service not found")
+    return service
+
+
+async def update_service(service_id: UUID, request: ServiceUpdateRequest) -> ServiceEntity:
+    """Update a service. Only fields present in the request body are modified. Raises HTTP 404
+    if the service is not found, or HTTP 409 if its venue is not accepting config changes."""
+    service = await find_service_or_throw(service_id)
+    check_venue_accepts_config_changes(await find_venue_or_throw(service.venue_id))
+    fields_to_update = request.model_fields_set
+
+    if "name" in fields_to_update and request.name is not None:
+        service.name = request.name
+    if "description" in fields_to_update:
+        service.description = request.description
+    if "turn_time_m" in fields_to_update and request.turn_time_m is not None:
+        service.turn_time_m = request.turn_time_m
+    if "advance_notice_m" in fields_to_update and request.advance_notice_m is not None:
+        service.advance_notice_m = request.advance_notice_m
+    if "slot_interval_m" in fields_to_update and request.slot_interval_m is not None:
+        service.slot_interval_m = request.slot_interval_m
+    if "grace_period_m" in fields_to_update and request.grace_period_m is not None:
+        service.grace_period_m = request.grace_period_m
+
+    session = get_sql_session()
+    await session.flush()
+    await session.refresh(service)
+    _logger.info("Updated service: %s", service_id)
     return service
 
 

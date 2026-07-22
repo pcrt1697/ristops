@@ -12,7 +12,6 @@ import {
   Tag,
 } from 'antd';
 import { MoreOutlined, PlusOutlined } from '@ant-design/icons';
-import { useSearchParams } from 'react-router-dom';
 import {
   useCan,
   useListPermissions,
@@ -22,7 +21,7 @@ import {
   ResourceType,
   type SearchResourceGrantsQuery,
 } from '../../services/graphql/graphql.ts';
-import { useDebounced } from '../../commons/hooks.ts';
+import { useDebounced, useSearchParamFilters } from '../../commons/hooks.ts';
 import { matchOption, orNull } from '../../commons/utils.ts';
 import AssignAppRoleModal from './AssignAppRoleModal.tsx';
 import RevokeAppRoleModal from './RevokeAppRoleModal.tsx';
@@ -36,36 +35,12 @@ type GrantRow =
 export default function AppTab() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<GrantRow | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { get, setFilter, page, setPage } = useSearchParamFilters();
 
-  const username = searchParams.get('username') ?? '';
-  const displayName = searchParams.get('displayName') ?? '';
-  const roleName = searchParams.get('roleName') ?? '';
-  const permission = searchParams.get('permission') ?? '';
-  const page = Number(searchParams.get('page')) || 0;
-
-  // A filter change resets pagination; page changes keep the filters.
-  const setFilter = (key: string) => (value: string) =>
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (value) next.set(key, value);
-        else next.delete(key);
-        next.delete('page');
-        return next;
-      },
-      { replace: true },
-    );
-  const setPage = (next: number) =>
-    setSearchParams(
-      (prev) => {
-        const params = new URLSearchParams(prev);
-        if (next > 0) params.set('page', String(next));
-        else params.delete('page');
-        return params;
-      },
-      { replace: true },
-    );
+  const username = get('username');
+  const displayName = get('displayName');
+  const roleName = get('roleName');
+  const permission = get('permission');
 
   const debUsername = useDebounced(username);
   const debDisplayName = useDebounced(displayName);
@@ -142,7 +117,9 @@ export default function AppTab() {
             width: 64,
             render: (_: unknown, row: GrantRow) => (
               <Dropdown
+                arrow
                 trigger={['click']}
+                placement="bottomRight"
                 menu={{
                   items: [
                     {

@@ -87,7 +87,7 @@ export default function RolesTab() {
               size="default"
               key={role.id}
               hoverable
-              style={{ width: 280 }}
+              style={{ width: '45%' }}
               onClick={() => setSelectedRole(role)}
             >
               <Meta

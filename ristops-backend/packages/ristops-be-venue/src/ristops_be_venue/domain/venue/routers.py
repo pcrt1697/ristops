@@ -122,7 +122,10 @@ _venue_action_permission_resolver = resolve_permission_from_body_field(
     response_model=VenueResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue status does not allow this transition"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue status does not allow this transition, or (for activate) no services are configured",
+        },
         HTTPStatus.BAD_REQUEST: {"model": ErrorResponse, "description": "Unknown action_type"},
     },
 )

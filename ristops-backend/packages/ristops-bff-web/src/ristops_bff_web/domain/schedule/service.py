@@ -1,0 +1,277 @@
+from datetime import date, datetime, time
+from typing import Any
+from uuid import UUID
+
+from ristops_bff_web.http import reservation_client
+from ristops_lib_core.http import ResponseTransformer
+
+opening_transformer = ResponseTransformer(
+    start_time=time.fromisoformat,
+    end_time=time.fromisoformat,
+    created_at=datetime.fromisoformat,
+    updated_at=datetime.fromisoformat,
+)
+
+override_transformer = ResponseTransformer(
+    date_start=date.fromisoformat,
+    date_end=date.fromisoformat,
+    start_time=time.fromisoformat,
+    end_time=time.fromisoformat,
+    created_at=datetime.fromisoformat,
+    updated_at=datetime.fromisoformat,
+)
+
+service_closing_transformer = ResponseTransformer(
+    date_start=date.fromisoformat,
+    date_end=date.fromisoformat,
+    created_at=datetime.fromisoformat,
+    updated_at=datetime.fromisoformat,
+)
+
+capacity_override_transformer = ResponseTransformer(
+    date_start=date.fromisoformat,
+    date_end=date.fromisoformat,
+    created_at=datetime.fromisoformat,
+    updated_at=datetime.fromisoformat,
+)
+
+
+async def list_service_openings(
+        service_id: str | UUID,
+        include_deleted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """Return the weekly openings configured for a service."""
+    params: dict[str, Any] = {}
+    if include_deleted is not None:
+        params["include_deleted"] = include_deleted
+    response = await reservation_client.client.get(
+        url=f"services/{service_id}/openings",
+        params=params,
+    )
+    openings = response.json()["openings"]
+    return [opening_transformer.transform(item) for item in openings]
+
+
+async def upsert_service_openings(
+        service_id: str | UUID,
+        openings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Replace the full set of weekly openings for a service and return the result."""
+    response = await reservation_client.client.put(
+        url=f"services/{service_id}/openings",
+        json={"openings": openings},
+    )
+    openings_ = response.json()["openings"]
+    return [opening_transformer.transform(item) for item in openings_]
+
+
+# --- Opening overrides -------------------------------------------------------
+
+async def search_service_opening_overrides(
+        service_id: str | UUID,
+        params: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a page of opening overrides for a service, filtered by the given params."""
+    response = await reservation_client.client.get(
+        url=f"services/{service_id}/opening-overrides",
+        params=params,
+    )
+    page = response.json()
+    page["items"] = [override_transformer.transform(item) for item in page["items"]]
+    return page
+
+
+async def create_service_opening_overrides(
+        service_id: str | UUID,
+        payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Create one or more opening overrides for a service (bulk: one row per weekday)."""
+    response = await reservation_client.client.post(
+        url=f"services/{service_id}/opening-overrides",
+        json=payload,
+    )
+    return [override_transformer.transform(item) for item in response.json()]
+
+
+async def update_service_opening_override(
+        service_id: str | UUID,
+        override_id: str | UUID,
+        payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Update an opening override."""
+    response = await reservation_client.client.patch(
+        url=f"services/{service_id}/opening-overrides/{override_id}",
+        json=payload,
+    )
+    return override_transformer.get_json(response)
+
+
+async def delete_service_opening_override(
+        service_id: str | UUID,
+        override_id: str | UUID,
+) -> None:
+    """Delete an opening override."""
+    await reservation_client.client.delete(
+        url=f"services/{service_id}/opening-overrides/{override_id}",
+    )
+
+
+# --- Closings ----------------------------------------------------------------
+
+async def search_service_closings(
+        service_id: str | UUID,
+        params: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a page of closings for a service, filtered by the given params."""
+    response = await reservation_client.client.get(
+        url=f"services/{service_id}/closings",
+        params=params,
+    )
+    page = response.json()
+    page["items"] = [service_closing_transformer.transform(item) for item in page["items"]]
+    return page
+
+
+async def create_service_closings(
+        service_id: str | UUID,
+        payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Create one or more closings for a service (bulk: one row per weekday)."""
+    response = await reservation_client.client.post(
+        url=f"services/{service_id}/closings",
+        json=payload,
+    )
+    return [service_closing_transformer.transform(item) for item in response.json()]
+
+
+async def update_service_closing(
+        service_id: str | UUID,
+        closing_id: str | UUID,
+        payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Update a closing."""
+    response = await reservation_client.client.patch(
+        url=f"services/{service_id}/closings/{closing_id}",
+        json=payload,
+    )
+    return service_closing_transformer.get_json(response)
+
+
+async def delete_service_closing(
+        service_id: str | UUID,
+        closing_id: str | UUID,
+) -> None:
+    """Delete a closing."""
+    await reservation_client.client.delete(
+        url=f"services/{service_id}/closings/{closing_id}",
+    )
+
+
+# --- Capacity overrides ------------------------------------------------------
+
+async def search_service_capacity_overrides(
+        service_id: str | UUID,
+        params: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a page of capacity overrides for a service, filtered by the given params."""
+    response = await reservation_client.client.get(
+        url=f"services/{service_id}/capacity-overrides",
+        params=params,
+    )
+    page = response.json()
+    page["items"] = [capacity_override_transformer.transform(item) for item in page["items"]]
+    return page
+
+
+async def create_service_capacity_overrides(
+        service_id: str | UUID,
+        payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Create one or more capacity overrides for a service (bulk: one row per weekday)."""
+    response = await reservation_client.client.post(
+        url=f"services/{service_id}/capacity-overrides",
+        json=payload,
+    )
+    return [capacity_override_transformer.transform(item) for item in response.json()]
+
+
+async def update_service_capacity_override(
+        service_id: str | UUID,
+        capacity_override_id: str | UUID,
+        payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Update a capacity override."""
+    response = await reservation_client.client.patch(
+        url=f"services/{service_id}/capacity-overrides/{capacity_override_id}",
+        json=payload,
+    )
+    return capacity_override_transformer.get_json(response)
+
+
+async def delete_service_capacity_override(
+        service_id: str | UUID,
+        capacity_override_id: str | UUID,
+) -> None:
+    """Delete a capacity override."""
+    await reservation_client.client.delete(
+        url=f"services/{service_id}/capacity-overrides/{capacity_override_id}",
+    )
+
+
+# --- Venue-wide closings -----------------------------------------------------
+
+venue_closing_transformer = ResponseTransformer(
+    date_start=date.fromisoformat,
+    date_end=date.fromisoformat,
+    created_at=datetime.fromisoformat,
+    updated_at=datetime.fromisoformat,
+)
+
+
+async def search_venue_closings(
+        venue_id: str | UUID,
+        params: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a page of venue-wide closings for a venue, filtered by the given params."""
+    response = await reservation_client.client.get(
+        url=f"venues/{venue_id}/closings",
+        params=params,
+    )
+    page = response.json()
+    page["items"] = [venue_closing_transformer.transform(item) for item in page["items"]]
+    return page
+
+
+async def create_venue_closings(
+        venue_id: str | UUID,
+        payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Create one or more venue-wide closings (bulk: one row per weekday)."""
+    response = await reservation_client.client.post(
+        url=f"venues/{venue_id}/closings",
+        json=payload,
+    )
+    return [venue_closing_transformer.transform(item) for item in response.json()]
+
+
+async def update_venue_closing(
+        venue_id: str | UUID,
+        closing_id: str | UUID,
+        payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Update a venue-wide closing."""
+    response = await reservation_client.client.patch(
+        url=f"venues/{venue_id}/closings/{closing_id}",
+        json=payload,
+    )
+    return venue_closing_transformer.get_json(response)
+
+
+async def delete_venue_closing(
+        venue_id: str | UUID,
+        closing_id: str | UUID,
+) -> None:
+    """Delete a venue-wide closing."""
+    await reservation_client.client.delete(
+        url=f"venues/{venue_id}/closings/{closing_id}",
+    )

@@ -14,8 +14,12 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
+  /** Date (isoformat) */
+  Date: { input: string; output: string; }
   /** Date with time (isoformat) */
   DateTime: { input: string; output: string; }
+  /** Time (isoformat) */
+  Time: { input: string; output: string; }
 };
 
 /** Access control entry granting a role to a user on a resource. */
@@ -40,6 +44,117 @@ export type AuthorizationResource = {
   resourceId: Scalars['String']['output'];
   /** ACL resource type */
   resourceType: ResourceType;
+};
+
+/** A seat-count delta applied on top of the resolved capacity for a date range. */
+export type CapacityOverride = {
+  __typename?: 'CapacityOverride';
+  /** Signed change to the resolved seat count. */
+  capacityDelta: Scalars['Int']['output'];
+  /** Creation date. */
+  createdAt: Scalars['DateTime']['output'];
+  /** Last date of the override period (inclusive). */
+  dateEnd: Scalars['Date']['output'];
+  /** First date of the override period (inclusive). */
+  dateStart: Scalars['Date']['output'];
+  /** Description of this capacity override. */
+  description?: Maybe<Scalars['String']['output']>;
+  /** Capacity override identifier. */
+  id: Scalars['String']['output'];
+  /** Identifier of the service this override belongs to. */
+  serviceId: Scalars['String']['output'];
+  /** Last update date. */
+  updatedAt: Scalars['DateTime']['output'];
+  /** Weekday the override applies to within the range; null means every day. */
+  weekday?: Maybe<Weekday>;
+};
+
+/** New capacity override information. Bulk: one row is created per weekday in `weekdays`; omitted/empty, or all seven, means every day. */
+export type CapacityOverrideCreateInput = {
+  /** Signed change to the resolved seat count. */
+  capacityDelta: Scalars['Int']['input'];
+  /** Last date of the override period (inclusive). */
+  dateEnd: Scalars['Date']['input'];
+  /** First date of the override period (inclusive). */
+  dateStart: Scalars['Date']['input'];
+  /** Description of this capacity override. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** Weekdays to scope to; provide multiple to create one row per weekday. */
+  weekdays?: InputMaybe<Array<Weekday>>;
+};
+
+/** A single page of results with pagination metadata. */
+export type CapacityOverridePage = {
+  __typename?: 'CapacityOverridePage';
+  /** Items in the current page. */
+  items: Array<CapacityOverride>;
+  /** 0-indexed page number. */
+  page: Scalars['Int']['output'];
+  /** Number of items per page. */
+  pageSize: Scalars['Int']['output'];
+  /** Total number of items across all pages. */
+  total: Scalars['Int']['output'];
+  /** Total number of pages. */
+  totalPages: Scalars['Int']['output'];
+};
+
+/** Capacity-override search query. */
+export type CapacityOverrideSearchInput = {
+  /** Filter parameters. */
+  filter?: InputMaybe<ScheduleDateFilter>;
+  /** Pagination parameters. */
+  pagination?: InputMaybe<PaginationInput>;
+  /** Sort instructions. */
+  sort?: Array<CapacityOverrideSortFieldSortInput>;
+};
+
+/** Fields a capacity-override search may be sorted by. */
+export const CapacityOverrideSortField = {
+  CreatedAt: 'CREATED_AT',
+  DateEnd: 'DATE_END',
+  DateStart: 'DATE_START',
+  Id: 'ID'
+} as const;
+
+export type CapacityOverrideSortField = typeof CapacityOverrideSortField[keyof typeof CapacityOverrideSortField];
+/** A single sort instruction. */
+export type CapacityOverrideSortFieldSortInput = {
+  /** Sort direction. */
+  direction?: SortDirection;
+  /** Field to sort by. */
+  field: CapacityOverrideSortField;
+};
+
+/** Capacity override fields to update. Unset fields are not modified. */
+export type CapacityOverrideUpdateInput = {
+  /** New signed seat-count change. */
+  capacityDelta?: InputMaybe<Scalars['Int']['input']>;
+  /** New last date (inclusive). */
+  dateEnd?: InputMaybe<Scalars['Date']['input']>;
+  /** New first date (inclusive). */
+  dateStart?: InputMaybe<Scalars['Date']['input']>;
+  /** New description of this override. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** New weekday the override applies to; null means every day. */
+  weekday?: InputMaybe<Weekday>;
+};
+
+/** Service information. */
+export type CreateServiceInput = {
+  /** Minimum notice required before a reservation slot, in minutes. */
+  advanceNoticeM: Scalars['Int']['input'];
+  /** Description of the service. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** Minutes past a reservation's start time before it may be marked as a no-show. */
+  gracePeriodM: Scalars['Int']['input'];
+  /** Name of the service. */
+  name: Scalars['String']['input'];
+  /** Interval between reservation slots, in minutes. */
+  slotIntervalM: Scalars['Int']['input'];
+  /** Reservation duration, in minutes. */
+  turnTimeM: Scalars['Int']['input'];
+  /** Identifier of the venue this service belongs to. */
+  venueId: Scalars['String']['input'];
 };
 
 /** Venue information. */
@@ -155,22 +270,54 @@ export type Mutation = {
   activateVenue: Venue;
   /** Close a venue: owner action, valid only from ACTIVE. Soft — no data is lost. */
   closeVenue: Venue;
+  /** Create a new capacity override for a service. */
+  createCapacityOverride: Array<CapacityOverride>;
+  /** Create a new opening override for a service. */
+  createOpeningOverride: Array<OpeningOverride>;
+  /** Create a new service. */
+  createService: Service;
+  /** Create a new closing for a service. */
+  createServiceClosing: Array<ServiceClosing>;
   /** Create a new venue. */
   createVenue: Venue;
+  /** Create a new venue-wide closing. */
+  createVenueClosing: Array<VenueClosing>;
+  /** Delete a capacity override. */
+  deleteCapacityOverride: Scalars['Boolean']['output'];
+  /** Delete an opening override. */
+  deleteOpeningOverride: Scalars['Boolean']['output'];
+  /** Delete a service. */
+  deleteService: Scalars['Boolean']['output'];
+  /** Delete a closing. */
+  deleteServiceClosing: Scalars['Boolean']['output'];
+  /** Delete a venue-wide closing. */
+  deleteVenueClosing: Scalars['Boolean']['output'];
   /** Disable a venue: app-admin action, valid from PENDING or ACTIVE. */
   disableVenue: Venue;
-  /** Re-enable a venue: app-admin action, valid only from DISABLED. */
+  /** Re-enable a venue: app-admin action, valid only from DISABLED. Lands on PENDING — the owner must still activate it, which requires at least one service configured. */
   enableVenue: Venue;
   /** Grant a role to a user on a resource */
   grantAccess: Acl;
   /** Revoke a role from a user on a resource */
   revokeAccess: Scalars['Boolean']['output'];
+  /** Update a capacity override. */
+  updateCapacityOverride: CapacityOverride;
   /** Update current user data */
   updateMe: User;
+  /** Update an opening override. */
+  updateOpeningOverride: OpeningOverride;
+  /** Update a service. */
+  updateService: Service;
+  /** Update a closing. */
+  updateServiceClosing: ServiceClosing;
   /** Update user data by ID */
   updateUser: User;
   /** Update venue data */
   updateVenue: Venue;
+  /** Update a venue-wide closing. */
+  updateVenueClosing: VenueClosing;
+  /** Replace the full set of weekly openings for a service. */
+  upsertServiceOpenings: Array<Opening>;
 };
 
 
@@ -184,8 +331,66 @@ export type MutationCloseVenueArgs = {
 };
 
 
+export type MutationCreateCapacityOverrideArgs = {
+  id: Scalars['ID']['input'];
+  input: CapacityOverrideCreateInput;
+};
+
+
+export type MutationCreateOpeningOverrideArgs = {
+  id: Scalars['ID']['input'];
+  input: OpeningOverrideCreateInput;
+};
+
+
+export type MutationCreateServiceArgs = {
+  input: CreateServiceInput;
+};
+
+
+export type MutationCreateServiceClosingArgs = {
+  id: Scalars['ID']['input'];
+  input: ServiceClosingCreateInput;
+};
+
+
 export type MutationCreateVenueArgs = {
   input: CreateVenueInput;
+};
+
+
+export type MutationCreateVenueClosingArgs = {
+  id: Scalars['ID']['input'];
+  input: VenueClosingCreateInput;
+};
+
+
+export type MutationDeleteCapacityOverrideArgs = {
+  capacityOverrideId: Scalars['ID']['input'];
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteOpeningOverrideArgs = {
+  id: Scalars['ID']['input'];
+  overrideId: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteServiceArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteServiceClosingArgs = {
+  closingId: Scalars['ID']['input'];
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteVenueClosingArgs = {
+  closingId: Scalars['ID']['input'];
+  id: Scalars['ID']['input'];
 };
 
 
@@ -209,8 +414,35 @@ export type MutationRevokeAccessArgs = {
 };
 
 
+export type MutationUpdateCapacityOverrideArgs = {
+  capacityOverrideId: Scalars['ID']['input'];
+  id: Scalars['ID']['input'];
+  input: CapacityOverrideUpdateInput;
+};
+
+
 export type MutationUpdateMeArgs = {
   input: UpdateUserInput;
+};
+
+
+export type MutationUpdateOpeningOverrideArgs = {
+  id: Scalars['ID']['input'];
+  input: OpeningOverrideUpdateInput;
+  overrideId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateServiceArgs = {
+  id: Scalars['ID']['input'];
+  input: UpdateServiceInput;
+};
+
+
+export type MutationUpdateServiceClosingArgs = {
+  closingId: Scalars['ID']['input'];
+  id: Scalars['ID']['input'];
+  input: ServiceClosingUpdateInput;
 };
 
 
@@ -223,6 +455,161 @@ export type MutationUpdateUserArgs = {
 export type MutationUpdateVenueArgs = {
   id: Scalars['ID']['input'];
   input: UpdateVenueInput;
+};
+
+
+export type MutationUpdateVenueClosingArgs = {
+  closingId: Scalars['ID']['input'];
+  id: Scalars['ID']['input'];
+  input: VenueClosingUpdateInput;
+};
+
+
+export type MutationUpsertServiceOpeningsArgs = {
+  id: Scalars['ID']['input'];
+  openings: Array<OpeningUpsertInput>;
+};
+
+/** A service's weekly opening for a given weekday. */
+export type Opening = {
+  __typename?: 'Opening';
+  /** Maximum number of reservable seats. */
+  capacity: Scalars['Int']['output'];
+  /** Creation date. */
+  createdAt: Scalars['DateTime']['output'];
+  /** Description of this opening. */
+  description?: Maybe<Scalars['String']['output']>;
+  /** Time the service closes. */
+  endTime: Scalars['Time']['output'];
+  /** Opening identifier. */
+  id: Scalars['String']['output'];
+  /** Identifier of the service this opening belongs to. */
+  serviceId: Scalars['String']['output'];
+  /** Time the service opens. */
+  startTime: Scalars['Time']['output'];
+  /** Last update date. */
+  updatedAt: Scalars['DateTime']['output'];
+  /** Day of the week this opening applies to. */
+  weekday: Weekday;
+};
+
+/** A one-off opening override replacing base hours for a date range. */
+export type OpeningOverride = {
+  __typename?: 'OpeningOverride';
+  /** Overridden maximum number of reservable seats. */
+  capacity: Scalars['Int']['output'];
+  /** Creation date. */
+  createdAt: Scalars['DateTime']['output'];
+  /** Last date of the override period (inclusive). */
+  dateEnd: Scalars['Date']['output'];
+  /** First date of the override period (inclusive). */
+  dateStart: Scalars['Date']['output'];
+  /** Description of this override. */
+  description?: Maybe<Scalars['String']['output']>;
+  /** Overridden closing time. */
+  endTime: Scalars['Time']['output'];
+  /** Override identifier. */
+  id: Scalars['String']['output'];
+  /** Identifier of the service this override belongs to. */
+  serviceId: Scalars['String']['output'];
+  /** Overridden opening time. */
+  startTime: Scalars['Time']['output'];
+  /** Last update date. */
+  updatedAt: Scalars['DateTime']['output'];
+  /** Weekday the override applies to within the range; null means every day. */
+  weekday?: Maybe<Weekday>;
+};
+
+/** New opening override information. Bulk: one row is created per weekday in `weekdays`; omitted/empty, or all seven, means every day. */
+export type OpeningOverrideCreateInput = {
+  /** Overridden maximum number of reservable seats. */
+  capacity: Scalars['Int']['input'];
+  /** Last date of the override period (inclusive). */
+  dateEnd: Scalars['Date']['input'];
+  /** First date of the override period (inclusive). */
+  dateStart: Scalars['Date']['input'];
+  /** Description of this override. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** Overridden closing time. */
+  endTime: Scalars['Time']['input'];
+  /** Overridden opening time. */
+  startTime: Scalars['Time']['input'];
+  /** Weekdays to scope to; provide multiple to create one row per weekday. */
+  weekdays?: InputMaybe<Array<Weekday>>;
+};
+
+/** A single page of results with pagination metadata. */
+export type OpeningOverridePage = {
+  __typename?: 'OpeningOverridePage';
+  /** Items in the current page. */
+  items: Array<OpeningOverride>;
+  /** 0-indexed page number. */
+  page: Scalars['Int']['output'];
+  /** Number of items per page. */
+  pageSize: Scalars['Int']['output'];
+  /** Total number of items across all pages. */
+  total: Scalars['Int']['output'];
+  /** Total number of pages. */
+  totalPages: Scalars['Int']['output'];
+};
+
+/** Opening-override search query. */
+export type OpeningOverrideSearchInput = {
+  /** Filter parameters. */
+  filter?: InputMaybe<ScheduleDateFilter>;
+  /** Pagination parameters. */
+  pagination?: InputMaybe<PaginationInput>;
+  /** Sort instructions. */
+  sort?: Array<OpeningOverrideSortFieldSortInput>;
+};
+
+/** Fields an opening-override search may be sorted by. */
+export const OpeningOverrideSortField = {
+  CreatedAt: 'CREATED_AT',
+  DateEnd: 'DATE_END',
+  DateStart: 'DATE_START',
+  Id: 'ID'
+} as const;
+
+export type OpeningOverrideSortField = typeof OpeningOverrideSortField[keyof typeof OpeningOverrideSortField];
+/** A single sort instruction. */
+export type OpeningOverrideSortFieldSortInput = {
+  /** Sort direction. */
+  direction?: SortDirection;
+  /** Field to sort by. */
+  field: OpeningOverrideSortField;
+};
+
+/** Opening override fields to update. Unset fields are not modified. */
+export type OpeningOverrideUpdateInput = {
+  /** New overridden capacity. */
+  capacity?: InputMaybe<Scalars['Int']['input']>;
+  /** New last date (inclusive). */
+  dateEnd?: InputMaybe<Scalars['Date']['input']>;
+  /** New first date (inclusive). */
+  dateStart?: InputMaybe<Scalars['Date']['input']>;
+  /** New description of this override. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** New overridden closing time. */
+  endTime?: InputMaybe<Scalars['Time']['input']>;
+  /** New overridden opening time. */
+  startTime?: InputMaybe<Scalars['Time']['input']>;
+  /** New weekday the override applies to; null means every day. */
+  weekday?: InputMaybe<Weekday>;
+};
+
+/** A single weekly opening within a bulk upsert. */
+export type OpeningUpsertInput = {
+  /** Maximum number of reservable seats. */
+  capacity: Scalars['Int']['input'];
+  /** Description of this opening. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** Time the service closes. */
+  endTime: Scalars['Time']['input'];
+  /** Time the service opens. */
+  startTime: Scalars['Time']['input'];
+  /** Day of the week this opening applies to. */
+  weekday: Weekday;
 };
 
 /** Pagination parameters. */
@@ -246,6 +633,8 @@ export type Query = {
   listPermissions: PermissionsList;
   /** List app roles */
   listRoles: RolesList;
+  /** List services for a venue. */
+  listServices: Array<Service>;
   /** Fetch authenticated user */
   me: User;
   /** Fetch a member (public user view) by ID */
@@ -260,10 +649,22 @@ export type Query = {
   searchResourceGrants: ResourceUserGrantsPage;
   /** Search venues the user has access to. */
   searchVenues: VenuePage;
+  /** Fetch service by ID */
+  service: Service;
+  /** Search the capacity overrides for a service. */
+  serviceCapacityOverrides: CapacityOverridePage;
+  /** Search the closings for a service. */
+  serviceClosings: ServiceClosingPage;
+  /** Search the opening overrides for a service. */
+  serviceOpeningOverrides: OpeningOverridePage;
+  /** List the weekly openings for a service. */
+  serviceOpenings: Array<Opening>;
   /** Fetch user by ID */
   user: User;
   /** Fetch venue by ID */
   venue: Venue;
+  /** Search the venue-wide closings for a venue. */
+  venueClosings: VenueClosingPage;
 };
 
 
@@ -274,6 +675,13 @@ export type QueryListPermissionsArgs = {
 
 export type QueryListRolesArgs = {
   input: ListRolesInput;
+};
+
+
+export type QueryListServicesArgs = {
+  includeDeleted?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  venueId: Scalars['ID']['input'];
 };
 
 
@@ -307,6 +715,35 @@ export type QuerySearchVenuesArgs = {
 };
 
 
+export type QueryServiceArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryServiceCapacityOverridesArgs = {
+  id: Scalars['ID']['input'];
+  input?: InputMaybe<CapacityOverrideSearchInput>;
+};
+
+
+export type QueryServiceClosingsArgs = {
+  id: Scalars['ID']['input'];
+  input?: InputMaybe<ServiceClosingSearchInput>;
+};
+
+
+export type QueryServiceOpeningOverridesArgs = {
+  id: Scalars['ID']['input'];
+  input?: InputMaybe<OpeningOverrideSearchInput>;
+};
+
+
+export type QueryServiceOpeningsArgs = {
+  id: Scalars['ID']['input'];
+  includeDeleted?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+
 export type QueryUserArgs = {
   id: Scalars['ID']['input'];
 };
@@ -314,6 +751,12 @@ export type QueryUserArgs = {
 
 export type QueryVenueArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryVenueClosingsArgs = {
+  id: Scalars['ID']['input'];
+  input?: InputMaybe<VenueClosingSearchInput>;
 };
 
 /** Fields a resource grants search may be sorted by. */
@@ -430,6 +873,16 @@ export type RolesList = {
   roles: Array<Role>;
 };
 
+/** Date-range filter for schedule exceptions. */
+export type ScheduleDateFilter = {
+  /** Include items whose period ends on or after this date. */
+  dateFrom?: InputMaybe<Scalars['Date']['input']>;
+  /** Include items whose period starts on or before this date. */
+  dateTo?: InputMaybe<Scalars['Date']['input']>;
+  /** Return results even if the parent service has been deleted. */
+  includeDeleted?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
 /** Resource grants search query. */
 export type SearchResourceGrantsInput = {
   /** Filter parameters. */
@@ -444,6 +897,120 @@ export type SearchResourceGrantsInput = {
   sort?: Array<ResourceGrantSortFieldSortInput>;
 };
 
+/** Service entity information. */
+export type Service = {
+  __typename?: 'Service';
+  /** Minimum notice required before a reservation slot, in minutes. */
+  advanceNoticeM: Scalars['Int']['output'];
+  /** Creation date. */
+  createdAt: Scalars['DateTime']['output'];
+  /** Deletion date, if the service has been deleted. */
+  deletedAt?: Maybe<Scalars['DateTime']['output']>;
+  /** Description of the service. */
+  description?: Maybe<Scalars['String']['output']>;
+  /** Minutes past a reservation's start time before it may be marked as a no-show. */
+  gracePeriodM: Scalars['Int']['output'];
+  /** Service identifier. */
+  id: Scalars['String']['output'];
+  /** Name of the service. */
+  name: Scalars['String']['output'];
+  /** Interval between reservation slots, in minutes. */
+  slotIntervalM: Scalars['Int']['output'];
+  /** Reservation duration, in minutes. */
+  turnTimeM: Scalars['Int']['output'];
+  /** Last update date. */
+  updatedAt: Scalars['DateTime']['output'];
+  /** Venue this service belongs to. */
+  venue: Venue;
+};
+
+/** A one-off closing for a date range. */
+export type ServiceClosing = {
+  __typename?: 'ServiceClosing';
+  /** Creation date. */
+  createdAt: Scalars['DateTime']['output'];
+  /** Last date of the closing period (inclusive). */
+  dateEnd: Scalars['Date']['output'];
+  /** First date of the closing period (inclusive). */
+  dateStart: Scalars['Date']['output'];
+  /** Description of this closing. */
+  description?: Maybe<Scalars['String']['output']>;
+  /** Closing identifier. */
+  id: Scalars['String']['output'];
+  /** Identifier of the service this closing belongs to. */
+  serviceId: Scalars['String']['output'];
+  /** Last update date. */
+  updatedAt: Scalars['DateTime']['output'];
+  /** Weekday the closing applies to within the range; null means every day. */
+  weekday?: Maybe<Weekday>;
+};
+
+/** New closing information. Bulk: one row is created per weekday in `weekdays`; omitted/empty, or all seven, means every day. */
+export type ServiceClosingCreateInput = {
+  /** Last date of the closing period (inclusive). */
+  dateEnd: Scalars['Date']['input'];
+  /** First date of the closing period (inclusive). */
+  dateStart: Scalars['Date']['input'];
+  /** Description of this closing. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** Weekdays to scope to; provide multiple to create one row per weekday. */
+  weekdays?: InputMaybe<Array<Weekday>>;
+};
+
+/** A single page of results with pagination metadata. */
+export type ServiceClosingPage = {
+  __typename?: 'ServiceClosingPage';
+  /** Items in the current page. */
+  items: Array<ServiceClosing>;
+  /** 0-indexed page number. */
+  page: Scalars['Int']['output'];
+  /** Number of items per page. */
+  pageSize: Scalars['Int']['output'];
+  /** Total number of items across all pages. */
+  total: Scalars['Int']['output'];
+  /** Total number of pages. */
+  totalPages: Scalars['Int']['output'];
+};
+
+/** Closing search query. */
+export type ServiceClosingSearchInput = {
+  /** Filter parameters. */
+  filter?: InputMaybe<ScheduleDateFilter>;
+  /** Pagination parameters. */
+  pagination?: InputMaybe<PaginationInput>;
+  /** Sort instructions. */
+  sort?: Array<ServiceClosingSortFieldSortInput>;
+};
+
+/** Fields a closing search may be sorted by. */
+export const ServiceClosingSortField = {
+  CreatedAt: 'CREATED_AT',
+  DateEnd: 'DATE_END',
+  DateStart: 'DATE_START',
+  Id: 'ID'
+} as const;
+
+export type ServiceClosingSortField = typeof ServiceClosingSortField[keyof typeof ServiceClosingSortField];
+/** A single sort instruction. */
+export type ServiceClosingSortFieldSortInput = {
+  /** Sort direction. */
+  direction?: SortDirection;
+  /** Field to sort by. */
+  field: ServiceClosingSortField;
+};
+
+/** Closing fields to update. Unset fields are not modified. */
+export type ServiceClosingUpdateInput = {
+  /** New last date (inclusive). */
+  dateEnd?: InputMaybe<Scalars['Date']['input']>;
+  /** New first date (inclusive). */
+  dateStart?: InputMaybe<Scalars['Date']['input']>;
+  /** New description of this closing. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** New weekday the closing applies to; null means every day. */
+  weekday?: InputMaybe<Weekday>;
+};
+
 /** Direction of a sort clause. */
 export const SortDirection = {
   Asc: 'ASC',
@@ -451,6 +1018,22 @@ export const SortDirection = {
 } as const;
 
 export type SortDirection = typeof SortDirection[keyof typeof SortDirection];
+/** Service information to update. */
+export type UpdateServiceInput = {
+  /** New minimum notice required before a reservation slot, in minutes. */
+  advanceNoticeM?: InputMaybe<Scalars['Int']['input']>;
+  /** New description of the service. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** New minutes past a reservation's start time before it may be marked as a no-show. */
+  gracePeriodM?: InputMaybe<Scalars['Int']['input']>;
+  /** New name of the service. */
+  name?: InputMaybe<Scalars['String']['input']>;
+  /** New interval between reservation slots, in minutes. */
+  slotIntervalM?: InputMaybe<Scalars['Int']['input']>;
+  /** New reservation duration, in minutes. */
+  turnTimeM?: InputMaybe<Scalars['Int']['input']>;
+};
+
 /** User information to update. */
 export type UpdateUserInput = {
   /** New display name of the user. */
@@ -525,6 +1108,93 @@ export type Venue = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
+/** A venue-wide closing: closes every service of a venue for a date range. */
+export type VenueClosing = {
+  __typename?: 'VenueClosing';
+  /** Creation date. */
+  createdAt: Scalars['DateTime']['output'];
+  /** Last date of the closing period (inclusive). */
+  dateEnd: Scalars['Date']['output'];
+  /** First date of the closing period (inclusive). */
+  dateStart: Scalars['Date']['output'];
+  /** Description of this venue closing. */
+  description?: Maybe<Scalars['String']['output']>;
+  /** Venue closing identifier. */
+  id: Scalars['String']['output'];
+  /** Last update date. */
+  updatedAt: Scalars['DateTime']['output'];
+  /** Identifier of the venue this closing belongs to. */
+  venueId: Scalars['String']['output'];
+  /** Weekday the closing applies to within the range; null means every day. */
+  weekday?: Maybe<Weekday>;
+};
+
+/** New venue closing information. Bulk: one row is created per weekday in `weekdays`; omitted/empty, or all seven, means every day. */
+export type VenueClosingCreateInput = {
+  /** Last date of the closing period (inclusive). */
+  dateEnd: Scalars['Date']['input'];
+  /** First date of the closing period (inclusive). */
+  dateStart: Scalars['Date']['input'];
+  /** Description of this venue closing. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** Weekdays to scope to; provide multiple to create one row per weekday. */
+  weekdays?: InputMaybe<Array<Weekday>>;
+};
+
+/** A single page of results with pagination metadata. */
+export type VenueClosingPage = {
+  __typename?: 'VenueClosingPage';
+  /** Items in the current page. */
+  items: Array<VenueClosing>;
+  /** 0-indexed page number. */
+  page: Scalars['Int']['output'];
+  /** Number of items per page. */
+  pageSize: Scalars['Int']['output'];
+  /** Total number of items across all pages. */
+  total: Scalars['Int']['output'];
+  /** Total number of pages. */
+  totalPages: Scalars['Int']['output'];
+};
+
+/** Venue-closing search query. */
+export type VenueClosingSearchInput = {
+  /** Filter parameters. */
+  filter?: InputMaybe<ScheduleDateFilter>;
+  /** Pagination parameters. */
+  pagination?: InputMaybe<PaginationInput>;
+  /** Sort instructions. */
+  sort?: Array<VenueClosingSortFieldSortInput>;
+};
+
+/** Fields a venue-closing search may be sorted by. */
+export const VenueClosingSortField = {
+  CreatedAt: 'CREATED_AT',
+  DateEnd: 'DATE_END',
+  DateStart: 'DATE_START',
+  Id: 'ID'
+} as const;
+
+export type VenueClosingSortField = typeof VenueClosingSortField[keyof typeof VenueClosingSortField];
+/** A single sort instruction. */
+export type VenueClosingSortFieldSortInput = {
+  /** Sort direction. */
+  direction?: SortDirection;
+  /** Field to sort by. */
+  field: VenueClosingSortField;
+};
+
+/** Venue closing fields to update. Unset fields are not modified. */
+export type VenueClosingUpdateInput = {
+  /** New last date (inclusive). */
+  dateEnd?: InputMaybe<Scalars['Date']['input']>;
+  /** New first date (inclusive). */
+  dateStart?: InputMaybe<Scalars['Date']['input']>;
+  /** New description of this closing. */
+  description?: InputMaybe<Scalars['String']['input']>;
+  /** New weekday the closing applies to; null means every day. */
+  weekday?: InputMaybe<Weekday>;
+};
+
 /** Venue search filter. */
 export type VenueFilterInput = {
   /** Filter by venue name using `like` operator. */
@@ -581,6 +1251,18 @@ export const VenueStatus = {
 } as const;
 
 export type VenueStatus = typeof VenueStatus[keyof typeof VenueStatus];
+/** Day of the week an opening applies to. */
+export const Weekday = {
+  Friday: 'FRIDAY',
+  Monday: 'MONDAY',
+  Saturday: 'SATURDAY',
+  Sunday: 'SUNDAY',
+  Thursday: 'THURSDAY',
+  Tuesday: 'TUESDAY',
+  Wednesday: 'WEDNESDAY'
+} as const;
+
+export type Weekday = typeof Weekday[keyof typeof Weekday];
 export type ListMyGrantsQueryVariables = Exact<{
   input: ListGrantsInput;
 }>;
@@ -641,6 +1323,192 @@ export type UpdateMeMutationVariables = Exact<{
 
 
 export type UpdateMeMutation = { __typename?: 'Mutation', updateMe: { __typename?: 'User', id: string, username: string, displayName?: string | null, email: string, createdAt: string, updatedAt: string } };
+
+export type ListServiceOpeningsQueryVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  includeDeleted?: InputMaybe<Scalars['Boolean']['input']>;
+}>;
+
+
+export type ListServiceOpeningsQuery = { __typename?: 'Query', serviceOpenings: Array<{ __typename?: 'Opening', id: string, serviceId: string, weekday: Weekday, capacity: number, startTime: string, endTime: string, description?: string | null, createdAt: string, updatedAt: string }> };
+
+export type UpsertServiceOpeningsMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  openings: Array<OpeningUpsertInput> | OpeningUpsertInput;
+}>;
+
+
+export type UpsertServiceOpeningsMutation = { __typename?: 'Mutation', upsertServiceOpenings: Array<{ __typename?: 'Opening', id: string, serviceId: string, weekday: Weekday, capacity: number, startTime: string, endTime: string, description?: string | null, createdAt: string, updatedAt: string }> };
+
+export type SearchOpeningOverridesQueryVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  input?: InputMaybe<OpeningOverrideSearchInput>;
+}>;
+
+
+export type SearchOpeningOverridesQuery = { __typename?: 'Query', serviceOpeningOverrides: { __typename?: 'OpeningOverridePage', total: number, page: number, pageSize: number, totalPages: number, items: Array<{ __typename?: 'OpeningOverride', id: string, serviceId: string, dateStart: string, dateEnd: string, weekday?: Weekday | null, capacity: number, startTime: string, endTime: string, description?: string | null, createdAt: string, updatedAt: string }> } };
+
+export type CreateOpeningOverrideMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  input: OpeningOverrideCreateInput;
+}>;
+
+
+export type CreateOpeningOverrideMutation = { __typename?: 'Mutation', createOpeningOverride: Array<{ __typename?: 'OpeningOverride', id: string }> };
+
+export type UpdateOpeningOverrideMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  overrideId: Scalars['ID']['input'];
+  input: OpeningOverrideUpdateInput;
+}>;
+
+
+export type UpdateOpeningOverrideMutation = { __typename?: 'Mutation', updateOpeningOverride: { __typename?: 'OpeningOverride', id: string } };
+
+export type DeleteOpeningOverrideMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  overrideId: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteOpeningOverrideMutation = { __typename?: 'Mutation', deleteOpeningOverride: boolean };
+
+export type SearchServiceClosingsQueryVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  input?: InputMaybe<ServiceClosingSearchInput>;
+}>;
+
+
+export type SearchServiceClosingsQuery = { __typename?: 'Query', serviceClosings: { __typename?: 'ServiceClosingPage', total: number, page: number, pageSize: number, totalPages: number, items: Array<{ __typename?: 'ServiceClosing', id: string, serviceId: string, dateStart: string, dateEnd: string, weekday?: Weekday | null, description?: string | null, createdAt: string, updatedAt: string }> } };
+
+export type CreateServiceClosingMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  input: ServiceClosingCreateInput;
+}>;
+
+
+export type CreateServiceClosingMutation = { __typename?: 'Mutation', createServiceClosing: Array<{ __typename?: 'ServiceClosing', id: string }> };
+
+export type UpdateServiceClosingMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  closingId: Scalars['ID']['input'];
+  input: ServiceClosingUpdateInput;
+}>;
+
+
+export type UpdateServiceClosingMutation = { __typename?: 'Mutation', updateServiceClosing: { __typename?: 'ServiceClosing', id: string } };
+
+export type DeleteServiceClosingMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  closingId: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteServiceClosingMutation = { __typename?: 'Mutation', deleteServiceClosing: boolean };
+
+export type SearchCapacityOverridesQueryVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  input?: InputMaybe<CapacityOverrideSearchInput>;
+}>;
+
+
+export type SearchCapacityOverridesQuery = { __typename?: 'Query', serviceCapacityOverrides: { __typename?: 'CapacityOverridePage', total: number, page: number, pageSize: number, totalPages: number, items: Array<{ __typename?: 'CapacityOverride', id: string, serviceId: string, dateStart: string, dateEnd: string, weekday?: Weekday | null, capacityDelta: number, description?: string | null, createdAt: string, updatedAt: string }> } };
+
+export type CreateCapacityOverrideMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  input: CapacityOverrideCreateInput;
+}>;
+
+
+export type CreateCapacityOverrideMutation = { __typename?: 'Mutation', createCapacityOverride: Array<{ __typename?: 'CapacityOverride', id: string }> };
+
+export type UpdateCapacityOverrideMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  capacityOverrideId: Scalars['ID']['input'];
+  input: CapacityOverrideUpdateInput;
+}>;
+
+
+export type UpdateCapacityOverrideMutation = { __typename?: 'Mutation', updateCapacityOverride: { __typename?: 'CapacityOverride', id: string } };
+
+export type DeleteCapacityOverrideMutationVariables = Exact<{
+  serviceId: Scalars['ID']['input'];
+  capacityOverrideId: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteCapacityOverrideMutation = { __typename?: 'Mutation', deleteCapacityOverride: boolean };
+
+export type SearchVenueClosingsQueryVariables = Exact<{
+  venueId: Scalars['ID']['input'];
+  input?: InputMaybe<VenueClosingSearchInput>;
+}>;
+
+
+export type SearchVenueClosingsQuery = { __typename?: 'Query', venueClosings: { __typename?: 'VenueClosingPage', total: number, page: number, pageSize: number, totalPages: number, items: Array<{ __typename?: 'VenueClosing', id: string, venueId: string, dateStart: string, dateEnd: string, weekday?: Weekday | null, description?: string | null, createdAt: string, updatedAt: string }> } };
+
+export type CreateVenueClosingMutationVariables = Exact<{
+  venueId: Scalars['ID']['input'];
+  input: VenueClosingCreateInput;
+}>;
+
+
+export type CreateVenueClosingMutation = { __typename?: 'Mutation', createVenueClosing: Array<{ __typename?: 'VenueClosing', id: string }> };
+
+export type UpdateVenueClosingMutationVariables = Exact<{
+  venueId: Scalars['ID']['input'];
+  closingId: Scalars['ID']['input'];
+  input: VenueClosingUpdateInput;
+}>;
+
+
+export type UpdateVenueClosingMutation = { __typename?: 'Mutation', updateVenueClosing: { __typename?: 'VenueClosing', id: string } };
+
+export type DeleteVenueClosingMutationVariables = Exact<{
+  venueId: Scalars['ID']['input'];
+  closingId: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteVenueClosingMutation = { __typename?: 'Mutation', deleteVenueClosing: boolean };
+
+export type GetServiceQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type GetServiceQuery = { __typename?: 'Query', service: { __typename?: 'Service', id: string, name: string, description?: string | null, turnTimeM: number, advanceNoticeM: number, slotIntervalM: number, gracePeriodM: number, deletedAt?: string | null, createdAt: string, updatedAt: string, venue: { __typename?: 'Venue', id: string, name: string, address: string, description?: string | null, status: VenueStatus, createdAt: string, updatedAt: string } } };
+
+export type ListServicesQueryVariables = Exact<{
+  venueId: Scalars['ID']['input'];
+  name?: InputMaybe<Scalars['String']['input']>;
+  includeDeleted?: InputMaybe<Scalars['Boolean']['input']>;
+}>;
+
+
+export type ListServicesQuery = { __typename?: 'Query', listServices: Array<{ __typename?: 'Service', id: string, name: string, description?: string | null, turnTimeM: number, advanceNoticeM: number, slotIntervalM: number, gracePeriodM: number, deletedAt?: string | null, createdAt: string, updatedAt: string }> };
+
+export type CreateServiceMutationVariables = Exact<{
+  input: CreateServiceInput;
+}>;
+
+
+export type CreateServiceMutation = { __typename?: 'Mutation', createService: { __typename?: 'Service', id: string, name: string, description?: string | null, turnTimeM: number, advanceNoticeM: number, slotIntervalM: number, gracePeriodM: number, deletedAt?: string | null, createdAt: string, updatedAt: string, venue: { __typename?: 'Venue', id: string, name: string, address: string, description?: string | null, status: VenueStatus, createdAt: string, updatedAt: string } } };
+
+export type UpdateServiceMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  input: UpdateServiceInput;
+}>;
+
+
+export type UpdateServiceMutation = { __typename?: 'Mutation', updateService: { __typename?: 'Service', id: string, name: string, description?: string | null, turnTimeM: number, advanceNoticeM: number, slotIntervalM: number, gracePeriodM: number, deletedAt?: string | null, createdAt: string, updatedAt: string } };
+
+export type DeleteServiceMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteServiceMutation = { __typename?: 'Mutation', deleteService: boolean };
 
 export type SearchVenuesQueryVariables = Exact<{
   input: VenueSearchInput;
@@ -709,6 +1577,29 @@ export const GrantAccessDocument = {"kind":"Document","definitions":[{"kind":"Op
 export const RevokeAccessDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RevokeAccess"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RevokeAccessInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"revokeAccess"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<RevokeAccessMutation, RevokeAccessMutationVariables>;
 export const GetMeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetMe"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"username"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<GetMeQuery, GetMeQueryVariables>;
 export const UpdateMeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateMe"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateUserInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateMe"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"username"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<UpdateMeMutation, UpdateMeMutationVariables>;
+export const ListServiceOpeningsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ListServiceOpenings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"includeDeleted"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"serviceOpenings"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"includeDeleted"},"value":{"kind":"Variable","name":{"kind":"Name","value":"includeDeleted"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"weekday"}},{"kind":"Field","name":{"kind":"Name","value":"capacity"}},{"kind":"Field","name":{"kind":"Name","value":"startTime"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<ListServiceOpeningsQuery, ListServiceOpeningsQueryVariables>;
+export const UpsertServiceOpeningsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpsertServiceOpenings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"openings"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"OpeningUpsertInput"}}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"upsertServiceOpenings"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"openings"},"value":{"kind":"Variable","name":{"kind":"Name","value":"openings"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"weekday"}},{"kind":"Field","name":{"kind":"Name","value":"capacity"}},{"kind":"Field","name":{"kind":"Name","value":"startTime"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<UpsertServiceOpeningsMutation, UpsertServiceOpeningsMutationVariables>;
+export const SearchOpeningOverridesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SearchOpeningOverrides"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"OpeningOverrideSearchInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"serviceOpeningOverrides"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"dateStart"}},{"kind":"Field","name":{"kind":"Name","value":"dateEnd"}},{"kind":"Field","name":{"kind":"Name","value":"weekday"}},{"kind":"Field","name":{"kind":"Name","value":"capacity"}},{"kind":"Field","name":{"kind":"Name","value":"startTime"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"page"}},{"kind":"Field","name":{"kind":"Name","value":"pageSize"}},{"kind":"Field","name":{"kind":"Name","value":"totalPages"}}]}}]}}]} as unknown as DocumentNode<SearchOpeningOverridesQuery, SearchOpeningOverridesQueryVariables>;
+export const CreateOpeningOverrideDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateOpeningOverride"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"OpeningOverrideCreateInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createOpeningOverride"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<CreateOpeningOverrideMutation, CreateOpeningOverrideMutationVariables>;
+export const UpdateOpeningOverrideDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateOpeningOverride"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"overrideId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"OpeningOverrideUpdateInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateOpeningOverride"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"overrideId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"overrideId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateOpeningOverrideMutation, UpdateOpeningOverrideMutationVariables>;
+export const DeleteOpeningOverrideDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteOpeningOverride"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"overrideId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteOpeningOverride"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"overrideId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"overrideId"}}}]}]}}]} as unknown as DocumentNode<DeleteOpeningOverrideMutation, DeleteOpeningOverrideMutationVariables>;
+export const SearchServiceClosingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SearchServiceClosings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ServiceClosingSearchInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"serviceClosings"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"dateStart"}},{"kind":"Field","name":{"kind":"Name","value":"dateEnd"}},{"kind":"Field","name":{"kind":"Name","value":"weekday"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"page"}},{"kind":"Field","name":{"kind":"Name","value":"pageSize"}},{"kind":"Field","name":{"kind":"Name","value":"totalPages"}}]}}]}}]} as unknown as DocumentNode<SearchServiceClosingsQuery, SearchServiceClosingsQueryVariables>;
+export const CreateServiceClosingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateServiceClosing"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ServiceClosingCreateInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createServiceClosing"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<CreateServiceClosingMutation, CreateServiceClosingMutationVariables>;
+export const UpdateServiceClosingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateServiceClosing"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"closingId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ServiceClosingUpdateInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateServiceClosing"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"closingId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"closingId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateServiceClosingMutation, UpdateServiceClosingMutationVariables>;
+export const DeleteServiceClosingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteServiceClosing"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"closingId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteServiceClosing"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"closingId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"closingId"}}}]}]}}]} as unknown as DocumentNode<DeleteServiceClosingMutation, DeleteServiceClosingMutationVariables>;
+export const SearchCapacityOverridesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SearchCapacityOverrides"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"CapacityOverrideSearchInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"serviceCapacityOverrides"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"dateStart"}},{"kind":"Field","name":{"kind":"Name","value":"dateEnd"}},{"kind":"Field","name":{"kind":"Name","value":"weekday"}},{"kind":"Field","name":{"kind":"Name","value":"capacityDelta"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"page"}},{"kind":"Field","name":{"kind":"Name","value":"pageSize"}},{"kind":"Field","name":{"kind":"Name","value":"totalPages"}}]}}]}}]} as unknown as DocumentNode<SearchCapacityOverridesQuery, SearchCapacityOverridesQueryVariables>;
+export const CreateCapacityOverrideDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateCapacityOverride"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CapacityOverrideCreateInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createCapacityOverride"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<CreateCapacityOverrideMutation, CreateCapacityOverrideMutationVariables>;
+export const UpdateCapacityOverrideDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateCapacityOverride"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"capacityOverrideId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CapacityOverrideUpdateInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateCapacityOverride"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"capacityOverrideId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"capacityOverrideId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateCapacityOverrideMutation, UpdateCapacityOverrideMutationVariables>;
+export const DeleteCapacityOverrideDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteCapacityOverride"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"capacityOverrideId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteCapacityOverride"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"capacityOverrideId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"capacityOverrideId"}}}]}]}}]} as unknown as DocumentNode<DeleteCapacityOverrideMutation, DeleteCapacityOverrideMutationVariables>;
+export const SearchVenueClosingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SearchVenueClosings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"VenueClosingSearchInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"venueClosings"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"venueId"}},{"kind":"Field","name":{"kind":"Name","value":"dateStart"}},{"kind":"Field","name":{"kind":"Name","value":"dateEnd"}},{"kind":"Field","name":{"kind":"Name","value":"weekday"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"page"}},{"kind":"Field","name":{"kind":"Name","value":"pageSize"}},{"kind":"Field","name":{"kind":"Name","value":"totalPages"}}]}}]}}]} as unknown as DocumentNode<SearchVenueClosingsQuery, SearchVenueClosingsQueryVariables>;
+export const CreateVenueClosingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateVenueClosing"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"VenueClosingCreateInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createVenueClosing"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<CreateVenueClosingMutation, CreateVenueClosingMutationVariables>;
+export const UpdateVenueClosingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateVenueClosing"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"closingId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"VenueClosingUpdateInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateVenueClosing"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}}},{"kind":"Argument","name":{"kind":"Name","value":"closingId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"closingId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateVenueClosingMutation, UpdateVenueClosingMutationVariables>;
+export const DeleteVenueClosingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteVenueClosing"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"closingId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteVenueClosing"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}}},{"kind":"Argument","name":{"kind":"Name","value":"closingId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"closingId"}}}]}]}}]} as unknown as DocumentNode<DeleteVenueClosingMutation, DeleteVenueClosingMutationVariables>;
+export const GetServiceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetService"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"service"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"turnTimeM"}},{"kind":"Field","name":{"kind":"Name","value":"advanceNoticeM"}},{"kind":"Field","name":{"kind":"Name","value":"slotIntervalM"}},{"kind":"Field","name":{"kind":"Name","value":"gracePeriodM"}},{"kind":"Field","name":{"kind":"Name","value":"deletedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"venue"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]}}]} as unknown as DocumentNode<GetServiceQuery, GetServiceQueryVariables>;
+export const ListServicesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ListServices"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"name"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"includeDeleted"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"listServices"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"venueId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}}},{"kind":"Argument","name":{"kind":"Name","value":"name"},"value":{"kind":"Variable","name":{"kind":"Name","value":"name"}}},{"kind":"Argument","name":{"kind":"Name","value":"includeDeleted"},"value":{"kind":"Variable","name":{"kind":"Name","value":"includeDeleted"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"turnTimeM"}},{"kind":"Field","name":{"kind":"Name","value":"advanceNoticeM"}},{"kind":"Field","name":{"kind":"Name","value":"slotIntervalM"}},{"kind":"Field","name":{"kind":"Name","value":"gracePeriodM"}},{"kind":"Field","name":{"kind":"Name","value":"deletedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<ListServicesQuery, ListServicesQueryVariables>;
+export const CreateServiceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateService"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateServiceInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createService"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"turnTimeM"}},{"kind":"Field","name":{"kind":"Name","value":"advanceNoticeM"}},{"kind":"Field","name":{"kind":"Name","value":"slotIntervalM"}},{"kind":"Field","name":{"kind":"Name","value":"gracePeriodM"}},{"kind":"Field","name":{"kind":"Name","value":"deletedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"venue"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]}}]} as unknown as DocumentNode<CreateServiceMutation, CreateServiceMutationVariables>;
+export const UpdateServiceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateService"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateServiceInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateService"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"turnTimeM"}},{"kind":"Field","name":{"kind":"Name","value":"advanceNoticeM"}},{"kind":"Field","name":{"kind":"Name","value":"slotIntervalM"}},{"kind":"Field","name":{"kind":"Name","value":"gracePeriodM"}},{"kind":"Field","name":{"kind":"Name","value":"deletedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<UpdateServiceMutation, UpdateServiceMutationVariables>;
+export const DeleteServiceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteService"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteService"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteServiceMutation, DeleteServiceMutationVariables>;
 export const SearchVenuesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SearchVenues"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"VenueSearchInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"searchVenues"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"page"}},{"kind":"Field","name":{"kind":"Name","value":"pageSize"}},{"kind":"Field","name":{"kind":"Name","value":"totalPages"}}]}}]}}]} as unknown as DocumentNode<SearchVenuesQuery, SearchVenuesQueryVariables>;
 export const GetVenueDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetVenue"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"venue"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<GetVenueQuery, GetVenueQueryVariables>;
 export const CreateVenueDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateVenue"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateVenueInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createVenue"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<CreateVenueMutation, CreateVenueMutationVariables>;

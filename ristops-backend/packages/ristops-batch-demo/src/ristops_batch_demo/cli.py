@@ -33,6 +33,13 @@ def demo(_: click.Context):
     help="Path to the venues JSON file.",
 )
 @click.option(
+    "-s",
+    "--services",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to the services JSON file.",
+)
+@click.option(
     "-a",
     "--assignments",
     type=click.Path(exists=True, path_type=Path),
@@ -60,25 +67,32 @@ async def seed(
         _: click.Context,
         users: Path,
         venues: Path,
+        services: Path,
         assignments: Path,
         admin_email: str,
         admin_password: str,
 ) -> None:
-    """ Seed demo data by calling the authn, venue, and authz REST APIs. """
-    from ristops_batch_demo.seed.models import DemoAssignments, DemoUsers, DemoVenues
+    """ Seed demo data by calling the authn, venue, reservation, and authz REST APIs. """
+    from ristops_batch_demo.seed.models import (
+        DemoAssignments, DemoServices, DemoUsers, DemoVenues,
+    )
     from ristops_batch_demo.seed.seeder import DemoSeeder
-    from ristops_batch_demo.services.http import authn_client, authz_client, venue_client
+    from ristops_batch_demo.services.http import (
+        authn_client, authz_client, reservation_client, venue_client,
+    )
     from ristops_batch_demo.settings import BackendServiceSettings
     from ristops_lib_core.http import with_clients
 
     demo_users = DemoUsers.model_validate(json.loads(users.read_text()))
     demo_venues = DemoVenues.model_validate(json.loads(venues.read_text()))
+    demo_services = DemoServices.model_validate(json.loads(services.read_text()))
     demo_assignments = DemoAssignments.model_validate(json.loads(assignments.read_text()))
 
     be_settings = BackendServiceSettings.get()
     seeder = DemoSeeder(
         users=demo_users,
         venues=demo_venues,
+        services=demo_services,
         assignments=demo_assignments,
         admin_email=admin_email,
         admin_password=admin_password,
@@ -87,6 +101,7 @@ async def seed(
         async with with_clients(
                 (authn_client, be_settings.authn_url),
                 (venue_client, be_settings.venue_url),
+                (reservation_client, be_settings.reservation_url),
                 (authz_client, be_settings.authz_url),
         ):
             await seeder.run()

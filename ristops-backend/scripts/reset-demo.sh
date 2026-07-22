@@ -3,15 +3,17 @@
 # Reset and reseed the local demo environment, end to end.
 #
 # Runs, in order:
-#   1. nuke  - drop the authn + venue SQL schemas and wipe the authz Neo4j graph
+#   1. nuke  - drop the authn + venue + reservation SQL schemas and wipe the authz Neo4j graph
 #   2. seed  - recreate the admin user (authn) and the roles + admin ACL (authz)
-#   3. demo  - create the Game-of-Thrones demo users, venues, and role grants
+#   3. demo  - create the Game-of-Thrones demo users, venues, services, role
+#              grants, and activate the venues
 #
 # PREREQUISITES
 #   * Infra up (Postgres, Redis x2, Neo4j) from docker/.
-#   * Backend services running: be-authn:8001, be-authz:8002, be-venue:8003.
-#     The demo-seed step calls their REST APIs and relies on the be-authz Redis
-#     stream consumer to propagate the new users/venues before roles are granted.
+#   * Backend services running: be-authn:8001, be-authz:8002, be-venue:8003,
+#     be-reservation:8004. The demo-seed step calls their REST APIs and relies on
+#     the be-authz Redis stream consumer to propagate the new users/venues before
+#     roles are granted.
 #
 # Credentials and the JWT key location default to the local dev values (matching
 # the IDE run configs) and can be overridden via environment variables, e.g.:
@@ -53,6 +55,8 @@ step "Nuke authn SQL schema"
 ristops_with_env packages/ristops-be-authn/.env sql-database nuke be-authn -f
 step "Nuke venue SQL schema"
 ristops_with_env packages/ristops-be-venue/.env sql-database nuke be-venue -f
+step "Nuke reservation SQL schema"
+ristops_with_env packages/ristops-be-reservation/.env sql-database nuke be-reservation -f
 step "Nuke authz Neo4j graph"
 ristops_with_env packages/ristops-be-authz/.env nuke-authz -f
 
@@ -63,10 +67,11 @@ step "Seed roles + admin ACL (authz)"
 ristops_with_env packages/ristops-be-authz/.env seed-authz
 
 # 3. SEED DEMO --------------------------------------------------------------
-step "Seed demo users, venues, and role grants"
+step "Seed demo users, venues, services, role grants, and activation"
 ristops_with_env packages/ristops-batch-demo/.env demo seed \
   --users "${DEMO_DATA}/users.json" \
   --venues "${DEMO_DATA}/venues.json" \
+  --services "${DEMO_DATA}/services.json" \
   --assignments "${DEMO_DATA}/assignments.json"
 
 echo ""

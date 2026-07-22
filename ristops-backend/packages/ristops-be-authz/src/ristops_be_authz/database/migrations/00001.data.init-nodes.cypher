@@ -28,6 +28,22 @@ MERGE (:Permission {id: "venue:get"});
 MERGE (:Permission {id: "venue:edit"});
 MERGE (:Permission {id: "venue:remove"});
 MERGE (:Permission {id: "venue:list"});
+MERGE (:Permission {id: "venue:activate"});
+MERGE (:Permission {id: "venue:close"});
+MERGE (:Permission {id: "venue:disable"});
+MERGE (:Permission {id: "venue:enable"});
+
+MERGE (:Permission {id: "service:add"});
+MERGE (:Permission {id: "service:get"});
+MERGE (:Permission {id: "service:edit"});
+MERGE (:Permission {id: "service:remove"});
+MERGE (:Permission {id: "service:list"});
+
+MERGE (:Permission {id: "schedule:add"});
+MERGE (:Permission {id: "schedule:get"});
+MERGE (:Permission {id: "schedule:edit"});
+MERGE (:Permission {id: "schedule:remove"});
+MERGE (:Permission {id: "schedule:list"});
 
 // -- Admin role --
 MERGE (:Role {id: "admin", name: "Admin", description: "Administrator role with full access", scope: "app"});
@@ -69,7 +85,7 @@ MERGE (:Role {id: "venue.manager", name: "Venue Manager", description: "Role wit
 // Assign permissions to venue manager role
 MATCH (r:Role {id: "venue.manager"})
 MATCH (p:Permission)
-WHERE p.id IN ["venue:get", "venue:edit", "acl:list", "acl:remove", "acl:add", "venue:activate", "venue:close"]
+WHERE p.id IN ["acl:list", "acl:remove", "acl:add", "venue:add", "venue:get", "venue:edit", "venue:remove", "venue:list", "venue:activate", "venue:close", "venue:disable", "venue:enable", "service:add", "service:get", "service:edit", "service:remove", "service:list", "schedule:add", "schedule:get", "schedule:edit", "schedule:remove", "schedule:list"]
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Venue Bartender role --

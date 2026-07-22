@@ -1,0 +1,199 @@
+{
+  "services": [
+    {
+      "venue": "stark",
+      "name": "Break of Fast at Winterfell",
+      "description": "Honeyed oats, black bread, and hard-boiled eggs to fortify you against the morning chill. Break your fast before the long cold day, for winter is coming.",
+      "turn_time_m": 45,
+      "advance_notice_m": 60,
+      "slot_interval_m": 15,
+      "grace_period_m": 10,
+      "openings": [
+        { "weekday": "monday", "capacity": 30, "start_time": "08:00", "end_time": "10:30" },
+        { "weekday": "tuesday", "capacity": 30, "start_time": "08:00", "end_time": "10:30" },
+        { "weekday": "wednesday", "capacity": 30, "start_time": "08:00", "end_time": "10:30" },
+        { "weekday": "thursday", "capacity": 30, "start_time": "08:00", "end_time": "10:30" }
+      ]
+    },
+    {
+      "venue": "stark",
+      "name": "The Northern Table",
+      "description": "Hearty venison stew and root vegetables hunted from the Wolfswood, served as the direwolves prowl the godswood. A meal fit for those who remember the North.",
+      "turn_time_m": 60,
+      "advance_notice_m": 120,
+      "slot_interval_m": 15,
+      "grace_period_m": 15,
+      "openings": [
+        { "weekday": "monday", "capacity": 40, "start_time": "12:00", "end_time": "15:00" },
+        { "weekday": "tuesday", "capacity": 40, "start_time": "12:00", "end_time": "15:00" },
+        { "weekday": "wednesday", "capacity": 40, "start_time": "12:00", "end_time": "15:00" },
+        { "weekday": "thursday", "capacity": 40, "start_time": "12:00", "end_time": "15:00" },
+        { "weekday": "friday", "capacity": 45, "start_time": "12:00", "end_time": "15:30" }
+      ]
+    },
+    {
+      "venue": "stark",
+      "name": "A Feast in the Great Hall",
+      "description": "Roast auroch, mutton pies, and mulled wine beneath the banners of the grey direwolf. The lords of the North gather; the pack survives together.",
+      "turn_time_m": 120,
+      "advance_notice_m": 240,
+      "slot_interval_m": 30,
+      "grace_period_m": 15,
+      "openings": [
+        { "weekday": "tuesday", "capacity": 45, "start_time": "19:00", "end_time": "23:00" },
+        { "weekday": "wednesday", "capacity": 45, "start_time": "19:00", "end_time": "23:00" },
+        { "weekday": "thursday", "capacity": 45, "start_time": "19:00", "end_time": "23:00" },
+        { "weekday": "friday", "capacity": 60, "start_time": "19:00", "end_time": "23:30", "description": "Two seatings" },
+        { "weekday": "saturday", "capacity": 60, "start_time": "19:00", "end_time": "23:30", "description": "Two seatings" },
+        { "weekday": "sunday", "capacity": 45, "start_time": "18:30", "end_time": "22:00" }
+      ],
+      "overrides": [
+        { "dates": { "days_from_now_start": 11, "days_from_now_end": 13 }, "capacity": 80, "start_time": "18:00", "end_time": "23:30", "description": "Harvest feast" },
+        { "dates": { "month_day_start": "03-15", "month_day_end": "03-16", "year_offsets": [-1, 0, 1] }, "capacity": 70, "start_time": "18:30", "end_time": "23:30", "description": "Winterfell name-day feast" },
+        { "dates": { "month_day_start": "04-04", "month_day_end": "04-05", "year_offsets": [-1, 0, 1] }, "capacity": 65, "start_time": "18:30", "end_time": "23:00", "description": "Maiden's Day feast" },
+        { "dates": { "month_day_start": "12-24", "month_day_end": "12-26", "year_offsets": [-1, 0, 1] }, "capacity": 80, "start_time": "18:00", "end_time": "23:30", "description": "Yule feast in the Great Hall" },
+        { "dates": { "month_day_start": "12-31", "month_day_end": "12-31", "year_offsets": [-1, 0, 1] }, "capacity": 90, "start_time": "18:00", "end_time": "23:59", "description": "New Year's Eve vigil" }
+      ],
+      "closings": [
+        { "dates": { "days_from_now_start": 4, "days_from_now_end": 5 }, "description": "Kingsmoot recess" },
+        { "dates": { "month_day_start": "12-21", "month_day_end": "12-23", "year_offsets": [-1, 0, 1] }, "description": "The Long Night vigil" },
+        { "dates": { "month_day_start": "01-01", "month_day_end": "01-01", "year_offsets": [-1, 0, 1] }, "description": "New Year's Day (closed)" }
+      ],
+      "capacity_overrides": [
+        { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] }, "capacity_delta": 30, "description": "Godswood garden (summer)" }
+      ]
+    },
+    {
+      "venue": "targaryen",
+      "name": "Fire and Blood Brunch",
+      "description": "Dragon-egg omelettes and smoked fish from Blackwater Bay, served late under the shadow of the Dragonmont. A leisurely feast for the blood of old Valyria.",
+      "turn_time_m": 90,
+      "advance_notice_m": 120,
+      "slot_interval_m": 30,
+      "grace_period_m": 15,
+      "openings": [
+        { "weekday": "wednesday", "capacity": 35, "start_time": "11:00", "end_time": "14:00" },
+        { "weekday": "thursday", "capacity": 35, "start_time": "11:00", "end_time": "14:00" },
+        { "weekday": "friday", "capacity": 35, "start_time": "11:00", "end_time": "14:30" },
+        { "weekday": "saturday", "capacity": 40, "start_time": "10:30", "end_time": "15:00" },
+        { "weekday": "sunday", "capacity": 40, "start_time": "10:30", "end_time": "15:00" }
+      ]
+    },
+    {
+      "venue": "targaryen",
+      "name": "The Dragonlord's Table",
+      "description": "Flame-charred delicacies and spiced Valyrian wine, served at dusk as the last dragons wake. Fire and Blood — dine as the Targaryens of old.",
+      "turn_time_m": 120,
+      "advance_notice_m": 240,
+      "slot_interval_m": 30,
+      "grace_period_m": 20,
+      "openings": [
+        { "weekday": "tuesday", "capacity": 50, "start_time": "19:00", "end_time": "23:00" },
+        { "weekday": "wednesday", "capacity": 50, "start_time": "19:00", "end_time": "23:00" },
+        { "weekday": "thursday", "capacity": 50, "start_time": "19:00", "end_time": "23:00" },
+        { "weekday": "friday", "capacity": 55, "start_time": "19:00", "end_time": "23:30" },
+        { "weekday": "saturday", "capacity": 55, "start_time": "19:00", "end_time": "23:30" },
+        { "weekday": "sunday", "capacity": 50, "start_time": "18:30", "end_time": "22:30" }
+      ],
+      "overrides": [
+        { "dates": { "days_from_now_start": 6, "days_from_now_end": 7 }, "capacity": 70, "start_time": "18:00", "end_time": "23:59", "description": "Dragon's return gala" },
+        { "dates": { "month_day_start": "08-14", "month_day_end": "08-16", "year_offsets": [-1, 0, 1] }, "capacity": 60, "start_time": "18:30", "end_time": "23:30", "description": "Fire and Blood festival" },
+        { "dates": { "month_day_start": "12-24", "month_day_end": "12-26", "year_offsets": [-1, 0, 1] }, "capacity": 65, "start_time": "18:30", "end_time": "23:30", "description": "Longnight fires (Yule)" },
+        { "dates": { "month_day_start": "12-31", "month_day_end": "12-31", "year_offsets": [-1, 0, 1] }, "capacity": 75, "start_time": "18:30", "end_time": "23:59", "description": "Year's End on Dragonstone" }
+      ],
+      "closings": [
+        { "dates": { "days_from_now_start": 9, "days_from_now_end": 11 }, "description": "Dragonmont ash-fall" },
+        { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] }, "weekday": "monday", "description": "Closed every Monday (summer rest)" },
+        { "dates": { "month_day_start": "01-01", "month_day_end": "01-02", "year_offsets": [-1, 0, 1] }, "description": "Recovering from the flames" }
+      ]
+    },
+    {
+      "venue": "lannister",
+      "name": "A Lannister Luncheon",
+      "description": "Golden roasted capon, honeyed figs, and the finest Arbor gold. A Lannister always pays his debts — and always dines in splendour.",
+      "turn_time_m": 60,
+      "advance_notice_m": 120,
+      "slot_interval_m": 15,
+      "grace_period_m": 15,
+      "openings": [
+        { "weekday": "monday", "capacity": 40, "start_time": "12:30", "end_time": "15:00" },
+        { "weekday": "tuesday", "capacity": 40, "start_time": "12:30", "end_time": "15:00" },
+        { "weekday": "wednesday", "capacity": 40, "start_time": "12:30", "end_time": "15:00" },
+        { "weekday": "thursday", "capacity": 40, "start_time": "12:30", "end_time": "15:00" },
+        { "weekday": "friday", "capacity": 45, "start_time": "12:30", "end_time": "15:30" }
+      ]
+    },
+    {
+      "venue": "lannister",
+      "name": "The Rains of Castamere Supper",
+      "description": "An opulent feast of roast boar and spiced Dornish reds beneath the gold of Casterly Rock. Hear us roar, and let none leave the table hungry.",
+      "turn_time_m": 120,
+      "advance_notice_m": 240,
+      "slot_interval_m": 30,
+      "grace_period_m": 15,
+      "openings": [
+        { "weekday": "tuesday", "capacity": 55, "start_time": "19:00", "end_time": "23:00" },
+        { "weekday": "wednesday", "capacity": 55, "start_time": "19:00", "end_time": "23:00" },
+        { "weekday": "thursday", "capacity": 55, "start_time": "19:00", "end_time": "23:00" },
+        { "weekday": "friday", "capacity": 60, "start_time": "19:00", "end_time": "23:30" },
+        { "weekday": "saturday", "capacity": 60, "start_time": "19:00", "end_time": "23:30" },
+        { "weekday": "sunday", "capacity": 55, "start_time": "18:30", "end_time": "22:30" }
+      ],
+      "overrides": [
+        { "dates": { "days_from_now_start": 12, "days_from_now_end": 13 }, "capacity": 75, "start_time": "18:30", "end_time": "23:59", "description": "Royal banquet" },
+        { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] }, "weekday": "friday", "capacity": 65, "start_time": "18:00", "end_time": "23:59", "description": "Extended service every Friday (summer)" },
+        { "dates": { "month_day_start": "04-04", "month_day_end": "04-05", "year_offsets": [-1, 0, 1] }, "capacity": 65, "start_time": "18:30", "end_time": "23:00", "description": "Maiden's Day at Lannisport" },
+        { "dates": { "month_day_start": "12-24", "month_day_end": "12-26", "year_offsets": [-1, 0, 1] }, "capacity": 70, "start_time": "18:30", "end_time": "23:30", "description": "Casterly Rock Yule feast" },
+        { "dates": { "month_day_start": "12-31", "month_day_end": "12-31", "year_offsets": [-1, 0, 1] }, "capacity": 80, "start_time": "18:30", "end_time": "23:59", "description": "Golden Year's End" }
+      ],
+      "closings": [
+        { "dates": { "days_from_now_start": 3, "days_from_now_end": 4 }, "description": "Gold count audit" },
+        { "dates": { "month_day_start": "09-01", "month_day_end": "09-03", "year_offsets": [-1, 0, 1] }, "description": "Debt collection week" },
+        { "dates": { "month_day_start": "01-01", "month_day_end": "01-05", "year_offsets": [-1, 0, 1] }, "description": "Midwinter shutdown" }
+      ],
+      "capacity_overrides": [
+        { "dates": { "days_from_now_start": 5, "days_from_now_end": 8 }, "capacity_delta": 20, "description": "Overflow seating for a royal visit" }
+      ]
+    },
+    {
+      "venue": "nightswatch",
+      "name": "A Feast of Crows",
+      "description": "Cold gruel, hard bread, and a strip of bacon before the morning drills atop the Wall. Night gathers, and now my watch begins.",
+      "turn_time_m": 45,
+      "advance_notice_m": 60,
+      "slot_interval_m": 15,
+      "grace_period_m": 10,
+      "openings": [
+        { "weekday": "thursday", "capacity": 30, "start_time": "07:00", "end_time": "09:00" },
+        { "weekday": "friday", "capacity": 30, "start_time": "07:00", "end_time": "09:00" },
+        { "weekday": "saturday", "capacity": 30, "start_time": "07:00", "end_time": "09:00" },
+        { "weekday": "sunday", "capacity": 30, "start_time": "07:00", "end_time": "09:00" }
+      ]
+    },
+    {
+      "venue": "nightswatch",
+      "name": "Supper at Castle Black",
+      "description": "Thin stew, brown ale, and black bread shared in the common hall by the brothers who guard the realms of men. Simple fare for a sworn and solemn duty.",
+      "turn_time_m": 90,
+      "advance_notice_m": 180,
+      "slot_interval_m": 30,
+      "grace_period_m": 15,
+      "openings": [
+        { "weekday": "wednesday", "capacity": 45, "start_time": "18:00", "end_time": "22:00" },
+        { "weekday": "thursday", "capacity": 45, "start_time": "18:00", "end_time": "22:00" },
+        { "weekday": "friday", "capacity": 45, "start_time": "18:00", "end_time": "22:00" },
+        { "weekday": "saturday", "capacity": 45, "start_time": "18:00", "end_time": "22:00" },
+        { "weekday": "sunday", "capacity": 45, "start_time": "17:30", "end_time": "21:30" }
+      ],
+      "overrides": [
+        { "dates": { "month_day_start": "11-10", "month_day_end": "11-12", "year_offsets": [-1, 0, 1] }, "capacity": 55, "start_time": "17:30", "end_time": "22:30", "description": "Feast of the First Men" },
+        { "dates": { "month_day_start": "12-31", "month_day_end": "12-31", "year_offsets": [-1, 0, 1] }, "capacity": 60, "start_time": "17:30", "end_time": "23:30", "description": "Year's End watch feast" }
+      ],
+      "closings": [
+        { "dates": { "days_from_now_start": 2, "days_from_now_end": 3 }, "description": "Wildling raid on the Wall" },
+        { "dates": { "month_day_start": "12-21", "month_day_end": "12-23", "year_offsets": [-1, 0, 1] }, "description": "The Long Night — the Watch holds" },
+        { "dates": { "month_day_start": "04-04", "month_day_end": "04-05", "year_offsets": [-1, 0, 1] }, "weekday": "sunday", "description": "Closed Maiden's Day (Sunday)" }
+      ]
+    }
+  ]
+}

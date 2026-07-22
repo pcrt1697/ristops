@@ -1,6 +1,6 @@
 import { type MenuProps } from 'antd';
 import {
-  ClockCircleOutlined,
+  AppstoreOutlined,
   HomeOutlined,
   SettingOutlined,
   TeamOutlined,
@@ -13,14 +13,33 @@ import Sidebar from './Sidebar.tsx';
 export default function VenueSidebar({ venueId }: { venueId: string }) {
   const navigate = useNavigate();
   const resource = { type: ResourceType.Venue, id: venueId };
-  const { isAllowed: canEdit } = useCan(resource, 'venue:edit');
-  const { isAllowed: canRemove } = useCan(resource, 'venue:remove');
+  // TODO: this is a temporary flag
+  //  for the future: if a user has 'service:' permissions on a service and not on a venue,
+  //  he would not be able to see the item
+  const { isAllowed: canEditSettings } = useCan(
+    resource,
+    'venue:edit',
+    'venue:activate',
+    'venue:close',
+    'venue:disable',
+    'venue:enable',
+    'service:add',
+    'service:edit',
+    'service:remove',
+  );
+  const { isAllowed: canManageServices } = useCan(
+    resource,
+    'service:list',
+    'service:add',
+    'service:edit',
+    'service:remove',
+  );
   const { isAllowed: canManageAcl } = useCan(resource, 'acl:list');
 
   const go = (path: string) => () => void navigate(path);
 
   const manageChildren: MenuProps['items'] = [];
-  if (canEdit || canRemove) {
+  if (canEditSettings) {
     manageChildren.push({
       key: `/venues/${venueId}/settings`,
       icon: <SettingOutlined />,
@@ -28,12 +47,12 @@ export default function VenueSidebar({ venueId }: { venueId: string }) {
       onClick: go(`/venues/${venueId}/settings`),
     });
   }
-  if (canEdit) {
+  if (canManageServices) {
     manageChildren.push({
-      key: `/venues/${venueId}/schedule`,
-      icon: <ClockCircleOutlined />,
-      label: 'Schedule',
-      onClick: go(`/venues/${venueId}/schedule`),
+      key: `/venues/${venueId}/services`,
+      icon: <AppstoreOutlined />,
+      label: 'Services',
+      onClick: go(`/venues/${venueId}/services`),
     });
   }
   if (canManageAcl) {

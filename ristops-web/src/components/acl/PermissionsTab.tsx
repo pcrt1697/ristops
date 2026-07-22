@@ -63,7 +63,7 @@ export default function PermissionsTab() {
             <Card
               key={permission}
               size="default"
-              style={{ width: 300, display: 'flex', flexDirection: 'column' }}
+              style={{ width: '45%', display: 'flex', flexDirection: 'column' }}
               styles={{ body: { flex: 1 }, actions: { flexShrink: 0 } }}
               actions={[
                 <Button

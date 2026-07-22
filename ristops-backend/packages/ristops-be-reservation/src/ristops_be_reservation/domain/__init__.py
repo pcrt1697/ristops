@@ -1,14 +1,16 @@
 from ristops_be_reservation.domain.schedule.entities import (
-    OpeningEntity, OpeningOverrideEntity, ClosingEntity,
+    OpeningEntity, OpeningOverrideEntity, ServiceClosingEntity, CapacityOverrideEntity,
 )
 from ristops_be_reservation.domain.service.entities import ServiceEntity, ServiceOccurrenceEntity
-from ristops_be_reservation.domain.venue.entities import VenueEntity
+from ristops_be_reservation.domain.venue.entities import VenueEntity, VenueClosingEntity
 
 MODELS = (
     VenueEntity,
     ServiceEntity,
     OpeningEntity,
     OpeningOverrideEntity,
-    ClosingEntity,
+    ServiceClosingEntity,
+    CapacityOverrideEntity,
+    VenueClosingEntity,
     ServiceOccurrenceEntity,
 )

@@ -6,12 +6,14 @@ jobs integrate with the CLI and the rest of the platform.
 ## `demo seed`
 
 Populates a running stack with Game-of-Thrones-themed demo data by calling the real backend REST
-APIs (authn, venue, authz): it registers users, creates venues, and grants venue roles.
+APIs (authn, venue, reservation, authz): it registers users, creates venues, adds services to each
+venue, grants venue roles, and activates the venues.
 
 ```bash
 ristops demo seed \
   --users packages/ristops-batch-demo/demo-data/users.json \
   --venues packages/ristops-batch-demo/demo-data/venues.json \
+  --services packages/ristops-batch-demo/demo-data/services.json \
   --assignments packages/ristops-batch-demo/demo-data/assignments.json \
   --admin-password <admin_pwd>
 ```
@@ -22,12 +24,17 @@ Options:
 |-----------------------|---------------------|-----------------------------------------------|
 | `-u/--users`          |                     | Path to the users JSON file (required).       |
 | `-v/--venues`         |                     | Path to the venues JSON file (required).      |
+| `-s/--services`       |                     | Path to the services JSON file (required).    |
 | `-a/--assignments`    |                     | Path to the assignments JSON file (required). |
 | `-e/--admin-email`    |                     | Admin email (default `admin@ristops.com`).    |
 | `-p/--admin-password` | `RISTOPS_ADMIN_PWD` | Admin password (required).                    |
 
 Service base URLs are read from `BackendServiceSettings` (`RISTOPS_BE_AUTHN_URL`,
-`RISTOPS_BE_VENUE_URL`, `RISTOPS_BE_AUTHZ_URL`) and must include the `/api` prefix.
+`RISTOPS_BE_VENUE_URL`, `RISTOPS_BE_RESERVATION_URL`, `RISTOPS_BE_AUTHZ_URL`) and must include the
+`/api` prefix.
+
+Venues are created in `PENDING` and only activated after their services exist — a venue cannot be
+activated without at least one service. A venue with no entry in `services.json` is left `PENDING`.
 
 ### Config files (split by domain)
 
@@ -37,10 +44,58 @@ Service base URLs are read from `BackendServiceSettings` (`RISTOPS_BE_AUTHN_URL`
 { "users": [ { "username": "the_headless", "email": "...", "display_name": "Eddard Stark" } ] }
 ```
 
-`venues.json` (venue) — `key` is a symbolic reference used by assignments:
+`venues.json` (venue) — `key` is a symbolic reference used by services and assignments. Optional
+`closings` are **venue-wide** (close every service for a date range, same `dates` / optional
+`weekday` shape as service closings), seeded via be-reservation's `/venues/{id}/closings`:
 
 ```json
-{ "venues": [ { "key": "stark", "name": "House Stark", "address": "...", "description": "..." } ] }
+{ "venues": [ { "key": "stark", "name": "House Stark", "address": "...", "description": "...",
+  "closings": [ { "dates": { "month_day_start": "01-15", "month_day_end": "02-05",
+    "year_offsets": [-1, 0, 1] }, "description": "Deep winter — Winterfell rests" } ] } ] }
+```
+
+`services.json` (reservation) — adds a service to a venue, referenced by `key`; all duration fields
+are in minutes. Optional `openings` set the service's weekly hours (open days); weekdays must be
+unique and lowercase, times are `HH:MM`:
+
+```json
+{ "services": [ { "venue": "stark", "name": "The Northern Table", "description": "...",
+  "turn_time_m": 60, "advance_notice_m": 120, "slot_interval_m": 15, "grace_period_m": 15,
+  "openings": [ { "weekday": "monday", "capacity": 40, "start_time": "12:00", "end_time": "15:00" } ] } ] }
+```
+
+Optional `overrides` (special hours/capacity for a date range) and `closings` (service closed) add
+calendar exceptions. Their dates are **materialized at seed time** so they land near "now": use
+`dates.days_from_now_start/end` for a single instance relative to today, or
+`dates.month_day_start/end` (`"MM-DD"`) with `dates.year_offsets` (relative to the current year,
+e.g. `[-1, 0, 1]` for previous/current/next) for an annual event:
+
+Both accept an optional lowercase `weekday` that scopes the exception to a single weekday within
+the range (null/omitted = every day) — e.g. "closed every Monday all summer":
+
+```json
+"overrides": [
+  { "dates": { "days_from_now_start": 11, "days_from_now_end": 13 },
+    "capacity": 80, "start_time": "18:00", "end_time": "23:30", "description": "Harvest feast" },
+  { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] },
+    "weekday": "friday", "capacity": 65, "start_time": "18:00", "end_time": "23:59",
+    "description": "Extended service every Friday (summer)" }
+],
+"closings": [
+  { "dates": { "days_from_now_start": 4, "days_from_now_end": 5 }, "description": "Kingsmoot recess" },
+  { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] },
+    "weekday": "monday", "description": "Closed every Monday (summer rest)" }
+]
+```
+
+Optional `capacity_overrides` add a signed seat delta on top of the resolved capacity for a date
+range (same `dates` / optional `weekday` shape) — e.g. a summer garden that adds seats:
+
+```json
+"capacity_overrides": [
+  { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] },
+    "capacity_delta": 30, "description": "Godswood garden (summer)" }
+]
 ```
 
 `assignments.json` (authz) — grants a role to users on a venue, referenced by key/username:
@@ -75,8 +130,9 @@ Equivalent manual steps:
 ```bash
 ristops sql-database nuke be-authn -f
 ristops sql-database nuke be-venue -f
+ristops sql-database nuke be-reservation -f
 ristops nuke-authz -f
 ristops seed-authn -p <admin_pwd>
 ristops seed-authz
-ristops demo seed --users ... --venues ... --assignments ... --admin-password <admin_pwd>
+ristops demo seed --users ... --venues ... --services ... --assignments ... --admin-password <admin_pwd>
 ```

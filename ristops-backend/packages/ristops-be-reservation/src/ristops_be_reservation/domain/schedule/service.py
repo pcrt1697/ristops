@@ -3,20 +3,75 @@ from http import HTTPStatus
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select, delete, ScalarResult
+from sqlalchemy import select, delete, ScalarResult, ColumnElement
 
+from ristops_be_reservation.domain.models import normalize_weekdays
 from ristops_be_reservation.domain.schedule.entities import (
-    OpeningEntity, OpeningOverrideEntity, ClosingEntity,
+    OpeningEntity, OpeningOverrideEntity, ServiceClosingEntity, CapacityOverrideEntity,
 )
 from ristops_be_reservation.domain.schedule.schema import (
     OpeningsUpsertRequest, OpeningOverrideCreateRequest,
-    OpeningOverrideUpdateRequest, ClosingCreateRequest, ClosingUpdateRequest,
+    OpeningOverrideUpdateRequest, ServiceClosingCreateRequest, ServiceClosingUpdateRequest,
+    OpeningOverrideResponse, OpeningOverrideSearchQuery,
+    ServiceClosingResponse, ServiceClosingSearchQuery, DateRangeFilter,
+    CapacityOverrideCreateRequest, CapacityOverrideUpdateRequest,
+    CapacityOverrideResponse, CapacityOverrideSearchQuery,
 )
 from ristops_be_reservation.domain.service.service import find_service_or_throw
-from ristops_be_reservation.domain.venue.service import ensure_venue_accepts_config_changes
+from ristops_be_reservation.domain.venue.service import (
+    ensure_venue_accepts_config_changes,
+)
+from ristops_lib_core.schema.pagination import Page
 from ristops_lib_sql.engine import get_sql_session
+from ristops_lib_sql.search import PaginatedSearchQueryExecutor
 
 _logger = logging.getLogger(__name__)
+
+
+def _date_range_conditions(
+        entity: type[OpeningOverrideEntity] | type[ServiceClosingEntity] | type[CapacityOverrideEntity],
+        service_id: UUID,
+        date_filter: DateRangeFilter,
+) -> list[ColumnElement[bool]]:
+    """Scope to the service and overlap the `[date_from, date_to]` window (either bound
+    optional). Overlap = the item's period covers at least one day of the window."""
+    conditions: list[ColumnElement[bool]] = [entity.service_id == service_id]
+    if date_filter.date_from is not None:
+        conditions.append(entity.date_end >= date_filter.date_from)
+    if date_filter.date_to is not None:
+        conditions.append(entity.date_start <= date_filter.date_to)
+    return conditions
+
+
+_override_search_executor = PaginatedSearchQueryExecutor[
+    OpeningOverrideSearchQuery, UUID, OpeningOverrideEntity, OpeningOverrideResponse
+](
+    entity_class=OpeningOverrideEntity,
+    response_class=OpeningOverrideResponse,
+    condition_builder=lambda query, service_id: _date_range_conditions(
+        OpeningOverrideEntity, service_id, query
+    ),
+)
+
+_service_closing_search_executor = PaginatedSearchQueryExecutor[
+    ServiceClosingSearchQuery, UUID, ServiceClosingEntity, ServiceClosingResponse
+](
+    entity_class=ServiceClosingEntity,
+    response_class=ServiceClosingResponse,
+    condition_builder=lambda query, service_id: _date_range_conditions(
+        ServiceClosingEntity, service_id, query
+    ),
+)
+
+_capacity_override_search_executor = PaginatedSearchQueryExecutor[
+    CapacityOverrideSearchQuery, UUID, CapacityOverrideEntity, CapacityOverrideResponse
+](
+    entity_class=CapacityOverrideEntity,
+    response_class=CapacityOverrideResponse,
+    condition_builder=lambda query, service_id: _date_range_conditions(
+        CapacityOverrideEntity, service_id, query
+    ),
+)
 
 
 async def upsert_service_openings(
@@ -87,29 +142,38 @@ async def find_service_opening_override_or_throw(
     return override
 
 
-async def create_service_opening_override(
+async def create_service_opening_overrides(
         service_id: UUID,
         request: OpeningOverrideCreateRequest,
-) -> OpeningOverrideEntity:
-    """Create a new opening override for a service. Overrides are one-off special cases, so
-    unlike openings this is a plain create, not a bulk reconcile."""
+) -> list[OpeningOverrideEntity]:
+    """Create one or more opening overrides for a service in a single transaction — one row per
+    weekday in ``request.weekdays`` (normalized: empty/all-seven collapses to a single every-day
+    row). Overrides are one-off special cases, so unlike openings this is a plain bulk create,
+    not a reconcile."""
     service = await find_service_or_throw(service_id)
     await ensure_venue_accepts_config_changes(service.venue_id)
     session = get_sql_session()
-    override = OpeningOverrideEntity(
-        service_id=service_id,
-        date_start=request.date_start,
-        date_end=request.date_end,
-        capacity=request.capacity,
-        start_time=request.start_time,
-        end_time=request.end_time,
-        description=request.description,
-    )
-    session.add(override)
+    overrides = [
+        OpeningOverrideEntity(
+            service_id=service_id,
+            date_start=request.date_start,
+            date_end=request.date_end,
+            weekday=weekday,
+            capacity=request.capacity,
+            start_time=request.start_time,
+            end_time=request.end_time,
+            description=request.description,
+        )
+        for weekday in normalize_weekdays(request.weekdays)
+    ]
+    session.add_all(overrides)
     await session.flush()
-    await session.refresh(override)
-    _logger.info("Created opening override %s for service %s", override.id, service_id)
-    return override
+    for override in overrides:
+        await session.refresh(override)
+    _logger.info(
+        "Created %d opening override(s) for service %s", len(overrides), service_id
+    )
+    return overrides
 
 
 async def update_service_opening_override(
@@ -127,6 +191,9 @@ async def update_service_opening_override(
         override.date_start = request.date_start
     if "date_end" in fields_to_update and request.date_end is not None:
         override.date_end = request.date_end
+    if "weekday" in fields_to_update:
+        # Nullable: an explicit null clears the weekday scope (back to every day).
+        override.weekday = request.weekday
     if "capacity" in fields_to_update and request.capacity is not None:
         override.capacity = request.capacity
     if "start_time" in fields_to_update and request.start_time is not None:
@@ -153,26 +220,22 @@ async def remove_service_opening_override(service_id: UUID, override_id: UUID) -
     _logger.info("Deleted opening override %s for service %s", override_id, service_id)
 
 
-async def list_service_opening_overrides(
+async def search_service_opening_overrides(
         service_id: UUID,
-        include_deleted: bool = False,
-) -> list[OpeningOverrideEntity]:
-    """Return all opening overrides for a service."""
-    await find_service_or_throw(service_id, include_deleted=include_deleted)
-    session = get_sql_session()
-    result: ScalarResult[OpeningOverrideEntity] = await session.scalars(
-        select(OpeningOverrideEntity).where(OpeningOverrideEntity.service_id == service_id)
-    )
-    return list(result.all())
+        query: OpeningOverrideSearchQuery,
+) -> Page[OpeningOverrideResponse]:
+    """Return a paginated, date-range-filtered page of opening overrides for a service."""
+    await find_service_or_throw(service_id, include_deleted=query.include_deleted)
+    return await _override_search_executor.execute(query, service_id)
 
 
-async def find_service_closing_or_throw(service_id: UUID, closing_id: UUID) -> ClosingEntity:
+async def find_service_closing_or_throw(service_id: UUID, closing_id: UUID) -> ServiceClosingEntity:
     """Return the closing with the given ID under the given service, or raise HTTP 404."""
     session = get_sql_session()
-    result: ScalarResult[ClosingEntity] = await session.scalars(
-        select(ClosingEntity).where(
-            ClosingEntity.id == closing_id,
-            ClosingEntity.service_id == service_id,
+    result: ScalarResult[ServiceClosingEntity] = await session.scalars(
+        select(ServiceClosingEntity).where(
+            ServiceClosingEntity.id == closing_id,
+            ServiceClosingEntity.service_id == service_id,
         ).limit(1)
     )
     closing = result.one_or_none()
@@ -181,33 +244,40 @@ async def find_service_closing_or_throw(service_id: UUID, closing_id: UUID) -> C
     return closing
 
 
-async def create_service_closing(
+async def create_service_closings(
         service_id: UUID,
-        request: ClosingCreateRequest,
-) -> ClosingEntity:
-    """Create a new closing for a service. Closings are one-off special cases, so unlike
-    openings this is a plain create, not a bulk reconcile."""
+        request: ServiceClosingCreateRequest,
+) -> list[ServiceClosingEntity]:
+    """Create one or more closings for a service in a single transaction — one row per weekday
+    in ``request.weekdays`` (normalized: empty/all-seven collapses to a single every-day row).
+    Closings are one-off special cases, so unlike openings this is a plain bulk create, not a
+    reconcile."""
     service = await find_service_or_throw(service_id)
     await ensure_venue_accepts_config_changes(service.venue_id)
     session = get_sql_session()
-    closing = ClosingEntity(
-        service_id=service_id,
-        date_start=request.date_start,
-        date_end=request.date_end,
-        description=request.description,
-    )
-    session.add(closing)
+    closings = [
+        ServiceClosingEntity(
+            service_id=service_id,
+            date_start=request.date_start,
+            date_end=request.date_end,
+            weekday=weekday,
+            description=request.description,
+        )
+        for weekday in normalize_weekdays(request.weekdays)
+    ]
+    session.add_all(closings)
     await session.flush()
-    await session.refresh(closing)
-    _logger.info("Created closing %s for service %s", closing.id, service_id)
-    return closing
+    for closing in closings:
+        await session.refresh(closing)
+    _logger.info("Created %d closing(s) for service %s", len(closings), service_id)
+    return closings
 
 
 async def update_service_closing(
         service_id: UUID,
         closing_id: UUID,
-        request: ClosingUpdateRequest,
-) -> ClosingEntity:
+        request: ServiceClosingUpdateRequest,
+) -> ServiceClosingEntity:
     """Update a closing. Only fields present in the request body are modified."""
     closing = await find_service_closing_or_throw(service_id, closing_id)
     service = await find_service_or_throw(service_id)
@@ -218,6 +288,9 @@ async def update_service_closing(
         closing.date_start = request.date_start
     if "date_end" in fields_to_update and request.date_end is not None:
         closing.date_end = request.date_end
+    if "weekday" in fields_to_update:
+        # Nullable: an explicit null clears the weekday scope (back to every day).
+        closing.weekday = request.weekday
     if "description" in fields_to_update:
         closing.description = request.description
 
@@ -238,11 +311,108 @@ async def remove_service_closing(service_id: UUID, closing_id: UUID) -> None:
     _logger.info("Deleted closing %s for service %s", closing_id, service_id)
 
 
-async def list_service_closings(service_id: UUID, include_deleted: bool = False) -> list[ClosingEntity]:
-    """Return all closings for a service."""
-    await find_service_or_throw(service_id, include_deleted=include_deleted)
+async def search_service_closings(
+        service_id: UUID,
+        query: ServiceClosingSearchQuery,
+) -> Page[ServiceClosingResponse]:
+    """Return a paginated, date-range-filtered page of closings for a service."""
+    await find_service_or_throw(service_id, include_deleted=query.include_deleted)
+    return await _service_closing_search_executor.execute(query, service_id)
+
+
+async def find_service_capacity_override_or_throw(
+        service_id: UUID,
+        capacity_override_id: UUID,
+) -> CapacityOverrideEntity:
+    """Return the capacity override with the given ID under the given service, or raise HTTP 404."""
     session = get_sql_session()
-    result: ScalarResult[ClosingEntity] = await session.scalars(
-        select(ClosingEntity).where(ClosingEntity.service_id == service_id)
+    result: ScalarResult[CapacityOverrideEntity] = await session.scalars(
+        select(CapacityOverrideEntity).where(
+            CapacityOverrideEntity.id == capacity_override_id,
+            CapacityOverrideEntity.service_id == service_id,
+        ).limit(1)
     )
-    return list(result.all())
+    capacity_override = result.one_or_none()
+    if capacity_override is None:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Capacity override not found")
+    return capacity_override
+
+
+async def create_service_capacity_overrides(
+        service_id: UUID,
+        request: CapacityOverrideCreateRequest,
+) -> list[CapacityOverrideEntity]:
+    """Create one or more capacity overrides for a service in a single transaction — one row per
+    weekday in ``request.weekdays`` (normalized: empty/all-seven collapses to a single every-day
+    row). A one-off seat delta, so a plain bulk create."""
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
+    session = get_sql_session()
+    capacity_overrides = [
+        CapacityOverrideEntity(
+            service_id=service_id,
+            date_start=request.date_start,
+            date_end=request.date_end,
+            weekday=weekday,
+            capacity_delta=request.capacity_delta,
+            description=request.description,
+        )
+        for weekday in normalize_weekdays(request.weekdays)
+    ]
+    session.add_all(capacity_overrides)
+    await session.flush()
+    for capacity_override in capacity_overrides:
+        await session.refresh(capacity_override)
+    _logger.info(
+        "Created %d capacity override(s) for service %s", len(capacity_overrides), service_id
+    )
+    return capacity_overrides
+
+
+async def update_service_capacity_override(
+        service_id: UUID,
+        capacity_override_id: UUID,
+        request: CapacityOverrideUpdateRequest,
+) -> CapacityOverrideEntity:
+    """Update a capacity override. Only fields present in the request body are modified."""
+    capacity_override = await find_service_capacity_override_or_throw(service_id, capacity_override_id)
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
+    fields_to_update = request.model_fields_set
+
+    if "date_start" in fields_to_update and request.date_start is not None:
+        capacity_override.date_start = request.date_start
+    if "date_end" in fields_to_update and request.date_end is not None:
+        capacity_override.date_end = request.date_end
+    if "weekday" in fields_to_update:
+        # Nullable: an explicit null clears the weekday scope (back to every day).
+        capacity_override.weekday = request.weekday
+    if "capacity_delta" in fields_to_update and request.capacity_delta is not None:
+        capacity_override.capacity_delta = request.capacity_delta
+    if "description" in fields_to_update:
+        capacity_override.description = request.description
+
+    session = get_sql_session()
+    await session.flush()
+    await session.refresh(capacity_override)
+    _logger.info("Updated capacity override %s for service %s", capacity_override_id, service_id)
+    return capacity_override
+
+
+async def remove_service_capacity_override(service_id: UUID, capacity_override_id: UUID) -> None:
+    """Delete a capacity override. Raises HTTP 404 if not found."""
+    capacity_override = await find_service_capacity_override_or_throw(service_id, capacity_override_id)
+    service = await find_service_or_throw(service_id)
+    await ensure_venue_accepts_config_changes(service.venue_id)
+    session = get_sql_session()
+    await session.delete(capacity_override)
+    _logger.info("Deleted capacity override %s for service %s", capacity_override_id, service_id)
+
+
+async def search_service_capacity_overrides(
+        service_id: UUID,
+        query: CapacityOverrideSearchQuery,
+) -> Page[CapacityOverrideResponse]:
+    """Return a paginated, date-range-filtered page of capacity overrides for a service."""
+    await find_service_or_throw(service_id, include_deleted=query.include_deleted)
+    return await _capacity_override_search_executor.execute(query, service_id)

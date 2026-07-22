@@ -41,6 +41,41 @@ class ServiceCreationRequest(BaseModel):
     )
 
 
+class ServiceUpdateRequest(BaseModel):
+    """Request body for updating an existing service. Unset fields are not modified."""
+
+    name: str | None = Field(
+        default=None,
+        description="New name of the service.",
+        max_length=120,
+    )
+    description: str | None = Field(
+        default=None,
+        description="New description of the service.",
+        max_length=1000,
+    )
+    turn_time_m: int | None = Field(
+        default=None,
+        description="New reservation duration, in minutes.",
+        gt=0,
+    )
+    advance_notice_m: int | None = Field(
+        default=None,
+        description="New minimum notice required before a reservation slot, in minutes.",
+        ge=0,
+    )
+    slot_interval_m: int | None = Field(
+        default=None,
+        description="New interval between reservation slots, in minutes.",
+        gt=0,
+    )
+    grace_period_m: int | None = Field(
+        default=None,
+        description="New minutes past a reservation's start time before it may be marked as a no-show.",
+        ge=0,
+    )
+
+
 class ServiceResponse(BaseModel):
     """Response body representing a service."""
 

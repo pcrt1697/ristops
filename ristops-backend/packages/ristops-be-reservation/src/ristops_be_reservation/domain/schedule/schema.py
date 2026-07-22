@@ -1,10 +1,44 @@
 from datetime import time, date
+from enum import StrEnum
+from typing import ClassVar
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
 from ristops_be_reservation.domain.models import Weekday
 from ristops_lib_core.pydantic.types import ObjectUUID, CreatedAt, UpdatedAt
+from ristops_lib_core.schema.pagination import SearchQuery
+
+
+class DateRangeFilter(BaseModel):
+    """Filter a date-ranged resource by overlap with a `[date_from, date_to]` window.
+
+    An item with period `[date_start, date_end]` matches when it covers at least one day of
+    the window: `date_end >= date_from AND date_start <= date_to`. Either bound may be omitted
+    to leave that side open. The intended use case is a month view, where the window is the
+    first and last day of the selected month.
+    """
+
+    date_from: date | None = Field(
+        default=None,
+        description="Include items whose period ends on or after this date (window start).",
+    )
+    date_to: date | None = Field(
+        default=None,
+        description="Include items whose period starts on or before this date (window end).",
+    )
+
+
+class ServiceScheduleQuery(SearchQuery, DateRangeFilter):
+    """Shared base for the paginated schedule list queries (opening overrides, closings):
+    pagination + sort + date-range overlap, plus the deleted-service gate. Concrete
+    subclasses only set ``sort_field_enum``. Exposed as `filter.*` / `page` / `sort` params.
+    """
+
+    include_deleted: bool = Field(
+        default=False,
+        description="Return results even if the parent service has been deleted.",
+    )
 
 
 class OpeningUpsertRequest(BaseModel):
@@ -60,10 +94,18 @@ class OpeningsResponse(BaseModel):
 
 
 class OpeningOverrideCreateRequest(BaseModel):
-    """Request body for creating a new opening override."""
+    """Request body for creating a new opening override. Bulk: one row is created per weekday
+    given in ``weekdays`` (in a single transaction); omitted/empty, or all seven weekdays,
+    collapses to a single every-day row (``weekday`` null) — the same normalization applied
+    for a single-weekday request too."""
 
     date_start: date = Field(description="First date of the override period (inclusive).")
     date_end: date = Field(description="Last date of the override period (inclusive).")
+    weekdays: list[Weekday] | None = Field(
+        default=None,
+        description="Weekdays to scope to; provide multiple to create one row per weekday. "
+                    "Omit, or include all 7, for every day.",
+    )
     capacity: int = Field(description="Overridden maximum number of reservable seats.", gt=0)
     start_time: time = Field(description="Overridden opening time.")
     end_time: time = Field(description="Overridden closing time.")
@@ -84,6 +126,10 @@ class OpeningOverrideUpdateRequest(BaseModel):
     date_end: date | None = Field(
         default=None,
         description="New last date of the override period (inclusive).",
+    )
+    weekday: Weekday | None = Field(
+        default=None,
+        description="New weekday the override applies to; null means every day in the range.",
     )
     capacity: int | None = Field(
         default=None,
@@ -106,6 +152,10 @@ class OpeningOverrideResponse(BaseModel):
     service_id: UUID = Field(description="Identifier of the service this override belongs to.")
     date_start: date = Field(description="First date of the override period (inclusive).")
     date_end: date = Field(description="Last date of the override period (inclusive).")
+    weekday: Weekday | None = Field(
+        default=None,
+        description="Weekday the override applies to within the range; null means every day.",
+    )
     capacity: int = Field(description="Overridden maximum number of reservable seats.")
     start_time: time = Field(description="Overridden opening time.")
     end_time: time = Field(description="Overridden closing time.")
@@ -114,17 +164,33 @@ class OpeningOverrideResponse(BaseModel):
     updated_at: UpdatedAt
 
 
-class OpeningOverridesResponse(BaseModel):
-    """Response body listing a service's opening overrides."""
+class OpeningOverrideSortField(StrEnum):
+    """Fields an opening-override search may be sorted by."""
 
-    opening_overrides: list[OpeningOverrideResponse]
+    DATE_START = "date_start"
+    DATE_END = "date_end"
+    CREATED_AT = "created_at"
+    ID = "id"
 
 
-class ClosingCreateRequest(BaseModel):
-    """Request body for creating a new closing."""
+class OpeningOverrideSearchQuery(ServiceScheduleQuery):
+    """Paginated, sorted, date-range-filtered opening-override search query."""
+
+    sort_field_enum: ClassVar[type[StrEnum]] = OpeningOverrideSortField
+
+
+class ServiceClosingCreateRequest(BaseModel):
+    """Request body for creating a new closing. Bulk: one row is created per weekday given in
+    ``weekdays`` (in a single transaction); omitted/empty, or all seven weekdays, collapses to
+    a single every-day row (``weekday`` null)."""
 
     date_start: date = Field(description="First date of the closing period (inclusive).")
     date_end: date = Field(description="Last date of the closing period (inclusive).")
+    weekdays: list[Weekday] | None = Field(
+        default=None,
+        description="Weekdays to scope to; provide multiple to create one row per weekday. "
+                    "Omit, or include all 7, for every day.",
+    )
     description: str | None = Field(
         default=None,
         description="Description of this closing.",
@@ -132,7 +198,7 @@ class ClosingCreateRequest(BaseModel):
     )
 
 
-class ClosingUpdateRequest(BaseModel):
+class ServiceClosingUpdateRequest(BaseModel):
     """Request body for updating a closing. Unset fields are not modified."""
 
     date_start: date | None = Field(
@@ -143,6 +209,10 @@ class ClosingUpdateRequest(BaseModel):
         default=None,
         description="New last date of the closing period (inclusive).",
     )
+    weekday: Weekday | None = Field(
+        default=None,
+        description="New weekday the closing applies to; null means every day in the range.",
+    )
     description: str | None = Field(
         default=None,
         description="New description of this closing.",
@@ -150,19 +220,112 @@ class ClosingUpdateRequest(BaseModel):
     )
 
 
-class ClosingResponse(BaseModel):
+class ServiceClosingResponse(BaseModel):
     """Response body representing a service closing."""
 
     id: ObjectUUID
     service_id: UUID = Field(description="Identifier of the service this closing belongs to.")
     date_start: date = Field(description="First date of the closing period (inclusive).")
     date_end: date = Field(description="Last date of the closing period (inclusive).")
+    weekday: Weekday | None = Field(
+        default=None,
+        description="Weekday the closing applies to within the range; null means every day.",
+    )
     description: str | None = Field(default=None, description="Description of this closing.")
     created_at: CreatedAt
     updated_at: UpdatedAt
 
 
-class ClosingsResponse(BaseModel):
-    """Response body listing a service's closings."""
+class ServiceClosingSortField(StrEnum):
+    """Fields a service-closing search may be sorted by."""
 
-    closings: list[ClosingResponse]
+    DATE_START = "date_start"
+    DATE_END = "date_end"
+    CREATED_AT = "created_at"
+    ID = "id"
+
+
+class ServiceClosingSearchQuery(ServiceScheduleQuery):
+    """Paginated, sorted, date-range-filtered service-closing search query."""
+
+    sort_field_enum: ClassVar[type[StrEnum]] = ServiceClosingSortField
+
+
+class CapacityOverrideCreateRequest(BaseModel):
+    """Request body for creating a new capacity override. Bulk: one row is created per weekday
+    given in ``weekdays`` (in a single transaction); omitted/empty, or all seven weekdays,
+    collapses to a single every-day row (``weekday`` null)."""
+
+    date_start: date = Field(description="First date of the override period (inclusive).")
+    date_end: date = Field(description="Last date of the override period (inclusive).")
+    weekdays: list[Weekday] | None = Field(
+        default=None,
+        description="Weekdays to scope to; provide multiple to create one row per weekday. "
+                    "Omit, or include all 7, for every day.",
+    )
+    capacity_delta: int = Field(
+        description="Signed change to the resolved seat count (e.g. +30 for a garden).",
+    )
+    description: str | None = Field(
+        default=None,
+        description="Description of this capacity override.",
+        max_length=1000,
+    )
+
+
+class CapacityOverrideUpdateRequest(BaseModel):
+    """Request body for updating a capacity override. Unset fields are not modified."""
+
+    date_start: date | None = Field(
+        default=None,
+        description="New first date of the override period (inclusive).",
+    )
+    date_end: date | None = Field(
+        default=None,
+        description="New last date of the override period (inclusive).",
+    )
+    weekday: Weekday | None = Field(
+        default=None,
+        description="New weekday the override applies to; null means every day in the range.",
+    )
+    capacity_delta: int | None = Field(
+        default=None,
+        description="New signed change to the resolved seat count.",
+    )
+    description: str | None = Field(
+        default=None,
+        description="New description of this capacity override.",
+        max_length=1000,
+    )
+
+
+class CapacityOverrideResponse(BaseModel):
+    """Response body representing a service capacity override."""
+
+    id: ObjectUUID
+    service_id: UUID = Field(description="Identifier of the service this override belongs to.")
+    date_start: date = Field(description="First date of the override period (inclusive).")
+    date_end: date = Field(description="Last date of the override period (inclusive).")
+    weekday: Weekday | None = Field(
+        default=None,
+        description="Weekday the override applies to within the range; null means every day.",
+    )
+    capacity_delta: int = Field(description="Signed change to the resolved seat count.")
+    description: str | None = Field(default=None, description="Description of this capacity override.")
+    created_at: CreatedAt
+    updated_at: UpdatedAt
+
+
+class CapacityOverrideSortField(StrEnum):
+    """Fields a capacity-override search may be sorted by."""
+
+    DATE_START = "date_start"
+    DATE_END = "date_end"
+    CREATED_AT = "created_at"
+    ID = "id"
+
+
+class CapacityOverrideSearchQuery(ServiceScheduleQuery):
+    """Paginated, sorted, date-range-filtered capacity-override search query."""
+
+    sort_field_enum: ClassVar[type[StrEnum]] = CapacityOverrideSortField

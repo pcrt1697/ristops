@@ -6,6 +6,7 @@ from fastapi import FastAPI, APIRouter, Depends
 
 from ristops_be_reservation.domain.schedule.routers import schedule_router
 from ristops_be_reservation.domain.service.routers import service_router
+from ristops_be_reservation.domain.venue.routers import venue_closing_router
 from ristops_be_reservation.domain.venue.service import on_venue_event
 from ristops_be_reservation.services.authz import is_authorized
 from ristops_be_reservation.services.http import authn_client, authz_client
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     api_router = APIRouter(prefix="/api")
     api_router.include_router(service_router)
     api_router.include_router(schedule_router)
+    api_router.include_router(venue_closing_router)
     app.include_router(api_router)
 
     public_registry = PublicRoutesRegistry(app)

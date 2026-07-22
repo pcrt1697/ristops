@@ -16,6 +16,9 @@ class BackendServiceSettings(BaseServiceSettings):
     authz_url: str = Field(
         description="The authorization service url.",
     )
+    reservation_url: str = Field(
+        description="The reservation service url.",
+    )
 
 
 class ResourceLifecycleProducerSettings(BaseRedisProducerSettings):

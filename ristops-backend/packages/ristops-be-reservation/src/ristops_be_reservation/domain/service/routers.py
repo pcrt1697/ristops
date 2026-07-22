@@ -6,10 +6,10 @@ from fastapi import APIRouter, Query
 from fastapi.params import Path
 
 from ristops_be_reservation.domain.service.schema import (
-    ServiceCreationRequest, ServiceResponse, ServicesResponse, ServiceListQuery,
+    ServiceCreationRequest, ServiceUpdateRequest, ServiceResponse, ServicesResponse, ServiceListQuery,
 )
 from ristops_be_reservation.domain.service.service import (
-    create_service, find_service_or_throw, remove_service, list_services,
+    create_service, find_service_or_throw, remove_service, list_services, update_service,
 )
 from ristops_lib_be.authz.policy import (
     policy, BaseResourceResolver, Policy, resolve_body_attribute, resolve_query_attribute,
@@ -82,6 +82,26 @@ async def get(
     """Return a service by ID. Authorized against the service itself, inheriting grants from
     its venue via the ReBAC hierarchy."""
     service = await find_service_or_throw(service_id, include_deleted=include_deleted)
+    return ServiceResponse.model_validate(service, from_attributes=True)
+
+
+@service_router.patch(
+    "/{service_id}",
+    response_model=ServiceResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
+        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+    },
+)
+@policy(Policy(_service_path_resolver, "service:edit"))
+@sql_transactional
+async def update(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        request: ServiceUpdateRequest,
+) -> ServiceResponse:
+    """Update a service. Only fields present in the request body are modified. Authorized
+    against the service itself."""
+    service = await update_service(service_id, request)
     return ServiceResponse.model_validate(service, from_attributes=True)
 
 

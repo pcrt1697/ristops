@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Protocol
 from typing import Any
 
 import strawberry
@@ -17,6 +17,14 @@ async def resolve_get_venue(
 ) -> Venue:
     venue = await find_venue(venue_id)
     return Venue.from_dict(venue)
+
+
+class VenueIdAware(Protocol):
+    venue_id: str
+
+
+async def resolve_venue(root: VenueIdAware, _: strawberry.Info) -> Venue:
+    return await resolve_get_venue(root.venue_id)
 
 
 async def resolve_create_venue(
@@ -67,7 +75,8 @@ async def resolve_disable_venue(
 async def resolve_enable_venue(
         venue_id: EntityId
 ) -> Venue:
-    """Re-enable a venue: app-admin action, valid only from DISABLED."""
+    """Re-enable a venue: app-admin action, valid only from DISABLED. Lands on PENDING — the
+    owner must still activate it, which requires at least one service configured."""
     venue = await perform_venue_action(venue_id, "enable")
     return Venue.from_dict(venue)
 
@@ -245,5 +254,7 @@ class VenueMutation:
     )
     enable_venue = strawberry.mutation(
         resolver=resolve_enable_venue,
-        description="Re-enable a venue: app-admin action, valid only from DISABLED.",
+        description="Re-enable a venue: app-admin action, valid only from DISABLED. Lands on "
+                    "PENDING — the owner must still activate it, which requires at least one "
+                    "service configured.",
     )

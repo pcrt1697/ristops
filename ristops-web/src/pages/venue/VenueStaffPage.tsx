@@ -13,7 +13,7 @@ import {
   Tooltip,
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   useCan,
   useRevokeAccess,
@@ -23,7 +23,7 @@ import {
   ResourceType,
   type SearchResourceGrantsQuery,
 } from '../../services/graphql/graphql.ts';
-import { useDebounced } from '../../commons/hooks.ts';
+import { useDebounced, useSearchParamFilters } from '../../commons/hooks.ts';
 import { orNull } from '../../commons/utils.ts';
 import AssignVenueRoleModal from '../../components/venue/AssignVenueRoleModal.tsx';
 import RoleDetailDrawer from '../../components/acl/RoleDetailDrawer.tsx';
@@ -43,7 +43,7 @@ export default function VenueStaffPage() {
   const { venueId = '' } = useParams<{ venueId: string }>();
   const [assignOpen, setAssignOpen] = useState(false);
   const [selected, setSelected] = useState<Selected | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { get, setFilter, page, setPage } = useSearchParamFilters();
 
   const venue = { type: ResourceType.Venue, id: venueId };
   const { isAllowed, isLoading: isLoadingCan } = useCan(venue, 'acl:list');
@@ -54,33 +54,10 @@ export default function VenueStaffPage() {
   const { isAllowed: canAssign } = useCan(venue, 'acl:add');
   const { isAllowed: canRevoke } = useCan(venue, 'acl:remove');
 
-  const username = searchParams.get('username') ?? '';
-  const displayName = searchParams.get('displayName') ?? '';
-  const roleName = searchParams.get('roleName') ?? '';
-  const hideInherited = searchParams.get('hideInherited') === '1';
-  const page = Number(searchParams.get('page')) || 0;
-
-  const setFilter = (key: string) => (value: string) =>
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (value) next.set(key, value);
-        else next.delete(key);
-        next.delete('page');
-        return next;
-      },
-      { replace: true },
-    );
-  const setPage = (next: number) =>
-    setSearchParams(
-      (prev) => {
-        const params = new URLSearchParams(prev);
-        if (next > 0) params.set('page', String(next));
-        else params.delete('page');
-        return params;
-      },
-      { replace: true },
-    );
+  const username = get('username');
+  const displayName = get('displayName');
+  const roleName = get('roleName');
+  const hideInherited = get('hideInherited') === '1';
 
   const debUsername = useDebounced(username);
   const debDisplayName = useDebounced(displayName);

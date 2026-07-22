@@ -1,0 +1,81 @@
+query GetService($id: ID!) {
+    service(id: $id) {
+        id
+        name
+        description
+        turnTimeM
+        advanceNoticeM
+        slotIntervalM
+        gracePeriodM
+        deletedAt
+        createdAt
+        updatedAt
+        venue {
+            id
+            name
+            address
+            description
+            status
+            createdAt
+            updatedAt
+        }
+    }
+}
+
+query ListServices($venueId: ID!, $name: String, $includeDeleted: Boolean) {
+    listServices(venueId: $venueId, name: $name, includeDeleted: $includeDeleted) {
+        id
+        name
+        description
+        turnTimeM
+        advanceNoticeM
+        slotIntervalM
+        gracePeriodM
+        deletedAt
+        createdAt
+        updatedAt
+    }
+}
+
+mutation CreateService($input: CreateServiceInput!) {
+    createService(input: $input) {
+        id
+        name
+        description
+        turnTimeM
+        advanceNoticeM
+        slotIntervalM
+        gracePeriodM
+        deletedAt
+        createdAt
+        updatedAt
+        venue {
+            id
+            name
+            address
+            description
+            status
+            createdAt
+            updatedAt
+        }
+    }
+}
+
+mutation UpdateService($id: ID!, $input: UpdateServiceInput!) {
+    updateService(id: $id, input: $input) {
+        id
+        name
+        description
+        turnTimeM
+        advanceNoticeM
+        slotIntervalM
+        gracePeriodM
+        deletedAt
+        createdAt
+        updatedAt
+    }
+}
+
+mutation DeleteService($id: ID!) {
+    deleteService(id: $id)
+}

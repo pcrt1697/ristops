@@ -2,9 +2,13 @@ import strawberry
 from strawberry.tools import merge_types
 
 from ristops_bff_web.domain.auth.graphql import AuthMutation, AuthQuery
+from ristops_bff_web.domain.schedule.graphql import ScheduleMutation, ScheduleQuery
+from ristops_bff_web.domain.service.graphql import ServiceQuery, ServiceMutation
 from ristops_bff_web.domain.venue.graphql import VenueQuery, VenueMutation
 
-QUERY = merge_types("Query", (AuthQuery, VenueQuery,))
-MUTATION = merge_types("Mutation", (AuthMutation, VenueMutation,))
+QUERY = merge_types("Query", (AuthQuery, VenueQuery, ServiceQuery, ScheduleQuery,))
+MUTATION = merge_types(
+    "Mutation", (AuthMutation, VenueMutation, ServiceMutation, ScheduleMutation,)
+)
 
 schema = strawberry.Schema(query=QUERY, mutation=MUTATION)

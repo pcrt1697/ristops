@@ -9,6 +9,8 @@ const config: CodegenConfig = {
       config: {
         scalars: {
           DateTime: 'string',
+          Time: 'string',
+          Date: 'string',
         },
         useTypeImports: true,
         enumsAsConst: true,
