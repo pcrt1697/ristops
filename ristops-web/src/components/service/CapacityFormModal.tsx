@@ -1,7 +1,10 @@
 import { DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import ScheduleConflictWarning from '../../components/schedule/ScheduleConflictWarning.tsx';
 import {
+  useCapacityOverrideConflicts,
+  useConflictCandidate,
   useCreateCapacityOverride,
   useUpdateCapacityOverride,
 } from '../../domain/schedule/schedule.hooks.ts';
@@ -45,6 +48,13 @@ export default function CapacityFormModal({
   const isEditing = !!capacityOverride;
   const isPending = createOverride.isPending || updateOverride.isPending;
 
+  const conflictCandidate = useConflictCandidate(form, capacityOverride?.id);
+  const conflictsQuery = useCapacityOverrideConflicts(
+    serviceId,
+    conflictCandidate,
+  );
+  const hasConflicts = (conflictsQuery.data?.length ?? 0) > 0;
+
   function handleCancel() {
     form.resetFields();
     onClose();
@@ -57,12 +67,12 @@ export default function CapacityFormModal({
         const dateStart = values.dates[0].format('YYYY-MM-DD');
         const dateEnd = values.dates[1].format('YYYY-MM-DD');
         if (capacityOverride) {
+          // Editing one row: the weekday scope is immutable, not sent.
           await updateOverride.mutateAsync({
             capacityOverrideId: capacityOverride.id,
             input: {
               dateStart,
               dateEnd,
-              weekday: (values.weekday as Weekday | undefined) ?? null,
               capacityDelta: values.capacityDelta,
               description: values.description || null,
             },
@@ -92,6 +102,7 @@ export default function CapacityFormModal({
       onOk={handleSubmit}
       onCancel={handleCancel}
       confirmLoading={isPending}
+      okButtonProps={{ disabled: hasConflicts }}
       okText={isEditing ? 'Save' : 'Create'}
       destroyOnHidden
       afterOpenChange={(o) => {
@@ -123,12 +134,13 @@ export default function CapacityFormModal({
           label="Applies to"
           extra={
             isEditing
-              ? 'Leave empty to apply to every day in the range.'
+              ? 'The weekday scope cannot be changed after creation; delete and recreate to change it.'
               : 'Select multiple to create one capacity change per weekday. Leave empty (or select all) for every day.'
           }
         >
           <Select
             allowClear
+            disabled={isEditing}
             mode={isEditing ? undefined : 'multiple'}
             placeholder="Every day"
             options={WEEKDAY_ORDER.map((w) => ({
@@ -137,6 +149,12 @@ export default function CapacityFormModal({
             }))}
           />
         </Form.Item>
+        <ScheduleConflictWarning
+          conflicts={conflictsQuery.data}
+          isLoading={conflictsQuery.isFetching}
+          isError={conflictsQuery.isError}
+          onRetry={() => void conflictsQuery.refetch()}
+        />
         <Form.Item
           name="capacityDelta"
           label="Seat change"

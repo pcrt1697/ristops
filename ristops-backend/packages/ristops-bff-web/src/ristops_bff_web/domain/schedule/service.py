@@ -35,6 +35,18 @@ capacity_override_transformer = ResponseTransformer(
     updated_at=datetime.fromisoformat,
 )
 
+conflict_transformer = ResponseTransformer(
+    conflicting_date_start=date.fromisoformat,
+    conflicting_date_end=date.fromisoformat,
+)
+
+
+async def _get_conflicts(url: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+    """GET a `.../conflicts` preview endpoint and return the transformed conflict rows."""
+    response = await reservation_client.client.get(url=url, params=params)
+    conflicts = response.json()["conflicts"]
+    return [conflict_transformer.transform(item) for item in conflicts]
+
 
 async def list_service_openings(
         service_id: str | UUID,
@@ -116,6 +128,14 @@ async def delete_service_opening_override(
     )
 
 
+async def service_opening_override_conflicts(
+        service_id: str | UUID,
+        params: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Preview which existing opening overrides a candidate period+weekdays would conflict with."""
+    return await _get_conflicts(f"services/{service_id}/opening-overrides/conflicts", params)
+
+
 # --- Closings ----------------------------------------------------------------
 
 async def search_service_closings(
@@ -167,6 +187,15 @@ async def delete_service_closing(
     )
 
 
+async def service_closing_conflicts(
+        service_id: str | UUID,
+        params: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Preview which existing service closings (this service) or venue closings (its venue) a
+    candidate period+weekdays would conflict with."""
+    return await _get_conflicts(f"services/{service_id}/closings/conflicts", params)
+
+
 # --- Capacity overrides ------------------------------------------------------
 
 async def search_service_capacity_overrides(
@@ -216,6 +245,14 @@ async def delete_service_capacity_override(
     await reservation_client.client.delete(
         url=f"services/{service_id}/capacity-overrides/{capacity_override_id}",
     )
+
+
+async def service_capacity_override_conflicts(
+        service_id: str | UUID,
+        params: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Preview which existing capacity overrides a candidate period+weekdays would conflict with."""
+    return await _get_conflicts(f"services/{service_id}/capacity-overrides/conflicts", params)
 
 
 # --- Venue-wide closings -----------------------------------------------------
@@ -275,3 +312,11 @@ async def delete_venue_closing(
     await reservation_client.client.delete(
         url=f"venues/{venue_id}/closings/{closing_id}",
     )
+
+
+async def venue_closing_conflicts(
+        venue_id: str | UUID,
+        params: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Preview which existing venue closings a candidate period+weekdays would conflict with."""
+    return await _get_conflicts(f"venues/{venue_id}/closings/conflicts", params)

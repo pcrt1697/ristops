@@ -126,7 +126,9 @@ input CapacityOverrideSortFieldSortInput {
   direction: SortDirection! = ASC
 }
 
-"""Capacity override fields to update. Unset fields are not modified."""
+"""
+Capacity override fields to update. Unset fields are not modified. The weekday scope is immutable — delete and recreate to re-scope it.
+"""
 input CapacityOverrideUpdateInput {
   """New first date (inclusive)."""
   dateStart: Date = null
@@ -134,14 +136,36 @@ input CapacityOverrideUpdateInput {
   """New last date (inclusive)."""
   dateEnd: Date = null
 
-  """New weekday the override applies to; null means every day."""
-  weekday: Weekday = null
-
   """New signed seat-count change."""
   capacityDelta: Int = null
 
   """New description of this override."""
   description: String = null
+}
+
+"""
+Candidate period+weekdays to check for conflicts before writing. Bulk `weekdays` mirror a create; omit/empty or all seven means every day.
+"""
+input ConflictCheckInput {
+  """First date of the candidate period (inclusive)."""
+  dateStart: Date!
+
+  """Last date of the candidate period (inclusive)."""
+  dateEnd: Date!
+
+  """Weekdays to check; provide multiple for a bulk candidate."""
+  weekdays: [Weekday!] = null
+
+  """Exclude this row from the check (use when previewing an edit of it)."""
+  excludeId: ID = null
+}
+
+"""Which kind of exception a conflicting row belongs to."""
+enum ConflictSource {
+  VENUE_CLOSING
+  SERVICE_CLOSING
+  OPENING_OVERRIDE
+  CAPACITY_OVERRIDE
 }
 
 """Service information."""
@@ -664,16 +688,15 @@ input OpeningOverrideSortFieldSortInput {
   direction: SortDirection! = ASC
 }
 
-"""Opening override fields to update. Unset fields are not modified."""
+"""
+Opening override fields to update. Unset fields are not modified. The weekday scope is immutable — delete and recreate to re-scope it.
+"""
 input OpeningOverrideUpdateInput {
   """New first date (inclusive)."""
   dateStart: Date = null
 
   """New last date (inclusive)."""
   dateEnd: Date = null
-
-  """New weekday the override applies to; null means every day."""
-  weekday: Weekday = null
 
   """New overridden capacity."""
   capacity: Int = null
@@ -846,6 +869,50 @@ type Query {
     """Capacity-override search query."""
     input: CapacityOverrideSearchInput = null
   ): CapacityOverridePage!
+
+  """
+  Preview which existing opening overrides a candidate period would conflict with.
+  """
+  serviceOpeningOverrideConflicts(
+    """Entity identifier."""
+    id: ID!
+
+    """Candidate period+weekdays to check."""
+    input: ConflictCheckInput!
+  ): [ScheduleConflict!]!
+
+  """
+  Preview which existing service or venue closings a candidate period would conflict with.
+  """
+  serviceClosingConflicts(
+    """Entity identifier."""
+    id: ID!
+
+    """Candidate period+weekdays to check."""
+    input: ConflictCheckInput!
+  ): [ScheduleConflict!]!
+
+  """
+  Preview which existing capacity overrides a candidate period would conflict with.
+  """
+  serviceCapacityOverrideConflicts(
+    """Entity identifier."""
+    id: ID!
+
+    """Candidate period+weekdays to check."""
+    input: ConflictCheckInput!
+  ): [ScheduleConflict!]!
+
+  """
+  Preview which existing venue closings a candidate period would conflict with.
+  """
+  venueClosingConflicts(
+    """Entity identifier."""
+    id: ID!
+
+    """Candidate period+weekdays to check."""
+    input: ConflictCheckInput!
+  ): [ScheduleConflict!]!
 }
 
 """Fields a resource grants search may be sorted by."""
@@ -974,6 +1041,29 @@ type RoleGrant {
 type RolesList {
   """List of roles."""
   roles: [Role!]!
+}
+
+"""An existing row that conflicts with a candidate period+weekday."""
+type ScheduleConflict {
+  """
+  Weekday from the candidate this conflict applies to; null means every day.
+  """
+  weekday: Weekday
+
+  """Which kind of exception the conflicting row is."""
+  source: ConflictSource!
+
+  """Identifier of the existing conflicting row."""
+  conflictingId: String!
+
+  """First date of the conflicting row (inclusive)."""
+  conflictingDateStart: Date!
+
+  """Last date of the conflicting row (inclusive)."""
+  conflictingDateEnd: Date!
+
+  """Weekday scope of the conflicting row; null means every day."""
+  conflictingWeekday: Weekday
 }
 
 """Date-range filter for schedule exceptions."""
@@ -1135,16 +1225,15 @@ input ServiceClosingSortFieldSortInput {
   direction: SortDirection! = ASC
 }
 
-"""Closing fields to update. Unset fields are not modified."""
+"""
+Closing fields to update. Unset fields are not modified. The weekday scope is immutable — delete and recreate to re-scope it.
+"""
 input ServiceClosingUpdateInput {
   """New first date (inclusive)."""
   dateStart: Date = null
 
   """New last date (inclusive)."""
   dateEnd: Date = null
-
-  """New weekday the closing applies to; null means every day."""
-  weekday: Weekday = null
 
   """New description of this closing."""
   description: String = null
@@ -1364,16 +1453,15 @@ input VenueClosingSortFieldSortInput {
   direction: SortDirection! = ASC
 }
 
-"""Venue closing fields to update. Unset fields are not modified."""
+"""
+Venue closing fields to update. Unset fields are not modified. The weekday scope is immutable — delete and recreate to re-scope it.
+"""
 input VenueClosingUpdateInput {
   """New first date (inclusive)."""
   dateStart: Date = null
 
   """New last date (inclusive)."""
   dateEnd: Date = null
-
-  """New weekday the closing applies to; null means every day."""
-  weekday: Weekday = null
 
   """New description of this closing."""
   description: String = null

@@ -5,13 +5,14 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from fastapi.params import Path
 
+from ristops_be_reservation.domain.schedule.schema import ConflictQuery, ConflictsResponse
 from ristops_be_reservation.domain.venue.schema import (
     VenueClosingCreateRequest, VenueClosingUpdateRequest,
     VenueClosingResponse, VenueClosingSearchQuery,
 )
 from ristops_be_reservation.domain.venue.service import (
     create_venue_closings, update_venue_closing,
-    remove_venue_closing, search_venue_closings,
+    remove_venue_closing, search_venue_closings, find_venue_closing_conflicts_for,
 )
 from ristops_lib_be.authz.policy import policy, BaseResourceResolver, Policy
 from ristops_lib_core.exception import ErrorResponse
@@ -32,10 +33,14 @@ venue_closing_router = APIRouter(
     status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue is not accepting config changes, or the period conflicts with "
+                           "an existing venue closing",
+        },
     },
 )
-@policy(Policy(_venue_path_resolver, "schedule:edit"))
+@policy(Policy(_venue_path_resolver, "schedule:add"))
 @sql_transactional
 async def create_closing(
         venue_id: Annotated[UUID, Path(description="Venue ID")],
@@ -55,7 +60,11 @@ async def create_closing(
     response_model=VenueClosingResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue closing not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue is not accepting config changes, or the new period conflicts "
+                           "with an existing venue closing",
+        },
     },
 )
 @policy(Policy(_venue_path_resolver, "schedule:edit"))
@@ -79,7 +88,7 @@ async def update_closing(
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_venue_path_resolver, "schedule:edit"))
+@policy(Policy(_venue_path_resolver, "schedule:remove"))
 @sql_transactional
 async def delete_closing(
         venue_id: Annotated[UUID, Path(description="Venue ID")],
@@ -105,3 +114,21 @@ async def get_venue_closings(
     """Return a paginated, date-range-filtered page of venue-wide closings for a venue.
     Authorized against the venue itself."""
     return await search_venue_closings(venue_id, query)
+
+
+@venue_closing_router.get(
+    "/{venue_id}/closings/conflicts",
+    response_model=ConflictsResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
+    },
+)
+@policy(Policy(_venue_path_resolver, "schedule:list"))
+@sql_transactional
+async def get_venue_closing_conflicts(
+        venue_id: Annotated[UUID, Path(description="Venue ID")],
+        query: Annotated[ConflictQuery, Query()],
+) -> ConflictsResponse:
+    """Read-only preview of which existing venue closings a candidate period+weekdays would
+    conflict with (what creation would 409 on). Authorized against the venue itself."""
+    return await find_venue_closing_conflicts_for(venue_id, query)

@@ -9,12 +9,14 @@ from ristops_bff_web.domain.schedule.service import (
     list_service_openings, upsert_service_openings,
     search_service_opening_overrides, create_service_opening_overrides,
     update_service_opening_override, delete_service_opening_override,
+    service_opening_override_conflicts,
     search_service_closings, create_service_closings,
-    update_service_closing, delete_service_closing,
+    update_service_closing, delete_service_closing, service_closing_conflicts,
     search_service_capacity_overrides, create_service_capacity_overrides,
     update_service_capacity_override, delete_service_capacity_override,
+    service_capacity_override_conflicts,
     search_venue_closings, create_venue_closings,
-    update_venue_closing, delete_venue_closing,
+    update_venue_closing, delete_venue_closing, venue_closing_conflicts,
 )
 from ristops_bff_web.graphql.pagination import Page, PaginationInput, SearchQueryParams, SortInput
 from ristops_bff_web.graphql.types import EntityId
@@ -183,13 +185,11 @@ class OpeningOverrideCreateInput:
     description: str | None = strawberry.field(default=None, description="Description of this override.")
 
 
-@strawberry.input(description="Opening override fields to update. Unset fields are not modified.")
+@strawberry.input(description="Opening override fields to update. Unset fields are not modified. "
+                              "The weekday scope is immutable — delete and recreate to re-scope it.")
 class OpeningOverrideUpdateInput:
     date_start: date | None = strawberry.field(default=None, description="New first date (inclusive).")
     date_end: date | None = strawberry.field(default=None, description="New last date (inclusive).")
-    weekday: Weekday | None = strawberry.field(
-        default=None, description="New weekday the override applies to; null means every day.",
-    )
     capacity: int | None = strawberry.field(default=None, description="New overridden capacity.")
     start_time: time | None = strawberry.field(default=None, description="New overridden opening time.")
     end_time: time | None = strawberry.field(default=None, description="New overridden closing time.")
@@ -208,13 +208,11 @@ class ServiceClosingCreateInput:
     description: str | None = strawberry.field(default=None, description="Description of this closing.")
 
 
-@strawberry.input(description="Closing fields to update. Unset fields are not modified.")
+@strawberry.input(description="Closing fields to update. Unset fields are not modified. The "
+                              "weekday scope is immutable — delete and recreate to re-scope it.")
 class ServiceClosingUpdateInput:
     date_start: date | None = strawberry.field(default=None, description="New first date (inclusive).")
     date_end: date | None = strawberry.field(default=None, description="New last date (inclusive).")
-    weekday: Weekday | None = strawberry.field(
-        default=None, description="New weekday the closing applies to; null means every day.",
-    )
     description: str | None = strawberry.field(default=None, description="New description of this closing.")
 
 
@@ -325,7 +323,6 @@ def _override_update_payload(inp: OpeningOverrideUpdateInput) -> dict[str, Any]:
     return {
         "date_start": inp.date_start.isoformat() if inp.date_start is not None else None,
         "date_end": inp.date_end.isoformat() if inp.date_end is not None else None,
-        "weekday": inp.weekday.value if inp.weekday is not None else None,
         "capacity": inp.capacity,
         "start_time": inp.start_time.isoformat() if inp.start_time is not None else None,
         "end_time": inp.end_time.isoformat() if inp.end_time is not None else None,
@@ -346,7 +343,6 @@ def _service_closing_update_payload(inp: ServiceClosingUpdateInput) -> dict[str,
     return {
         "date_start": inp.date_start.isoformat() if inp.date_start is not None else None,
         "date_end": inp.date_end.isoformat() if inp.date_end is not None else None,
-        "weekday": inp.weekday.value if inp.weekday is not None else None,
         "description": inp.description,
     }
 
@@ -483,13 +479,11 @@ class CapacityOverrideCreateInput:
     description: str | None = strawberry.field(default=None, description="Description of this capacity override.")
 
 
-@strawberry.input(description="Capacity override fields to update. Unset fields are not modified.")
+@strawberry.input(description="Capacity override fields to update. Unset fields are not modified. "
+                              "The weekday scope is immutable — delete and recreate to re-scope it.")
 class CapacityOverrideUpdateInput:
     date_start: date | None = strawberry.field(default=None, description="New first date (inclusive).")
     date_end: date | None = strawberry.field(default=None, description="New last date (inclusive).")
-    weekday: Weekday | None = strawberry.field(
-        default=None, description="New weekday the override applies to; null means every day.",
-    )
     capacity_delta: int | None = strawberry.field(default=None, description="New signed seat-count change.")
     description: str | None = strawberry.field(default=None, description="New description of this override.")
 
@@ -546,7 +540,6 @@ def _capacity_override_update_payload(inp: CapacityOverrideUpdateInput) -> dict[
     return {
         "date_start": inp.date_start.isoformat() if inp.date_start is not None else None,
         "date_end": inp.date_end.isoformat() if inp.date_end is not None else None,
-        "weekday": inp.weekday.value if inp.weekday is not None else None,
         "capacity_delta": inp.capacity_delta,
         "description": inp.description,
     }
@@ -643,13 +636,11 @@ class VenueClosingCreateInput:
     description: str | None = strawberry.field(default=None, description="Description of this venue closing.")
 
 
-@strawberry.input(description="Venue closing fields to update. Unset fields are not modified.")
+@strawberry.input(description="Venue closing fields to update. Unset fields are not modified. The "
+                              "weekday scope is immutable — delete and recreate to re-scope it.")
 class VenueClosingUpdateInput:
     date_start: date | None = strawberry.field(default=None, description="New first date (inclusive).")
     date_end: date | None = strawberry.field(default=None, description="New last date (inclusive).")
-    weekday: Weekday | None = strawberry.field(
-        default=None, description="New weekday the closing applies to; null means every day.",
-    )
     description: str | None = strawberry.field(default=None, description="New description of this closing.")
 
 
@@ -703,7 +694,6 @@ def _venue_closing_update_payload(inp: VenueClosingUpdateInput) -> dict[str, Any
     return {
         "date_start": inp.date_start.isoformat() if inp.date_start is not None else None,
         "date_end": inp.date_end.isoformat() if inp.date_end is not None else None,
-        "weekday": inp.weekday.value if inp.weekday is not None else None,
         "description": inp.description,
     }
 
@@ -753,6 +743,108 @@ async def resolve_delete_venue_closing(
     return True
 
 
+@strawberry.enum(description="Which kind of exception a conflicting row belongs to.")
+class ConflictSource(Enum):
+    VENUE_CLOSING = "venue_closing"
+    SERVICE_CLOSING = "service_closing"
+    OPENING_OVERRIDE = "opening_override"
+    CAPACITY_OVERRIDE = "capacity_override"
+
+
+@strawberry.type(description="An existing row that conflicts with a candidate period+weekday.")
+class ScheduleConflict:
+    weekday: Weekday | None = strawberry.field(
+        description="Weekday from the candidate this conflict applies to; null means every day.",
+    )
+    source: ConflictSource = strawberry.field(description="Which kind of exception the conflicting row is.")
+    conflicting_id: str = strawberry.field(description="Identifier of the existing conflicting row.")
+    conflicting_date_start: date = strawberry.field(description="First date of the conflicting row (inclusive).")
+    conflicting_date_end: date = strawberry.field(description="Last date of the conflicting row (inclusive).")
+    conflicting_weekday: Weekday | None = strawberry.field(
+        description="Weekday scope of the conflicting row; null means every day.",
+    )
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "ScheduleConflict":
+        return ScheduleConflict(
+            weekday=Weekday(obj["weekday"]) if obj.get("weekday") else None,
+            source=ConflictSource(obj["source"]),
+            conflicting_id=obj["conflicting_id"],
+            conflicting_date_start=obj["conflicting_date_start"],
+            conflicting_date_end=obj["conflicting_date_end"],
+            conflicting_weekday=Weekday(obj["conflicting_weekday"]) if obj.get("conflicting_weekday") else None,
+        )
+
+
+@strawberry.input(description="Candidate period+weekdays to check for conflicts before writing. "
+                              "Bulk `weekdays` mirror a create; omit/empty or all seven means every day.")
+class ConflictCheckInput:
+    date_start: date = strawberry.field(description="First date of the candidate period (inclusive).")
+    date_end: date = strawberry.field(description="Last date of the candidate period (inclusive).")
+    weekdays: list[Weekday] | None = strawberry.field(
+        default=None, description="Weekdays to check; provide multiple for a bulk candidate.",
+    )
+    exclude_id: strawberry.ID | None = strawberry.field(
+        default=None, description="Exclude this row from the check (use when previewing an edit of it).",
+    )
+
+
+def _conflict_params(inp: ConflictCheckInput) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "date_start": inp.date_start.isoformat(),
+        "date_end": inp.date_end.isoformat(),
+    }
+    if inp.weekdays:
+        params["weekdays"] = [w.value for w in inp.weekdays]
+    if inp.exclude_id is not None:
+        params["exclude_id"] = str(inp.exclude_id)
+    return params
+
+
+async def resolve_service_opening_override_conflicts(
+        service_id: EntityId,
+        _input: Annotated[
+            ConflictCheckInput,
+            strawberry.argument(description="Candidate period+weekdays to check.", name="input")
+        ],
+) -> list[ScheduleConflict]:
+    rows = await service_opening_override_conflicts(service_id, _conflict_params(_input))
+    return [ScheduleConflict.from_dict(row) for row in rows]
+
+
+async def resolve_service_closing_conflicts(
+        service_id: EntityId,
+        _input: Annotated[
+            ConflictCheckInput,
+            strawberry.argument(description="Candidate period+weekdays to check.", name="input")
+        ],
+) -> list[ScheduleConflict]:
+    rows = await service_closing_conflicts(service_id, _conflict_params(_input))
+    return [ScheduleConflict.from_dict(row) for row in rows]
+
+
+async def resolve_service_capacity_override_conflicts(
+        service_id: EntityId,
+        _input: Annotated[
+            ConflictCheckInput,
+            strawberry.argument(description="Candidate period+weekdays to check.", name="input")
+        ],
+) -> list[ScheduleConflict]:
+    rows = await service_capacity_override_conflicts(service_id, _conflict_params(_input))
+    return [ScheduleConflict.from_dict(row) for row in rows]
+
+
+async def resolve_venue_closing_conflicts(
+        venue_id: EntityId,
+        _input: Annotated[
+            ConflictCheckInput,
+            strawberry.argument(description="Candidate period+weekdays to check.", name="input")
+        ],
+) -> list[ScheduleConflict]:
+    rows = await venue_closing_conflicts(venue_id, _conflict_params(_input))
+    return [ScheduleConflict.from_dict(row) for row in rows]
+
+
 @strawberry.type
 class ScheduleQuery:
     service_openings: list[Opening] = strawberry.field(
@@ -774,6 +866,22 @@ class ScheduleQuery:
     service_capacity_overrides: Page[CapacityOverride] = strawberry.field(
         resolver=resolve_service_capacity_overrides,
         description="Search the capacity overrides for a service.",
+    )
+    service_opening_override_conflicts: list[ScheduleConflict] = strawberry.field(
+        resolver=resolve_service_opening_override_conflicts,
+        description="Preview which existing opening overrides a candidate period would conflict with.",
+    )
+    service_closing_conflicts: list[ScheduleConflict] = strawberry.field(
+        resolver=resolve_service_closing_conflicts,
+        description="Preview which existing service or venue closings a candidate period would conflict with.",
+    )
+    service_capacity_override_conflicts: list[ScheduleConflict] = strawberry.field(
+        resolver=resolve_service_capacity_override_conflicts,
+        description="Preview which existing capacity overrides a candidate period would conflict with.",
+    )
+    venue_closing_conflicts: list[ScheduleConflict] = strawberry.field(
+        resolver=resolve_venue_closing_conflicts,
+        description="Preview which existing venue closings a candidate period would conflict with.",
     )
 
 

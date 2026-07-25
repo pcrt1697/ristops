@@ -48,19 +48,28 @@ async def create_service(request: ServiceCreationRequest) -> ServiceEntity:
     return service
 
 
-async def find_service_or_throw(service_id: UUID, include_deleted: bool = False) -> ServiceEntity:
+async def find_service_or_throw(
+        service_id: UUID,
+        include_deleted: bool = False,
+        for_update: bool = False,
+) -> ServiceEntity:
     """Return the service with the given ID, or raise HTTP 404.
 
     Deleted services are excluded by default; set ``include_deleted=True`` to fetch them anyway
     (e.g. to resolve a service still referenced by an existing reservation).
+
+    Set ``for_update=True`` from a mutating path that needs to serialize against concurrent
+    conflict-checked writes on the same service: it takes a ``SELECT ... FOR UPDATE`` row lock,
+    held until the transaction commits. Leave it false on read paths so plain GETs never block.
     """
     session = get_sql_session()
     conditions = [ServiceEntity.id == service_id]
     if not include_deleted:
         conditions.append(ServiceEntity.deleted_at.is_(None))
-    result: ScalarResult[ServiceEntity] = await session.scalars(
-        select(ServiceEntity).where(*conditions).limit(1)
-    )
+    stmt = select(ServiceEntity).where(*conditions).limit(1)
+    if for_update:
+        stmt = stmt.with_for_update()
+    result: ScalarResult[ServiceEntity] = await session.scalars(stmt)
     service = result.one_or_none()
     if service is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Service not found")

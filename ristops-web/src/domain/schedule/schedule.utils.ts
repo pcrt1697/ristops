@@ -1,5 +1,5 @@
 import dayjs, { type Dayjs } from 'dayjs';
-import { Weekday } from '../../services/graphql/graphql.ts';
+import { ConflictSource, Weekday } from '../../services/graphql/graphql.ts';
 
 /**
  * Parse a "HH:mm:ss" wire value into a Dayjs without the customParseFormat
@@ -68,4 +68,18 @@ export function formatDateRange(start: string, end: string): string {
   if (s.isSame(e, 'day')) return s.format('MMM D');
   if (s.isSame(e, 'month')) return `${s.format('MMM D')} – ${e.format('D')}`;
   return `${s.format('MMM D')} – ${e.format('MMM D')}`;
+}
+
+/** Human label for the kind of exception a conflicting row belongs to. */
+export function conflictSourceLabel(source: ConflictSource): string {
+  switch (source) {
+    case ConflictSource.VenueClosing:
+      return 'venue closure';
+    case ConflictSource.ServiceClosing:
+      return 'closing';
+    case ConflictSource.OpeningOverride:
+      return 'opening override';
+    case ConflictSource.CapacityOverride:
+      return 'capacity change';
+  }
 }

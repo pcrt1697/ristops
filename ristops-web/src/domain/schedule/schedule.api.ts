@@ -3,8 +3,10 @@ import { gqlRequest } from '../../services/graphql/client.ts';
 import {
   type CapacityOverrideCreateInput,
   type CapacityOverrideUpdateInput,
+  type ConflictCheckInput,
   type ServiceClosingCreateInput,
   type ServiceClosingUpdateInput,
+  CapacityOverrideConflictsDocument,
   CreateCapacityOverrideDocument,
   CreateServiceClosingDocument,
   CreateOpeningOverrideDocument,
@@ -14,6 +16,7 @@ import {
   ListServiceOpeningsDocument,
   type OpeningOverrideCreateInput,
   type OpeningOverrideUpdateInput,
+  OpeningOverrideConflictsDocument,
   type OpeningUpsertInput,
   type PaginationInput,
   type ScheduleDateFilter,
@@ -21,6 +24,7 @@ import {
   SearchServiceClosingsDocument,
   SearchOpeningOverridesDocument,
   SearchVenueClosingsDocument,
+  ServiceClosingConflictsDocument,
   UpdateCapacityOverrideDocument,
   UpdateServiceClosingDocument,
   UpdateOpeningOverrideDocument,
@@ -30,6 +34,7 @@ import {
   CreateVenueClosingDocument,
   DeleteVenueClosingDocument,
   UpdateVenueClosingDocument,
+  VenueClosingConflictsDocument,
 } from '../../services/graphql/graphql.ts';
 
 export const scheduleApi = {
@@ -65,6 +70,10 @@ export const scheduleApi = {
     gqlRequest(UpdateOpeningOverrideDocument, { serviceId, overrideId, input }),
   deleteOpeningOverride: (serviceId: string, overrideId: string) =>
     gqlRequest(DeleteOpeningOverrideDocument, { serviceId, overrideId }),
+  openingOverrideConflicts: (serviceId: string, input: ConflictCheckInput) =>
+    gqlRequest(OpeningOverrideConflictsDocument, { serviceId, input }).then(
+      (res) => res.serviceOpeningOverrideConflicts,
+    ),
 
   searchServiceClosings: (
     serviceId: string,
@@ -92,6 +101,10 @@ export const scheduleApi = {
   ) => gqlRequest(UpdateServiceClosingDocument, { serviceId, closingId, input }),
   deleteServiceClosing: (serviceId: string, closingId: string) =>
     gqlRequest(DeleteServiceClosingDocument, { serviceId, closingId }),
+  serviceClosingConflicts: (serviceId: string, input: ConflictCheckInput) =>
+    gqlRequest(ServiceClosingConflictsDocument, { serviceId, input }).then(
+      (res) => res.serviceClosingConflicts,
+    ),
 
   searchCapacityOverrides: (
     serviceId: string,
@@ -129,6 +142,10 @@ export const scheduleApi = {
       serviceId,
       capacityOverrideId,
     }),
+  capacityOverrideConflicts: (serviceId: string, input: ConflictCheckInput) =>
+    gqlRequest(CapacityOverrideConflictsDocument, { serviceId, input }).then(
+      (res) => res.serviceCapacityOverrideConflicts,
+    ),
 
   searchVenueClosings: (
     venueId: string,
@@ -156,4 +173,8 @@ export const scheduleApi = {
   ) => gqlRequest(UpdateVenueClosingDocument, { venueId, closingId, input }),
   deleteVenueClosing: (venueId: string, closingId: string) =>
     gqlRequest(DeleteVenueClosingDocument, { venueId, closingId }),
+  venueClosingConflicts: (venueId: string, input: ConflictCheckInput) =>
+    gqlRequest(VenueClosingConflictsDocument, { venueId, input }).then(
+      (res) => res.venueClosingConflicts,
+    ),
 };

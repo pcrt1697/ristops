@@ -1,9 +1,12 @@
 import { DatePicker, Form, Input, Modal, Select } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import ScheduleConflictWarning from '../../components/schedule/ScheduleConflictWarning.tsx';
 import {
+  useConflictCandidate,
   useCreateVenueClosing,
   useUpdateVenueClosing,
+  useVenueClosingConflicts,
 } from '../../domain/schedule/schedule.hooks.ts';
 import {
   normalizeWeekdays,
@@ -43,6 +46,10 @@ export default function VenueClosingFormModal({
   const isEditing = !!closing;
   const isPending = createClosing.isPending || updateClosing.isPending;
 
+  const conflictCandidate = useConflictCandidate(form, closing?.id);
+  const conflictsQuery = useVenueClosingConflicts(venueId, conflictCandidate);
+  const hasConflicts = (conflictsQuery.data?.length ?? 0) > 0;
+
   function handleCancel() {
     form.resetFields();
     onClose();
@@ -55,12 +62,12 @@ export default function VenueClosingFormModal({
         const dateStart = values.dates[0].format('YYYY-MM-DD');
         const dateEnd = values.dates[1].format('YYYY-MM-DD');
         if (closing) {
+          // Editing one row: the weekday scope is immutable, not sent.
           await updateClosing.mutateAsync({
             closingId: closing.id,
             input: {
               dateStart,
               dateEnd,
-              weekday: (values.weekday as Weekday | undefined) ?? null,
               description: values.description || null,
             },
           });
@@ -88,6 +95,7 @@ export default function VenueClosingFormModal({
       onOk={handleSubmit}
       onCancel={handleCancel}
       confirmLoading={isPending}
+      okButtonProps={{ disabled: hasConflicts }}
       okText={isEditing ? 'Save' : 'Create'}
       destroyOnHidden
       afterOpenChange={(o) => {
@@ -115,12 +123,13 @@ export default function VenueClosingFormModal({
           label="Applies to"
           extra={
             isEditing
-              ? 'Closes every service of the venue. Leave empty for every day in the range (e.g. select Monday to close every Monday).'
+              ? 'Closes every service of the venue. The weekday scope cannot be changed after creation; delete and recreate to change it.'
               : 'Closes every service of the venue. Select multiple to create one closure per weekday. Leave empty (or select all) to close every day.'
           }
         >
           <Select
             allowClear
+            disabled={isEditing}
             mode={isEditing ? undefined : 'multiple'}
             placeholder="Every day"
             options={WEEKDAY_ORDER.map((w) => ({
@@ -129,6 +138,12 @@ export default function VenueClosingFormModal({
             }))}
           />
         </Form.Item>
+        <ScheduleConflictWarning
+          conflicts={conflictsQuery.data}
+          isLoading={conflictsQuery.isFetching}
+          isError={conflictsQuery.isError}
+          onRetry={() => void conflictsQuery.refetch()}
+        />
         <Form.Item name="description" label="Notes">
           <Input placeholder="e.g. Winter break" />
         </Form.Item>

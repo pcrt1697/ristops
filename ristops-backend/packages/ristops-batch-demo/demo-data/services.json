@@ -48,14 +48,14 @@
         { "weekday": "sunday", "capacity": 45, "start_time": "18:30", "end_time": "22:00" }
       ],
       "overrides": [
-        { "dates": { "days_from_now_start": 11, "days_from_now_end": 13 }, "capacity": 80, "start_time": "18:00", "end_time": "23:30", "description": "Harvest feast" },
+        { "dates": { "month_day_start": "09-21", "month_day_end": "09-23", "year_offsets": [-1, 0, 1] }, "capacity": 80, "start_time": "18:00", "end_time": "23:30", "description": "Harvest feast" },
         { "dates": { "month_day_start": "03-15", "month_day_end": "03-16", "year_offsets": [-1, 0, 1] }, "capacity": 70, "start_time": "18:30", "end_time": "23:30", "description": "Winterfell name-day feast" },
         { "dates": { "month_day_start": "04-04", "month_day_end": "04-05", "year_offsets": [-1, 0, 1] }, "capacity": 65, "start_time": "18:30", "end_time": "23:00", "description": "Maiden's Day feast" },
         { "dates": { "month_day_start": "12-24", "month_day_end": "12-26", "year_offsets": [-1, 0, 1] }, "capacity": 80, "start_time": "18:00", "end_time": "23:30", "description": "Yule feast in the Great Hall" },
         { "dates": { "month_day_start": "12-31", "month_day_end": "12-31", "year_offsets": [-1, 0, 1] }, "capacity": 90, "start_time": "18:00", "end_time": "23:59", "description": "New Year's Eve vigil" }
       ],
       "closings": [
-        { "dates": { "days_from_now_start": 4, "days_from_now_end": 5 }, "description": "Kingsmoot recess" },
+        { "dates": { "month_day_start": "10-10", "month_day_end": "10-11", "year_offsets": [-1, 0, 1] }, "description": "Kingsmoot recess" },
         { "dates": { "month_day_start": "12-21", "month_day_end": "12-23", "year_offsets": [-1, 0, 1] }, "description": "The Long Night vigil" },
         { "dates": { "month_day_start": "01-01", "month_day_end": "01-01", "year_offsets": [-1, 0, 1] }, "description": "New Year's Day (closed)" }
       ],
@@ -77,6 +77,9 @@
         { "weekday": "friday", "capacity": 35, "start_time": "11:00", "end_time": "14:30" },
         { "weekday": "saturday", "capacity": 40, "start_time": "10:30", "end_time": "15:00" },
         { "weekday": "sunday", "capacity": 40, "start_time": "10:30", "end_time": "15:00" }
+      ],
+      "closings": [
+        { "dates": { "month_day_start": "05-05", "month_day_end": "05-06", "year_offsets": [-1, 0, 1] }, "description": "Dragonmont ash-fall" }
       ]
     },
     {
@@ -96,14 +99,13 @@
         { "weekday": "sunday", "capacity": 50, "start_time": "18:30", "end_time": "22:30" }
       ],
       "overrides": [
-        { "dates": { "days_from_now_start": 6, "days_from_now_end": 7 }, "capacity": 70, "start_time": "18:00", "end_time": "23:59", "description": "Dragon's return gala" },
+        { "dates": { "month_day_start": "05-20", "month_day_end": "05-21", "year_offsets": [-1, 0, 1] }, "capacity": 70, "start_time": "18:00", "end_time": "23:59", "description": "Dragon's return gala" },
         { "dates": { "month_day_start": "08-14", "month_day_end": "08-16", "year_offsets": [-1, 0, 1] }, "capacity": 60, "start_time": "18:30", "end_time": "23:30", "description": "Fire and Blood festival" },
         { "dates": { "month_day_start": "12-24", "month_day_end": "12-26", "year_offsets": [-1, 0, 1] }, "capacity": 65, "start_time": "18:30", "end_time": "23:30", "description": "Longnight fires (Yule)" },
         { "dates": { "month_day_start": "12-31", "month_day_end": "12-31", "year_offsets": [-1, 0, 1] }, "capacity": 75, "start_time": "18:30", "end_time": "23:59", "description": "Year's End on Dragonstone" }
       ],
       "closings": [
-        { "dates": { "days_from_now_start": 9, "days_from_now_end": 11 }, "description": "Dragonmont ash-fall" },
-        { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] }, "weekday": "monday", "description": "Closed every Monday (summer rest)" },
+        { "dates": { "month_day_start": "06-01", "month_day_end": "07-31", "year_offsets": [-1, 0, 1] }, "weekday": "monday", "description": "Closed every Monday (early summer rest)" },
         { "dates": { "month_day_start": "01-01", "month_day_end": "01-02", "year_offsets": [-1, 0, 1] }, "description": "Recovering from the flames" }
       ]
     },
@@ -121,6 +123,9 @@
         { "weekday": "wednesday", "capacity": 40, "start_time": "12:30", "end_time": "15:00" },
         { "weekday": "thursday", "capacity": 40, "start_time": "12:30", "end_time": "15:00" },
         { "weekday": "friday", "capacity": 45, "start_time": "12:30", "end_time": "15:30" }
+      ],
+      "overrides": [
+        { "dates": { "month_day_start": "05-15", "month_day_end": "05-16", "year_offsets": [-1, 0, 1] }, "capacity": 75, "start_time": "18:30", "end_time": "23:59", "description": "Royal banquet" }
       ]
     },
     {
@@ -140,19 +145,18 @@
         { "weekday": "sunday", "capacity": 55, "start_time": "18:30", "end_time": "22:30" }
       ],
       "overrides": [
-        { "dates": { "days_from_now_start": 12, "days_from_now_end": 13 }, "capacity": 75, "start_time": "18:30", "end_time": "23:59", "description": "Royal banquet" },
         { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] }, "weekday": "friday", "capacity": 65, "start_time": "18:00", "end_time": "23:59", "description": "Extended service every Friday (summer)" },
         { "dates": { "month_day_start": "04-04", "month_day_end": "04-05", "year_offsets": [-1, 0, 1] }, "capacity": 65, "start_time": "18:30", "end_time": "23:00", "description": "Maiden's Day at Lannisport" },
         { "dates": { "month_day_start": "12-24", "month_day_end": "12-26", "year_offsets": [-1, 0, 1] }, "capacity": 70, "start_time": "18:30", "end_time": "23:30", "description": "Casterly Rock Yule feast" },
         { "dates": { "month_day_start": "12-31", "month_day_end": "12-31", "year_offsets": [-1, 0, 1] }, "capacity": 80, "start_time": "18:30", "end_time": "23:59", "description": "Golden Year's End" }
       ],
       "closings": [
-        { "dates": { "days_from_now_start": 3, "days_from_now_end": 4 }, "description": "Gold count audit" },
+        { "dates": { "month_day_start": "05-10", "month_day_end": "05-11", "year_offsets": [-1, 0, 1] }, "description": "Gold count audit" },
         { "dates": { "month_day_start": "09-01", "month_day_end": "09-03", "year_offsets": [-1, 0, 1] }, "description": "Debt collection week" },
         { "dates": { "month_day_start": "01-01", "month_day_end": "01-05", "year_offsets": [-1, 0, 1] }, "description": "Midwinter shutdown" }
       ],
       "capacity_overrides": [
-        { "dates": { "days_from_now_start": 5, "days_from_now_end": 8 }, "capacity_delta": 20, "description": "Overflow seating for a royal visit" }
+        { "dates": { "month_day_start": "05-25", "month_day_end": "05-28", "year_offsets": [-1, 0, 1] }, "capacity_delta": 20, "description": "Overflow seating for a royal visit" }
       ]
     },
     {
@@ -190,7 +194,7 @@
         { "dates": { "month_day_start": "12-31", "month_day_end": "12-31", "year_offsets": [-1, 0, 1] }, "capacity": 60, "start_time": "17:30", "end_time": "23:30", "description": "Year's End watch feast" }
       ],
       "closings": [
-        { "dates": { "days_from_now_start": 2, "days_from_now_end": 3 }, "description": "Wildling raid on the Wall" },
+        { "dates": { "month_day_start": "05-01", "month_day_end": "05-02", "year_offsets": [-1, 0, 1] }, "description": "Wildling raid on the Wall" },
         { "dates": { "month_day_start": "12-21", "month_day_end": "12-23", "year_offsets": [-1, 0, 1] }, "description": "The Long Night — the Watch holds" },
         { "dates": { "month_day_start": "04-04", "month_day_end": "04-05", "year_offsets": [-1, 0, 1] }, "weekday": "sunday", "description": "Closed Maiden's Day (Sunday)" }
       ]

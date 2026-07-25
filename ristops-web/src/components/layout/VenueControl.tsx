@@ -15,9 +15,11 @@ export default function VenueControl() {
   const { data, error } = useVenue(currentVenueId);
   const venue = data?.venue;
 
-  // Self-heal: a stored venue that no longer exists (e.g. after a reseed) clears itself.
+  // Self-heal: a stored venue that no longer exists (404, e.g. after a reseed) or that this
+  // user can no longer access (403, e.g. a revoked grant) clears itself.
   useEffect(() => {
-    if (currentVenueId && (error as ServiceError | null)?.status === 404) {
+    const status = (error as ServiceError | null)?.status;
+    if (currentVenueId && (status === 404 || status === 403)) {
       setCurrentVenueId(null);
     }
   }, [currentVenueId, error, setCurrentVenueId]);

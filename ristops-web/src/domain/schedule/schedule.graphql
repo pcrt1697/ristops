@@ -169,3 +169,47 @@ mutation UpdateVenueClosing($venueId: ID!, $closingId: ID!, $input: VenueClosing
 mutation DeleteVenueClosing($venueId: ID!, $closingId: ID!) {
     deleteVenueClosing(id: $venueId, closingId: $closingId)
 }
+
+query OpeningOverrideConflicts($serviceId: ID!, $input: ConflictCheckInput!) {
+    serviceOpeningOverrideConflicts(id: $serviceId, input: $input) {
+        weekday
+        source
+        conflictingId
+        conflictingDateStart
+        conflictingDateEnd
+        conflictingWeekday
+    }
+}
+
+query ServiceClosingConflicts($serviceId: ID!, $input: ConflictCheckInput!) {
+    serviceClosingConflicts(id: $serviceId, input: $input) {
+        weekday
+        source
+        conflictingId
+        conflictingDateStart
+        conflictingDateEnd
+        conflictingWeekday
+    }
+}
+
+query CapacityOverrideConflicts($serviceId: ID!, $input: ConflictCheckInput!) {
+    serviceCapacityOverrideConflicts(id: $serviceId, input: $input) {
+        weekday
+        source
+        conflictingId
+        conflictingDateStart
+        conflictingDateEnd
+        conflictingWeekday
+    }
+}
+
+query VenueClosingConflicts($venueId: ID!, $input: ConflictCheckInput!) {
+    venueClosingConflicts(id: $venueId, input: $input) {
+        weekday
+        source
+        conflictingId
+        conflictingDateStart
+        conflictingDateEnd
+        conflictingWeekday
+    }
+}

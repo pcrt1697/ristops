@@ -9,8 +9,11 @@ import {
 } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import ScheduleConflictWarning from '../../components/schedule/ScheduleConflictWarning.tsx';
 import {
+  useConflictCandidate,
   useCreateOpeningOverride,
+  useOpeningOverrideConflicts,
   useUpdateOpeningOverride,
 } from '../../domain/schedule/schedule.hooks.ts';
 import {
@@ -56,6 +59,13 @@ export default function OverrideFormModal({
   const isEditing = !!override;
   const isPending = createOverride.isPending || updateOverride.isPending;
 
+  const conflictCandidate = useConflictCandidate(form, override?.id);
+  const conflictsQuery = useOpeningOverrideConflicts(
+    serviceId,
+    conflictCandidate,
+  );
+  const hasConflicts = (conflictsQuery.data?.length ?? 0) > 0;
+
   function handleCancel() {
     form.resetFields();
     onClose();
@@ -70,13 +80,12 @@ export default function OverrideFormModal({
         const startTime = values.startTime.format('HH:mm:ss');
         const endTime = values.endTime.format('HH:mm:ss');
         if (override) {
-          // Editing one row: a single weekday value.
+          // Editing one row: the weekday scope is immutable, not sent.
           await updateOverride.mutateAsync({
             overrideId: override.id,
             input: {
               dateStart,
               dateEnd,
-              weekday: (values.weekday as Weekday | undefined) ?? null,
               startTime,
               endTime,
               capacity: values.capacity,
@@ -111,6 +120,7 @@ export default function OverrideFormModal({
       onOk={handleSubmit}
       onCancel={handleCancel}
       confirmLoading={isPending}
+      okButtonProps={{ disabled: hasConflicts }}
       okText={isEditing ? 'Save' : 'Create'}
       destroyOnHidden
       afterOpenChange={(o) => {
@@ -141,12 +151,13 @@ export default function OverrideFormModal({
           label="Applies to"
           extra={
             isEditing
-              ? 'Leave empty to apply to every day in the range.'
+              ? 'The weekday scope cannot be changed after creation; delete and recreate to change it.'
               : 'Select multiple to create one override per weekday. Leave empty (or select all) for every day.'
           }
         >
           <Select
             allowClear
+            disabled={isEditing}
             mode={isEditing ? undefined : 'multiple'}
             placeholder="Every day"
             options={WEEKDAY_ORDER.map((w) => ({
@@ -155,6 +166,12 @@ export default function OverrideFormModal({
             }))}
           />
         </Form.Item>
+        <ScheduleConflictWarning
+          conflicts={conflictsQuery.data}
+          isLoading={conflictsQuery.isFetching}
+          isError={conflictsQuery.isError}
+          onRetry={() => void conflictsQuery.refetch()}
+        />
         <Form.Item
           name="startTime"
           label="Opens at"

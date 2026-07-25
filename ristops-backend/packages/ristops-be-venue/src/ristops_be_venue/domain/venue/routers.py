@@ -2,7 +2,7 @@ from http import HTTPStatus
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.params import Path, Depends
 
 from ristops_be_venue.domain.models import VenueActionType
@@ -17,9 +17,10 @@ from ristops_be_venue.services.authz import authz_client_factory
 from ristops_lib_be.authz.client import AuthorizationResourceGrantsFetcher
 from ristops_lib_be.authz.policy import (
     policy, BaseResourceResolver, Policy, resolve_static_resource, resolve_permission_from_body_field,
+    resolve_body_attribute, resolve_path_attribute,
 )
 from ristops_lib_core.exception import ErrorResponse
-from ristops_lib_core.schema.authz import ResourceType, ListUserResourceGrantsResponse
+from ristops_lib_core.schema.authz import AuthorizationResource, ResourceType, ListUserResourceGrantsResponse
 from ristops_lib_core.schema.pagination import Page
 from ristops_lib_sql.engine import sql_transactional
 
@@ -116,6 +117,22 @@ _venue_action_permission_resolver = resolve_permission_from_body_field(
     },
 )
 
+# disable/enable are app-admin actions: checked against the app resource, not the venue, so
+# not even a venue's own wildcard grant (e.g. venue.owner) can satisfy them — only a role
+# assigned at app scope (admin, developer) can. activate/close stay venue-scoped (owner
+# self-service).
+_APP_SCOPED_VENUE_ACTIONS = (VenueActionType.DISABLE, VenueActionType.ENABLE)
+
+
+async def _venue_action_resource_resolver(request: Request) -> AuthorizationResource:
+    action = await resolve_body_attribute(request, "action_type")
+    if action in _APP_SCOPED_VENUE_ACTIONS:
+        return AuthorizationResource(resource_id="*", resource_type=ResourceType.APP)
+    return AuthorizationResource(
+        resource_id=await resolve_path_attribute(request, "venue_id"),
+        resource_type=ResourceType.VENUE,
+    )
+
 
 @venue_router.post(
     "/{venue_id}/actions",
@@ -129,7 +146,7 @@ _venue_action_permission_resolver = resolve_permission_from_body_field(
         HTTPStatus.BAD_REQUEST: {"model": ErrorResponse, "description": "Unknown action_type"},
     },
 )
-@policy(Policy(_venue_path_resolver, permissions_resolver=_venue_action_permission_resolver))
+@policy(Policy(_venue_action_resource_resolver, permissions_resolver=_venue_action_permission_resolver))
 @sql_transactional
 async def perform_action(
         venue_id: Annotated[UUID, Path(description="Venue ID")],

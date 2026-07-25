@@ -1,11 +1,14 @@
 import logging
+from datetime import date
 from http import HTTPStatus
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select, delete, ScalarResult, ColumnElement
 
-from ristops_be_reservation.domain.models import normalize_weekdays
+from ristops_be_reservation.domain.models import (
+    Weekday, normalize_weekdays, weekday_scope_overlap_condition,
+)
 from ristops_be_reservation.domain.schedule.entities import (
     OpeningEntity, OpeningOverrideEntity, ServiceClosingEntity, CapacityOverrideEntity,
 )
@@ -16,10 +19,12 @@ from ristops_be_reservation.domain.schedule.schema import (
     ServiceClosingResponse, ServiceClosingSearchQuery, DateRangeFilter,
     CapacityOverrideCreateRequest, CapacityOverrideUpdateRequest,
     CapacityOverrideResponse, CapacityOverrideSearchQuery,
+    ConflictQuery, ConflictSource, ConflictsResponse, ScheduleConflict,
 )
 from ristops_be_reservation.domain.service.service import find_service_or_throw
+from ristops_be_reservation.domain.venue.entities import VenueClosingEntity
 from ristops_be_reservation.domain.venue.service import (
-    ensure_venue_accepts_config_changes,
+    ensure_venue_accepts_config_changes, find_venue_closing_conflicts,
 )
 from ristops_lib_core.schema.pagination import Page
 from ristops_lib_sql.engine import get_sql_session
@@ -72,6 +77,99 @@ _capacity_override_search_executor = PaginatedSearchQueryExecutor[
         CapacityOverrideEntity, service_id, query
     ),
 )
+
+
+# --- Conflict detection ------------------------------------------------------
+#
+# Each exception kind only conflicts with its own kind on the same service (service closings
+# additionally check venue closings — handled in `_ensure_no_service_closing_conflict`). Two rows
+# conflict when their date ranges intersect (inclusive) AND their weekday scopes intersect.
+
+_ServiceExceptionEntity = (
+    type[OpeningOverrideEntity] | type[ServiceClosingEntity] | type[CapacityOverrideEntity]
+)
+
+
+async def _find_service_exception_conflicts(
+        entity: _ServiceExceptionEntity,
+        service_id: UUID,
+        date_start: date,
+        date_end: date,
+        weekday: Weekday | None,
+        exclude_id: UUID | None = None,
+) -> list[OpeningOverrideEntity | ServiceClosingEntity | CapacityOverrideEntity]:
+    """Return all rows of ``entity`` on ``service_id`` overlapping the given period and weekday
+    scope. ``exclude_id`` drops one row (used to let an in-place edit not conflict with itself)."""
+    conditions: list[ColumnElement[bool]] = [
+        entity.service_id == service_id,
+        entity.date_end >= date_start,
+        entity.date_start <= date_end,
+        weekday_scope_overlap_condition(entity.weekday, weekday),
+    ]
+    if exclude_id is not None:
+        conditions.append(entity.id != exclude_id)
+    session = get_sql_session()
+    result = await session.scalars(select(entity).where(*conditions))
+    return list(result.all())
+
+
+async def _ensure_no_opening_override_conflict(
+        service_id: UUID,
+        date_start: date,
+        date_end: date,
+        weekday: Weekday | None,
+        exclude_id: UUID | None = None,
+) -> None:
+    """Raise HTTP 409 if another opening override already overlaps this period and weekday scope."""
+    if await _find_service_exception_conflicts(
+            OpeningOverrideEntity, service_id, date_start, date_end, weekday, exclude_id=exclude_id
+    ):
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail="The period conflicts with an existing opening override",
+        )
+
+
+async def _ensure_no_capacity_override_conflict(
+        service_id: UUID,
+        date_start: date,
+        date_end: date,
+        weekday: Weekday | None,
+        exclude_id: UUID | None = None,
+) -> None:
+    """Raise HTTP 409 if another capacity override already overlaps this period and weekday scope."""
+    if await _find_service_exception_conflicts(
+            CapacityOverrideEntity, service_id, date_start, date_end, weekday, exclude_id=exclude_id
+    ):
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail="The period conflicts with an existing capacity override",
+        )
+
+
+async def _ensure_no_service_closing_conflict(
+        service_id: UUID,
+        venue_id: UUID,
+        date_start: date,
+        date_end: date,
+        weekday: Weekday | None,
+        exclude_id: UUID | None = None,
+) -> None:
+    """Raise HTTP 409 if the period overlaps another service closing on this service, or any venue
+    closing on the service's venue. ``exclude_id`` applies only to the same-table (service-closing)
+    check — a service-closing id can never identify a venue-closing row."""
+    if await _find_service_exception_conflicts(
+            ServiceClosingEntity, service_id, date_start, date_end, weekday, exclude_id=exclude_id
+    ):
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail="The period conflicts with an existing service closing",
+        )
+    if await find_venue_closing_conflicts(venue_id, date_start, date_end, weekday):
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail="The period conflicts with an existing venue closing",
+        )
 
 
 async def upsert_service_openings(
@@ -149,9 +247,14 @@ async def create_service_opening_overrides(
     """Create one or more opening overrides for a service in a single transaction — one row per
     weekday in ``request.weekdays`` (normalized: empty/all-seven collapses to a single every-day
     row). Overrides are one-off special cases, so unlike openings this is a plain bulk create,
-    not a reconcile."""
-    service = await find_service_or_throw(service_id)
+    not a reconcile. Raises HTTP 409 if any row would overlap an existing opening override."""
+    service = await find_service_or_throw(service_id, for_update=True)
     await ensure_venue_accepts_config_changes(service.venue_id)
+    weekdays = normalize_weekdays(request.weekdays)
+    for weekday in weekdays:
+        await _ensure_no_opening_override_conflict(
+            service_id, request.date_start, request.date_end, weekday
+        )
     session = get_sql_session()
     overrides = [
         OpeningOverrideEntity(
@@ -164,7 +267,7 @@ async def create_service_opening_overrides(
             end_time=request.end_time,
             description=request.description,
         )
-        for weekday in normalize_weekdays(request.weekdays)
+        for weekday in weekdays
     ]
     session.add_all(overrides)
     await session.flush()
@@ -181,9 +284,11 @@ async def update_service_opening_override(
         override_id: UUID,
         request: OpeningOverrideUpdateRequest,
 ) -> OpeningOverrideEntity:
-    """Update an opening override. Only fields present in the request body are modified."""
+    """Update an opening override. Only fields present in the request body are modified. The
+    weekday scope is immutable. Raises HTTP 409 if the new period would overlap another opening
+    override."""
     override = await find_service_opening_override_or_throw(service_id, override_id)
-    service = await find_service_or_throw(service_id)
+    service = await find_service_or_throw(service_id, for_update=True)
     await ensure_venue_accepts_config_changes(service.venue_id)
     fields_to_update = request.model_fields_set
 
@@ -191,9 +296,6 @@ async def update_service_opening_override(
         override.date_start = request.date_start
     if "date_end" in fields_to_update and request.date_end is not None:
         override.date_end = request.date_end
-    if "weekday" in fields_to_update:
-        # Nullable: an explicit null clears the weekday scope (back to every day).
-        override.weekday = request.weekday
     if "capacity" in fields_to_update and request.capacity is not None:
         override.capacity = request.capacity
     if "start_time" in fields_to_update and request.start_time is not None:
@@ -202,6 +304,14 @@ async def update_service_opening_override(
         override.end_time = request.end_time
     if "description" in fields_to_update:
         override.description = request.description
+
+    await _ensure_no_opening_override_conflict(
+        service_id,
+        override.date_start,
+        override.date_end,
+        Weekday(override.weekday) if override.weekday is not None else None,
+        exclude_id=override.id,
+    )
 
     session = get_sql_session()
     await session.flush()
@@ -251,9 +361,15 @@ async def create_service_closings(
     """Create one or more closings for a service in a single transaction — one row per weekday
     in ``request.weekdays`` (normalized: empty/all-seven collapses to a single every-day row).
     Closings are one-off special cases, so unlike openings this is a plain bulk create, not a
-    reconcile."""
-    service = await find_service_or_throw(service_id)
-    await ensure_venue_accepts_config_changes(service.venue_id)
+    reconcile. Raises HTTP 409 if any row would overlap an existing service closing, or a venue
+    closing on the service's venue."""
+    service = await find_service_or_throw(service_id, for_update=True)
+    await ensure_venue_accepts_config_changes(service.venue_id, for_update=True)
+    weekdays = normalize_weekdays(request.weekdays)
+    for weekday in weekdays:
+        await _ensure_no_service_closing_conflict(
+            service_id, service.venue_id, request.date_start, request.date_end, weekday
+        )
     session = get_sql_session()
     closings = [
         ServiceClosingEntity(
@@ -263,7 +379,7 @@ async def create_service_closings(
             weekday=weekday,
             description=request.description,
         )
-        for weekday in normalize_weekdays(request.weekdays)
+        for weekday in weekdays
     ]
     session.add_all(closings)
     await session.flush()
@@ -278,21 +394,29 @@ async def update_service_closing(
         closing_id: UUID,
         request: ServiceClosingUpdateRequest,
 ) -> ServiceClosingEntity:
-    """Update a closing. Only fields present in the request body are modified."""
+    """Update a closing. Only fields present in the request body are modified. The weekday scope
+    is immutable. Raises HTTP 409 if the new period would overlap another service closing, or a
+    venue closing on the service's venue."""
     closing = await find_service_closing_or_throw(service_id, closing_id)
-    service = await find_service_or_throw(service_id)
-    await ensure_venue_accepts_config_changes(service.venue_id)
+    service = await find_service_or_throw(service_id, for_update=True)
+    await ensure_venue_accepts_config_changes(service.venue_id, for_update=True)
     fields_to_update = request.model_fields_set
 
     if "date_start" in fields_to_update and request.date_start is not None:
         closing.date_start = request.date_start
     if "date_end" in fields_to_update and request.date_end is not None:
         closing.date_end = request.date_end
-    if "weekday" in fields_to_update:
-        # Nullable: an explicit null clears the weekday scope (back to every day).
-        closing.weekday = request.weekday
     if "description" in fields_to_update:
         closing.description = request.description
+
+    await _ensure_no_service_closing_conflict(
+        service_id,
+        service.venue_id,
+        closing.date_start,
+        closing.date_end,
+        Weekday(closing.weekday) if closing.weekday is not None else None,
+        exclude_id=closing.id,
+    )
 
     session = get_sql_session()
     await session.flush()
@@ -344,9 +468,15 @@ async def create_service_capacity_overrides(
 ) -> list[CapacityOverrideEntity]:
     """Create one or more capacity overrides for a service in a single transaction — one row per
     weekday in ``request.weekdays`` (normalized: empty/all-seven collapses to a single every-day
-    row). A one-off seat delta, so a plain bulk create."""
-    service = await find_service_or_throw(service_id)
+    row). A one-off seat delta, so a plain bulk create. Raises HTTP 409 if any row would overlap
+    an existing capacity override."""
+    service = await find_service_or_throw(service_id, for_update=True)
     await ensure_venue_accepts_config_changes(service.venue_id)
+    weekdays = normalize_weekdays(request.weekdays)
+    for weekday in weekdays:
+        await _ensure_no_capacity_override_conflict(
+            service_id, request.date_start, request.date_end, weekday
+        )
     session = get_sql_session()
     capacity_overrides = [
         CapacityOverrideEntity(
@@ -357,7 +487,7 @@ async def create_service_capacity_overrides(
             capacity_delta=request.capacity_delta,
             description=request.description,
         )
-        for weekday in normalize_weekdays(request.weekdays)
+        for weekday in weekdays
     ]
     session.add_all(capacity_overrides)
     await session.flush()
@@ -374,9 +504,11 @@ async def update_service_capacity_override(
         capacity_override_id: UUID,
         request: CapacityOverrideUpdateRequest,
 ) -> CapacityOverrideEntity:
-    """Update a capacity override. Only fields present in the request body are modified."""
+    """Update a capacity override. Only fields present in the request body are modified. The
+    weekday scope is immutable. Raises HTTP 409 if the new period would overlap another capacity
+    override."""
     capacity_override = await find_service_capacity_override_or_throw(service_id, capacity_override_id)
-    service = await find_service_or_throw(service_id)
+    service = await find_service_or_throw(service_id, for_update=True)
     await ensure_venue_accepts_config_changes(service.venue_id)
     fields_to_update = request.model_fields_set
 
@@ -384,13 +516,18 @@ async def update_service_capacity_override(
         capacity_override.date_start = request.date_start
     if "date_end" in fields_to_update and request.date_end is not None:
         capacity_override.date_end = request.date_end
-    if "weekday" in fields_to_update:
-        # Nullable: an explicit null clears the weekday scope (back to every day).
-        capacity_override.weekday = request.weekday
     if "capacity_delta" in fields_to_update and request.capacity_delta is not None:
         capacity_override.capacity_delta = request.capacity_delta
     if "description" in fields_to_update:
         capacity_override.description = request.description
+
+    await _ensure_no_capacity_override_conflict(
+        service_id,
+        capacity_override.date_start,
+        capacity_override.date_end,
+        Weekday(capacity_override.weekday) if capacity_override.weekday is not None else None,
+        exclude_id=capacity_override.id,
+    )
 
     session = get_sql_session()
     await session.flush()
@@ -416,3 +553,88 @@ async def search_service_capacity_overrides(
     """Return a paginated, date-range-filtered page of capacity overrides for a service."""
     await find_service_or_throw(service_id, include_deleted=query.include_deleted)
     return await _capacity_override_search_executor.execute(query, service_id)
+
+
+# --- Conflict previews (read-only) -------------------------------------------
+
+def _to_schedule_conflict(
+        candidate_weekday: Weekday | None,
+        source: ConflictSource,
+        row: OpeningOverrideEntity | ServiceClosingEntity | CapacityOverrideEntity | VenueClosingEntity,
+) -> ScheduleConflict:
+    """Map a conflicting DB row to a `ScheduleConflict`, tagged with the candidate weekday it
+    clashes with and the row's own kind."""
+    return ScheduleConflict(
+        weekday=candidate_weekday,
+        source=source,
+        conflicting_id=row.id,
+        conflicting_date_start=row.date_start,
+        conflicting_date_end=row.date_end,
+        conflicting_weekday=Weekday(row.weekday) if row.weekday is not None else None,
+    )
+
+
+async def find_service_opening_override_conflicts_for(
+        service_id: UUID,
+        query: ConflictQuery,
+) -> ConflictsResponse:
+    """Read-only preview: which existing opening overrides a candidate period+weekdays would
+    conflict with. Lock-free — mirrors what `create_service_opening_overrides` would reject."""
+    await find_service_or_throw(service_id)
+    conflicts: list[ScheduleConflict] = []
+    for weekday in normalize_weekdays(query.weekdays):
+        rows = await _find_service_exception_conflicts(
+            OpeningOverrideEntity, service_id, query.date_start, query.date_end, weekday,
+            exclude_id=query.exclude_id,
+        )
+        conflicts.extend(
+            _to_schedule_conflict(weekday, ConflictSource.OPENING_OVERRIDE, row) for row in rows
+        )
+    return ConflictsResponse(conflicts=conflicts)
+
+
+async def find_service_capacity_override_conflicts_for(
+        service_id: UUID,
+        query: ConflictQuery,
+) -> ConflictsResponse:
+    """Read-only preview: which existing capacity overrides a candidate period+weekdays would
+    conflict with. Lock-free — mirrors what `create_service_capacity_overrides` would reject."""
+    await find_service_or_throw(service_id)
+    conflicts: list[ScheduleConflict] = []
+    for weekday in normalize_weekdays(query.weekdays):
+        rows = await _find_service_exception_conflicts(
+            CapacityOverrideEntity, service_id, query.date_start, query.date_end, weekday,
+            exclude_id=query.exclude_id,
+        )
+        conflicts.extend(
+            _to_schedule_conflict(weekday, ConflictSource.CAPACITY_OVERRIDE, row) for row in rows
+        )
+    return ConflictsResponse(conflicts=conflicts)
+
+
+async def find_service_closing_conflicts_for(
+        service_id: UUID,
+        query: ConflictQuery,
+) -> ConflictsResponse:
+    """Read-only preview: which existing service closings (this service) or venue closings (its
+    venue) a candidate period+weekdays would conflict with. Lock-free — mirrors what
+    `create_service_closings` would reject. ``exclude_id`` applies only to the service-closing
+    side; venue closings are always checked in full."""
+    service = await find_service_or_throw(service_id)
+    conflicts: list[ScheduleConflict] = []
+    for weekday in normalize_weekdays(query.weekdays):
+        service_rows = await _find_service_exception_conflicts(
+            ServiceClosingEntity, service_id, query.date_start, query.date_end, weekday,
+            exclude_id=query.exclude_id,
+        )
+        conflicts.extend(
+            _to_schedule_conflict(weekday, ConflictSource.SERVICE_CLOSING, row)
+            for row in service_rows
+        )
+        venue_rows = await find_venue_closing_conflicts(
+            service.venue_id, query.date_start, query.date_end, weekday
+        )
+        conflicts.extend(
+            _to_schedule_conflict(weekday, ConflictSource.VENUE_CLOSING, row) for row in venue_rows
+        )
+    return ConflictsResponse(conflicts=conflicts)

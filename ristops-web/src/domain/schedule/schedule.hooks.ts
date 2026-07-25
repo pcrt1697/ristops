@@ -1,18 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { message } from 'antd';
+import { Form, type FormInstance, message } from 'antd';
+import type { Dayjs } from 'dayjs';
+import { useMemo } from 'react';
+import { useDebounced } from '../../commons/hooks.ts';
+import type { ServiceError } from '../../services/common.ts';
 import type {
   CapacityOverrideCreateInput,
   CapacityOverrideUpdateInput,
-  ServiceClosingCreateInput,
-  ServiceClosingUpdateInput,
+  ConflictCheckInput,
   OpeningOverrideCreateInput,
   OpeningOverrideUpdateInput,
   OpeningUpsertInput,
   ScheduleDateFilter,
+  ServiceClosingCreateInput,
+  ServiceClosingUpdateInput,
   VenueClosingCreateInput,
   VenueClosingUpdateInput,
+  Weekday,
 } from '../../services/graphql/graphql.ts';
 import { scheduleApi } from './schedule.api.ts';
+import { normalizeWeekdays } from './schedule.utils.ts';
+
+/** Only toast non-conflict failures — a 409 is shown inline in the modal by the live check. */
+function toastUnlessConflict(msg: string) {
+  return (error: unknown) => {
+    if ((error as ServiceError).status !== 409) void message.error(msg);
+  };
+}
 
 export function useServiceOpenings(
   serviceId: string,
@@ -68,7 +82,7 @@ export function useCreateOpeningOverride(serviceId: string) {
         queryKey: ['schedule.overrides', serviceId],
       });
     },
-    onError: () => void message.error('Could not create the override'),
+    onError: toastUnlessConflict('Could not create the override'),
   });
 }
 
@@ -87,7 +101,7 @@ export function useUpdateOpeningOverride(serviceId: string) {
         queryKey: ['schedule.overrides', serviceId],
       });
     },
-    onError: () => void message.error('Could not update the override'),
+    onError: toastUnlessConflict('Could not update the override'),
   });
 }
 
@@ -130,7 +144,7 @@ export function useCreateServiceClosing(serviceId: string) {
         queryKey: ['schedule.closings', serviceId],
       });
     },
-    onError: () => void message.error('Could not create the closing'),
+    onError: toastUnlessConflict('Could not create the closing'),
   });
 }
 
@@ -149,7 +163,7 @@ export function useUpdateServiceClosing(serviceId: string) {
         queryKey: ['schedule.closings', serviceId],
       });
     },
-    onError: () => void message.error('Could not update the closing'),
+    onError: toastUnlessConflict('Could not update the closing'),
   });
 }
 
@@ -192,7 +206,7 @@ export function useCreateCapacityOverride(serviceId: string) {
         queryKey: ['schedule.capacityOverrides', serviceId],
       });
     },
-    onError: () => void message.error('Could not create the capacity change'),
+    onError: toastUnlessConflict('Could not create the capacity change'),
   });
 }
 
@@ -212,7 +226,7 @@ export function useUpdateCapacityOverride(serviceId: string) {
         queryKey: ['schedule.capacityOverrides', serviceId],
       });
     },
-    onError: () => void message.error('Could not update the capacity change'),
+    onError: toastUnlessConflict('Could not update the capacity change'),
   });
 }
 
@@ -310,7 +324,14 @@ export function useSearchVenueClosingsPage(
   pageSize: number,
 ) {
   return useQuery({
-    queryKey: ['schedule.venueClosings', venueId, 'page', filter, page, pageSize],
+    queryKey: [
+      'schedule.venueClosings',
+      venueId,
+      'page',
+      filter,
+      page,
+      pageSize,
+    ],
     queryFn: () =>
       scheduleApi.searchVenueClosings(venueId, filter, { page, pageSize }),
     enabled: !!venueId,
@@ -327,7 +348,7 @@ export function useCreateVenueClosing(venueId: string) {
         queryKey: ['schedule.venueClosings', venueId],
       });
     },
-    onError: () => void message.error('Could not create the venue closure'),
+    onError: toastUnlessConflict('Could not create the venue closure'),
   });
 }
 
@@ -346,7 +367,7 @@ export function useUpdateVenueClosing(venueId: string) {
         queryKey: ['schedule.venueClosings', venueId],
       });
     },
-    onError: () => void message.error('Could not update the venue closure'),
+    onError: toastUnlessConflict('Could not update the venue closure'),
   });
 }
 
@@ -361,5 +382,92 @@ export function useDeleteVenueClosing(venueId: string) {
       });
     },
     onError: () => void message.error('Could not delete the venue closure'),
+  });
+}
+
+// --- Conflict previews (live, pre-submit check in the creation/edit modals) ----
+// Each query is keyed under the same base as its kind's calendar/page queries, so a
+// create/update mutation (which invalidates that base key) also refreshes any open preview.
+
+interface ConflictFormFields {
+  dates?: [Dayjs, Dayjs];
+  // Single value when editing one row; multiple when bulk-creating one row per weekday.
+  weekday?: Weekday | Weekday[];
+}
+
+/**
+ * Derive a debounced `ConflictCheckInput` from a schedule form's `dates`/`weekday` fields, or
+ * `undefined` while the date range isn't complete yet (nothing to check). `excludeId` should be
+ * the row's own id when editing, so it doesn't conflict with itself.
+ */
+export function useConflictCandidate<T extends ConflictFormFields>(
+  form: FormInstance<T>,
+  excludeId?: string,
+): ConflictCheckInput | undefined {
+  const dates = Form.useWatch('dates', form) as [Dayjs, Dayjs] | undefined;
+  const weekday = Form.useWatch('weekday', form) as
+    | Weekday
+    | Weekday[]
+    | undefined;
+
+  const candidate = useMemo<ConflictCheckInput | undefined>(() => {
+    if (!dates?.[0] || !dates[1]) return undefined;
+    const weekdays = Array.isArray(weekday)
+      ? normalizeWeekdays(weekday)
+      : weekday
+        ? [weekday]
+        : undefined;
+    return {
+      dateStart: dates[0].format('YYYY-MM-DD'),
+      dateEnd: dates[1].format('YYYY-MM-DD'),
+      weekdays,
+      excludeId,
+    };
+  }, [dates, weekday, excludeId]);
+
+  return useDebounced(candidate);
+}
+
+export function useOpeningOverrideConflicts(
+  serviceId: string,
+  candidate: ConflictCheckInput | undefined,
+) {
+  return useQuery({
+    queryKey: ['schedule.overrides', serviceId, 'conflicts', candidate],
+    queryFn: () => scheduleApi.openingOverrideConflicts(serviceId, candidate!),
+    enabled: !!serviceId && !!candidate,
+  });
+}
+
+export function useServiceClosingConflicts(
+  serviceId: string,
+  candidate: ConflictCheckInput | undefined,
+) {
+  return useQuery({
+    queryKey: ['schedule.closings', serviceId, 'conflicts', candidate],
+    queryFn: () => scheduleApi.serviceClosingConflicts(serviceId, candidate!),
+    enabled: !!serviceId && !!candidate,
+  });
+}
+
+export function useCapacityOverrideConflicts(
+  serviceId: string,
+  candidate: ConflictCheckInput | undefined,
+) {
+  return useQuery({
+    queryKey: ['schedule.capacityOverrides', serviceId, 'conflicts', candidate],
+    queryFn: () => scheduleApi.capacityOverrideConflicts(serviceId, candidate!),
+    enabled: !!serviceId && !!candidate,
+  });
+}
+
+export function useVenueClosingConflicts(
+  venueId: string,
+  candidate: ConflictCheckInput | undefined,
+) {
+  return useQuery({
+    queryKey: ['schedule.venueClosings', venueId, 'conflicts', candidate],
+    queryFn: () => scheduleApi.venueClosingConflicts(venueId, candidate!),
+    enabled: !!venueId && !!candidate,
   });
 }

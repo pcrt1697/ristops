@@ -13,15 +13,21 @@ import {
   VenueContext,
 } from './venue.context.ts';
 import { use } from 'react';
+import { useAuth } from '../auth/auth.hooks.ts';
 
 export function useSearchVenues(
   filter?: VenueFilterInput,
   pagination?: PaginationInput,
   sort?: VenueSortFieldSortInput[],
 ) {
+  const { isAuthenticated } = useAuth();
+
   return useQuery({
     queryKey: ['venue.search', filter, pagination, sort],
     queryFn: () => venueApi.searchVenues(filter, pagination, sort),
+    // Only ever meaningful for a logged-in user; also guards against firing during the
+    // logout race (session invalidated server-side before the authenticated tree unmounts).
+    enabled: isAuthenticated,
   });
 }
 

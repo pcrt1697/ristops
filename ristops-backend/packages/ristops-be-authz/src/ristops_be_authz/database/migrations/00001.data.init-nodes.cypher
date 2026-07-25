@@ -83,9 +83,13 @@ MERGE (r)-[:GRANTS]->(p);
 MERGE (:Role {id: "venue.manager", name: "Venue Manager", description: "Role with permissions manage venue ACL, update venue information", scope: "venue"});
 
 // Assign permissions to venue manager role
+// Deliberately excludes venue lifecycle control: venue:activate/close is owner-only
+// self-service, venue:disable/enable is app-admin-only (checked against the app resource, see
+// be-venue's perform_action route). Also excludes venue:add/venue:list (checked against the
+// app resource — inert on a venue-scoped role) and venue:remove (no endpoint checks it).
 MATCH (r:Role {id: "venue.manager"})
 MATCH (p:Permission)
-WHERE p.id IN ["acl:list", "acl:remove", "acl:add", "venue:add", "venue:get", "venue:edit", "venue:remove", "venue:list", "venue:activate", "venue:close", "venue:disable", "venue:enable", "service:add", "service:get", "service:edit", "service:remove", "service:list", "schedule:add", "schedule:get", "schedule:edit", "schedule:remove", "schedule:list"]
+WHERE p.id IN ["acl:list", "acl:remove", "acl:add", "venue:get", "venue:edit", "service:add", "service:get", "service:edit", "service:remove", "service:list", "schedule:add", "schedule:get", "schedule:edit", "schedule:remove", "schedule:list"]
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Venue Bartender role --
@@ -93,7 +97,8 @@ MERGE (:Role {id: "venue.bartender", name: "Venue Bartender", description: "Role
 
 // Assign permissions to venue bartender role
 MATCH (r:Role {id: "venue.bartender"})
-MATCH (p:Permission {id: "venue:get"})
+MATCH (p:Permission)
+WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list"]
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Venue Chef role --
@@ -101,13 +106,15 @@ MERGE (:Role {id: "venue.chef", name: "Venue Chef", description: "Role with base
 
 // Assign permissions to venue chef role
 MATCH (r:Role {id: "venue.chef"})
-MATCH (p:Permission {id: "venue:get"})
+MATCH (p:Permission)
+WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list"]
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Venue Server role --
 MERGE (:Role {id: "venue.server", name: "Venue Server", description: "Role with base access to venue orders", scope: "venue"});
 
-// Assign permissions to venue owner role
+// Assign permissions to venue server role
 MATCH (r:Role {id: "venue.server"})
-MATCH (p:Permission {id: "venue:get"})
+MATCH (p:Permission)
+WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list"]
 MERGE (r)-[:GRANTS]->(p);

@@ -65,26 +65,27 @@ unique and lowercase, times are `HH:MM`:
 ```
 
 Optional `overrides` (special hours/capacity for a date range) and `closings` (service closed) add
-calendar exceptions. Their dates are **materialized at seed time** so they land near "now": use
-`dates.days_from_now_start/end` for a single instance relative to today, or
-`dates.month_day_start/end` (`"MM-DD"`) with `dates.year_offsets` (relative to the current year,
-e.g. `[-1, 0, 1]` for previous/current/next) for an annual event:
+calendar exceptions. Their dates are a fixed annual `dates.month_day_start/end` (`"MM-DD"`) range,
+materialized once per entry in `dates.year_offsets` (relative to the current *year* only —
+`[-1, 0, 1]` for previous/current/next year). The day/month are always fixed, so seed data never
+depends on which day it happens to be seeded on.
 
 Both accept an optional lowercase `weekday` that scopes the exception to a single weekday within
 the range (null/omitted = every day) — e.g. "closed every Monday all summer":
 
 ```json
 "overrides": [
-  { "dates": { "days_from_now_start": 11, "days_from_now_end": 13 },
+  { "dates": { "month_day_start": "09-21", "month_day_end": "09-23", "year_offsets": [-1, 0, 1] },
     "capacity": 80, "start_time": "18:00", "end_time": "23:30", "description": "Harvest feast" },
   { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] },
     "weekday": "friday", "capacity": 65, "start_time": "18:00", "end_time": "23:59",
     "description": "Extended service every Friday (summer)" }
 ],
 "closings": [
-  { "dates": { "days_from_now_start": 4, "days_from_now_end": 5 }, "description": "Kingsmoot recess" },
-  { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] },
-    "weekday": "monday", "description": "Closed every Monday (summer rest)" }
+  { "dates": { "month_day_start": "10-10", "month_day_end": "10-11", "year_offsets": [-1, 0, 1] },
+    "description": "Kingsmoot recess" },
+  { "dates": { "month_day_start": "06-01", "month_day_end": "07-31", "year_offsets": [-1, 0, 1] },
+    "weekday": "monday", "description": "Closed every Monday (early summer rest)" }
 ]
 ```
 

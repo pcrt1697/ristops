@@ -41,6 +41,59 @@ class ServiceScheduleQuery(SearchQuery, DateRangeFilter):
     )
 
 
+class ConflictSource(StrEnum):
+    """Which kind of exception a conflicting row belongs to."""
+
+    VENUE_CLOSING = "venue_closing"
+    SERVICE_CLOSING = "service_closing"
+    OPENING_OVERRIDE = "opening_override"
+    CAPACITY_OVERRIDE = "capacity_override"
+
+
+class ScheduleConflict(BaseModel):
+    """A single existing row that conflicts with a candidate period+weekday being checked."""
+
+    weekday: Weekday | None = Field(
+        default=None,
+        description="Weekday from the candidate request this conflict applies to; null = every day.",
+    )
+    source: ConflictSource = Field(description="Which kind of exception the conflicting row is.")
+    conflicting_id: UUID = Field(description="Identifier of the existing conflicting row.")
+    conflicting_date_start: date = Field(description="First date of the conflicting row (inclusive).")
+    conflicting_date_end: date = Field(description="Last date of the conflicting row (inclusive).")
+    conflicting_weekday: Weekday | None = Field(
+        default=None,
+        description="Weekday scope of the conflicting row; null means every day.",
+    )
+
+
+class ConflictQuery(BaseModel):
+    """Query for a read-only conflict preview: the candidate period a client is about to write.
+    Mirrors the create-request shape (bulk `weekdays`), plus an optional `exclude_id` to preview
+    an in-place edit without the row conflicting with itself."""
+
+    date_start: date = Field(description="First date of the candidate period (inclusive).")
+    date_end: date = Field(description="Last date of the candidate period (inclusive).")
+    weekdays: list[Weekday] | None = Field(
+        default=None,
+        description="Weekdays to check; provide multiple for a bulk candidate. "
+                    "Omit, or include all 7, for every day.",
+    )
+    exclude_id: UUID | None = Field(
+        default=None,
+        description="Exclude this row from the check (use when previewing an edit of it).",
+    )
+
+
+class ConflictsResponse(BaseModel):
+    """Result of a conflict preview: the conflicting rows, empty when the candidate is free."""
+
+    conflicts: list[ScheduleConflict] = Field(
+        default_factory=list,
+        description="Existing rows that conflict with the candidate; empty means no conflict.",
+    )
+
+
 class OpeningUpsertRequest(BaseModel):
     """A single opening within a bulk upsert request."""
 
@@ -117,7 +170,8 @@ class OpeningOverrideCreateRequest(BaseModel):
 
 
 class OpeningOverrideUpdateRequest(BaseModel):
-    """Request body for updating an opening override. Unset fields are not modified."""
+    """Request body for updating an opening override. Unset fields are not modified. The
+    ``weekday`` scope is immutable — delete and recreate to re-scope it."""
 
     date_start: date | None = Field(
         default=None,
@@ -126,10 +180,6 @@ class OpeningOverrideUpdateRequest(BaseModel):
     date_end: date | None = Field(
         default=None,
         description="New last date of the override period (inclusive).",
-    )
-    weekday: Weekday | None = Field(
-        default=None,
-        description="New weekday the override applies to; null means every day in the range.",
     )
     capacity: int | None = Field(
         default=None,
@@ -199,7 +249,8 @@ class ServiceClosingCreateRequest(BaseModel):
 
 
 class ServiceClosingUpdateRequest(BaseModel):
-    """Request body for updating a closing. Unset fields are not modified."""
+    """Request body for updating a closing. Unset fields are not modified. The ``weekday`` scope
+    is immutable — delete and recreate to re-scope it."""
 
     date_start: date | None = Field(
         default=None,
@@ -208,10 +259,6 @@ class ServiceClosingUpdateRequest(BaseModel):
     date_end: date | None = Field(
         default=None,
         description="New last date of the closing period (inclusive).",
-    )
-    weekday: Weekday | None = Field(
-        default=None,
-        description="New weekday the closing applies to; null means every day in the range.",
     )
     description: str | None = Field(
         default=None,
@@ -274,7 +321,8 @@ class CapacityOverrideCreateRequest(BaseModel):
 
 
 class CapacityOverrideUpdateRequest(BaseModel):
-    """Request body for updating a capacity override. Unset fields are not modified."""
+    """Request body for updating a capacity override. Unset fields are not modified. The
+    ``weekday`` scope is immutable — delete and recreate to re-scope it."""
 
     date_start: date | None = Field(
         default=None,
@@ -283,10 +331,6 @@ class CapacityOverrideUpdateRequest(BaseModel):
     date_end: date | None = Field(
         default=None,
         description="New last date of the override period (inclusive).",
-    )
-    weekday: Weekday | None = Field(
-        default=None,
-        description="New weekday the override applies to; null means every day in the range.",
     )
     capacity_delta: int | None = Field(
         default=None,

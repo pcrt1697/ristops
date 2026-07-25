@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import date, timedelta
+from datetime import date
 from http import HTTPStatus
 from typing import Awaitable, Callable
 
@@ -18,20 +18,16 @@ _logger = logging.getLogger(__name__)
 
 
 def _expand_exception_dates(anchor: DemoExceptionDates) -> list[tuple[date, date]]:
-    """Materialize a calendar exception's date spec into concrete `(start, end)` ranges,
-    computed relative to today so the demo data stays near "now" whenever it is seeded."""
-    today = date.today()
-    if anchor.days_from_now_start is not None and anchor.days_from_now_end is not None:
-        return [(
-            today + timedelta(days=anchor.days_from_now_start),
-            today + timedelta(days=anchor.days_from_now_end),
-        )]
+    """Materialize a calendar exception's fixed annual 'MM-DD' date spec into concrete
+    `(start, end)` ranges, one per entry in `year_offsets` (relative to the current year only —
+    never to today's exact date, so seed data is stable regardless of when it is seeded)."""
+    current_year = date.today().year
     start_month, start_day = (int(part) for part in anchor.month_day_start.split("-"))
     end_month, end_day = (int(part) for part in anchor.month_day_end.split("-"))
     return [
         (
-            date(today.year + offset, start_month, start_day),
-            date(today.year + offset, end_month, end_day),
+            date(current_year + offset, start_month, start_day),
+            date(current_year + offset, end_month, end_day),
         )
         for offset in anchor.year_offsets
     ]

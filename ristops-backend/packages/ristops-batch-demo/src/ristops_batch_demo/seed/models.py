@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class DemoUser(BaseModel):
@@ -61,35 +61,18 @@ class DemoOpening(BaseModel):
 
 
 class DemoExceptionDates(BaseModel):
-    """When a calendar exception (override/closing) occurs. Materialized at seed time, so the
-    dates land near "now" whenever the demo is seeded. Exactly one style must be set:
-
-    * **relative** — ``days_from_now_start`` / ``days_from_now_end`` produce a single instance
-      offset from today (use small offsets so it shows in the default current-month view).
-    * **annual** — ``month_day_start`` / ``month_day_end`` (``"MM-DD"``) produce one instance per
-      entry in ``year_offsets`` (relative to the current year), e.g. ``[-1, 0, 1]`` for the
-      previous, current, and next year.
+    """When a calendar exception (override/closing) occurs: a fixed annual ``"MM-DD"`` range,
+    materialized once per entry in ``year_offsets`` (relative to the current *year* only — the
+    day/month are always fixed, so seed data never depends on which day it happens to be seeded
+    on). ``[-1, 0, 1]`` gives the previous, current, and next year.
     """
 
-    days_from_now_start: int | None = Field(default=None, description="Start day offset from today.")
-    days_from_now_end: int | None = Field(default=None, description="End day offset from today.")
-    month_day_start: str | None = Field(default=None, description="Annual start 'MM-DD'.")
-    month_day_end: str | None = Field(default=None, description="Annual end 'MM-DD'.")
+    month_day_start: str = Field(description="Annual start 'MM-DD'.")
+    month_day_end: str = Field(description="Annual end 'MM-DD'.")
     year_offsets: list[int] = Field(
-        default_factory=lambda: [0],
-        description="Year offsets relative to the current year (annual mode only).",
+        default_factory=lambda: [-1, 0, 1],
+        description="Year offsets relative to the current year.",
     )
-
-    @model_validator(mode="after")
-    def _validate_one_style(self) -> "DemoExceptionDates":
-        relative = self.days_from_now_start is not None and self.days_from_now_end is not None
-        annual = self.month_day_start is not None and self.month_day_end is not None
-        if relative == annual:
-            raise ValueError(
-                "Set exactly one of (days_from_now_start + days_from_now_end) or "
-                "(month_day_start + month_day_end)."
-            )
-        return self
 
 
 class DemoOverride(BaseModel):

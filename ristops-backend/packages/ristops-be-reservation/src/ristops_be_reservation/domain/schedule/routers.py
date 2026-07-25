@@ -13,6 +13,7 @@ from ristops_be_reservation.domain.schedule.schema import (
     ServiceClosingSearchQuery,
     CapacityOverrideCreateRequest, CapacityOverrideUpdateRequest,
     CapacityOverrideResponse, CapacityOverrideSearchQuery,
+    ConflictQuery, ConflictsResponse,
 )
 from ristops_be_reservation.domain.schedule.service import (
     upsert_service_openings, list_service_openings,
@@ -22,6 +23,8 @@ from ristops_be_reservation.domain.schedule.service import (
     remove_service_closing, search_service_closings,
     create_service_capacity_overrides, update_service_capacity_override,
     remove_service_capacity_override, search_service_capacity_overrides,
+    find_service_opening_override_conflicts_for, find_service_closing_conflicts_for,
+    find_service_capacity_override_conflicts_for,
 )
 from ristops_lib_be.authz.policy import policy, BaseResourceResolver, Policy
 from ristops_lib_core.exception import ErrorResponse
@@ -90,10 +93,14 @@ async def get_service_openings(
     status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue is not accepting config changes, or the period conflicts with "
+                           "an existing opening override",
+        },
     },
 )
-@policy(Policy(_service_path_resolver, "schedule:edit"))
+@policy(Policy(_service_path_resolver, "schedule:add"))
 @sql_transactional
 async def create_opening_override(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -113,7 +120,11 @@ async def create_opening_override(
     response_model=OpeningOverrideResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Opening override not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue is not accepting config changes, or the new period conflicts "
+                           "with an existing opening override",
+        },
     },
 )
 @policy(Policy(_service_path_resolver, "schedule:edit"))
@@ -137,7 +148,7 @@ async def update_opening_override(
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_service_path_resolver, "schedule:edit"))
+@policy(Policy(_service_path_resolver, "schedule:remove"))
 @sql_transactional
 async def delete_opening_override(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -145,6 +156,24 @@ async def delete_opening_override(
 ) -> None:
     """Delete an opening override. Authorized against the service itself."""
     await remove_service_opening_override(service_id, override_id)
+
+
+@schedule_router.get(
+    "/{service_id}/opening-overrides/conflicts",
+    response_model=ConflictsResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
+    },
+)
+@policy(Policy(_service_path_resolver, "schedule:list"))
+@sql_transactional
+async def get_opening_override_conflicts(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        query: Annotated[ConflictQuery, Query()],
+) -> ConflictsResponse:
+    """Read-only preview of which existing opening overrides a candidate period+weekdays would
+    conflict with (what a create would 409 on). Authorized against the service itself."""
+    return await find_service_opening_override_conflicts_for(service_id, query)
 
 
 @schedule_router.get(
@@ -171,10 +200,14 @@ async def get_service_opening_overrides(
     status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue is not accepting config changes, or the period conflicts with "
+                           "an existing service closing or venue closing",
+        },
     },
 )
-@policy(Policy(_service_path_resolver, "schedule:edit"))
+@policy(Policy(_service_path_resolver, "schedule:add"))
 @sql_transactional
 async def create_closing(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -194,7 +227,11 @@ async def create_closing(
     response_model=ServiceClosingResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Closing not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue is not accepting config changes, or the new period conflicts "
+                           "with an existing service closing or venue closing",
+        },
     },
 )
 @policy(Policy(_service_path_resolver, "schedule:edit"))
@@ -218,7 +255,7 @@ async def update_closing(
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_service_path_resolver, "schedule:edit"))
+@policy(Policy(_service_path_resolver, "schedule:remove"))
 @sql_transactional
 async def delete_closing(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -246,16 +283,38 @@ async def get_service_closings(
     return await search_service_closings(service_id, query)
 
 
+@schedule_router.get(
+    "/{service_id}/closings/conflicts",
+    response_model=ConflictsResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
+    },
+)
+@policy(Policy(_service_path_resolver, "schedule:list"))
+@sql_transactional
+async def get_service_closing_conflicts(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        query: Annotated[ConflictQuery, Query()],
+) -> ConflictsResponse:
+    """Read-only preview of which existing service closings (this service) or venue closings (its
+    venue) a candidate period+weekdays would conflict with. Authorized against the service itself."""
+    return await find_service_closing_conflicts_for(service_id, query)
+
+
 @schedule_router.post(
     "/{service_id}/capacity-overrides",
     response_model=list[CapacityOverrideResponse],
     status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue is not accepting config changes, or the period conflicts with "
+                           "an existing capacity override",
+        },
     },
 )
-@policy(Policy(_service_path_resolver, "schedule:edit"))
+@policy(Policy(_service_path_resolver, "schedule:add"))
 @sql_transactional
 async def create_capacity_override(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -275,7 +334,11 @@ async def create_capacity_override(
     response_model=CapacityOverrideResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Capacity override not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue is not accepting config changes, or the new period conflicts "
+                           "with an existing capacity override",
+        },
     },
 )
 @policy(Policy(_service_path_resolver, "schedule:edit"))
@@ -299,7 +362,7 @@ async def update_capacity_override(
         HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
     },
 )
-@policy(Policy(_service_path_resolver, "schedule:edit"))
+@policy(Policy(_service_path_resolver, "schedule:remove"))
 @sql_transactional
 async def delete_capacity_override(
         service_id: Annotated[UUID, Path(description="Service ID")],
@@ -325,3 +388,21 @@ async def get_service_capacity_overrides(
     """Return a paginated, date-range-filtered page of capacity overrides for a service.
     Authorized against the service itself."""
     return await search_service_capacity_overrides(service_id, query)
+
+
+@schedule_router.get(
+    "/{service_id}/capacity-overrides/conflicts",
+    response_model=ConflictsResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
+    },
+)
+@policy(Policy(_service_path_resolver, "schedule:list"))
+@sql_transactional
+async def get_capacity_override_conflicts(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        query: Annotated[ConflictQuery, Query()],
+) -> ConflictsResponse:
+    """Read-only preview of which existing capacity overrides a candidate period+weekdays would
+    conflict with (what a create would 409 on). Authorized against the service itself."""
+    return await find_service_capacity_override_conflicts_for(service_id, query)

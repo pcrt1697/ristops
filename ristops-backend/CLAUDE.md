@@ -117,3 +117,256 @@ at-least-once delivery; stale messages are reclaimed with `XAUTOCLAIM`.
   CLI entry points to configure the provider before any transactional call.
 * **Neo4j** (`be-authz`): same pattern via `@neo4j_transactional`, `get_neo4j_transaction()`,
   and `@with_neo4j_db` for CLI commands.
+
+## Adding a new endpoint
+
+Step-by-step conventions for scaffolding a new endpoint in a Postgres-backed domain service
+(`be-venue`, `be-reservation`, `be-authn`). `be-authz` (Neo4j) differs — noted inline where it
+does. Worked examples to cross-check against: `ristops-be-venue/.../domain/venue/` and
+`ristops-be-reservation/.../domain/schedule/`.
+
+### 1. Locate or create the subdomain module
+
+Each domain package is organized as `src/ristops_be_<service>/domain/<subdomain>/`:
+
+```text
+entities.py   # SQLAlchemy ORM entities (Postgres). be-authz: domain/models.py Pydantic node classes instead
+schema.py     # Pydantic request/response/search schemas
+routers.py    # FastAPI APIRouter + route handlers
+service.py    # business logic, queries, conflict checks
+events.py     # optional: domain events published to a Redis stream
+```
+
+Before adding a new subdomain, check whether an existing one already covers the concept and
+extend it instead of creating a new one. Enums/types shared across subdomains of the same
+service go in `domain/models.py`.
+
+### 2. Entity model
+
+Check `entities.py` for an existing entity first. Each service declares its own declarative
+`Base` in `database.py` — there is no shared base/mixin across services, so id/timestamp columns
+are repeated per entity:
+
+```python
+class Base(_DeclarativeBase):
+    __table_args__ = make_table_args()  # binds the service's SCHEMA_NAME
+```
+
+New entity skeleton:
+
+```python
+class ThingEntity(Base):
+    __tablename__ = "things"
+    __table_args__ = make_table_args(UniqueConstraint("venue_id", "name"))
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    venue_id: Mapped[UUID] = mapped_column(ForeignKey(f"{SCHEMA_NAME}.venues.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(120), index=True)
+    status: Mapped[str] = mapped_column(String(20))  # enums stored as plain text, validated by Pydantic
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+```
+
+**Register it** — every new entity class must be imported into `domain/__init__.py` and added to
+that module's `MODELS` tuple (e.g. `ristops-be-reservation/.../domain/__init__.py`):
+
+```python
+from ristops_be_<service>.domain.<subdomain>.entities import ThingEntity
+
+MODELS = (
+    ...,
+    ThingEntity,
+)
+```
+
+`MODELS` is what `ristops sql-database generate-ddl`/`nuke` reads to create or drop tables —
+forgetting to add a new entity here means its table is never created.
+
+`be-authz` only: define a plain Pydantic model with a `__label__` class attribute in
+`domain/models.py` instead, and persist it via raw Cypher inside a `@neo4j_transactional`
+function using `get_neo4j_transaction()`.
+
+### 3. Schemas — lib-core vs service
+
+`ristops-lib-core` owns generic building blocks only — reuse them, don't redefine:
+
+* `ristops_lib_core.pydantic.types` — `ObjectUUID`, `CreatedAt`, `UpdatedAt`, `DeletedAt`
+* `ristops_lib_core.schema.pagination` — `PaginationParams`, `SortableQuery`, `SearchQuery`, `Page[TItem]`
+* `ristops_lib_core.schema.authz` — `ResourceType`, `AuthorizationResource`, `AuthorizationGrant`
+
+Everything domain-specific lives in the service's own `schema.py`:
+
+```python
+class ThingCreationRequest(BaseModel):
+    name: str
+    venue_id: ObjectUUID
+
+
+class ThingResponse(BaseModel):
+    id: ObjectUUID
+    name: str
+    created_at: CreatedAt
+    updated_at: UpdatedAt
+
+
+class ThingSortField(StrEnum):
+    NAME = "name"
+
+
+class ThingSearchFilter(BaseModel):
+    name: str | None = None
+
+
+class ThingSearchQuery(SearchQuery, ThingSearchFilter):
+    sort_field_enum: ClassVar[type[StrEnum]] = ThingSortField
+```
+
+### 4. Router (`routers.py`)
+
+Decoration order, top to bottom: `@router.<method>(...)` → `@policy(...)` → `@sql_transactional`
+→ handler.
+
+**Policy / authz** — every non-`@public` route needs `@policy(...)` or it 500s at request time
+(deny-by-default, enforced centrally by `AuthZInterceptor`). Pair a resource resolver with
+permission strings. A `BaseResourceResolver(ResourceType.X)` used by more than one handler in the
+router is declared once as a module-level constant, not re-created inline per endpoint (see
+`_venue_path_resolver` in `venue/routers.py`); a one-off `resolve_static_resource(...)` call tied
+to a single endpoint's permission string is fine written inline:
+
+```python
+_thing_path_resolver = BaseResourceResolver(ResourceType.THING)
+
+
+@router.post("/things")
+@policy(Policy(_thing_path_resolver, "thing:add"))
+@sql_transactional
+async def create_thing(request: ThingCreationRequest) -> ThingResponse:
+    thing = await create_thing_entity(request)
+    return ThingResponse.model_validate(thing, from_attributes=True)
+```
+
+* `BaseResourceResolver(ResourceType.X)` reads `{x}_id` from the path. Other resolvers:
+  `resolve_static_resource`, `resolve_path_attribute`, `resolve_query_attribute`,
+  `resolve_body_attribute`.
+* New resource type → add a member to `ResourceType` in `ristops_lib_core.schema.authz`, then
+  publish a lifecycle event (`publish_resource_created_event`) so `be-authz` creates the Neo4j
+  node reactively. There is no central resolver registry to update.
+* Permission strings (e.g. `"thing:add"`) are free-form `scope:action` — they only need to match
+  a Role grant in Neo4j, they aren't declared anywhere centrally.
+
+**Transaction decorator** — `@sql_transactional` (Neo4j: `@neo4j_transactional`) always goes
+directly on the router handler, never on a `service.py` function, as the innermost decorator. It
+opens a session or joins an already-open one; service functions read it via `get_sql_session()`.
+
+**DI for resource-access lists** (mirrors venue's `get_venues`) — for list endpoints scoped to
+"what the caller can see":
+
+```python
+@router.get("/things")
+@policy()
+@sql_transactional
+async def get_things(
+    search: Annotated[ThingSearchQuery, Query()],
+    grants: Annotated[
+        ListUserResourceGrantsResponse,
+        Depends(
+            AuthorizationResourceGrantsFetcher(
+                authz_client_factory,
+                ResourceType.THING,
+                "thing:get",
+                override_policies=(Policy(resolve_static_resource("*", ResourceType.APP), "thing:list"),),
+            )
+        ),
+    ],
+) -> Page[ThingResponse]:
+    scope = ThingSearchScope.from_grants(grants)
+    return await search_things(search, scope)
+```
+
+If the caller holds the `override_policies` permission (e.g. an admin-level `thing:list`), the
+fetcher returns `None` (unrestricted); otherwise it returns the `THING` resources the caller
+individually holds `thing:get` on. Build a `BaseModel` scope from it the same way venue does
+(`VenueSearchScope.from_grants`, `venue/service.py`) — a `<resource>_ids: list[str] | None` field,
+`None` meaning unrestricted — and AND `id.in_(scope.<resource>_ids)` into the query's WHERE
+conditions only when the scope isn't `None`.
+
+**409 checks** always happen in `service.py`, next to the business rule — never in the router.
+The router only documents the possibility: `responses={HTTPStatus.CONFLICT: {"model": ErrorResponse}}`.
+
+**Params/body organization** — path params as `Annotated[T, Path(...)]`, query bundles as a
+single `Annotated[SearchQueryClass, Query()]`, body as a bare Pydantic model parameter — all as
+sibling function arguments, no wrapper object.
+
+**List/search endpoints** always take one `SearchQuery`-derived class (pagination + sort + a
+domain filter, see step 3) and return `Page[TItem]`.
+
+**Entity → schema mapping** — single-item responses use
+`ResponseModel.model_validate(entity, from_attributes=True)` inline in the router. List/search
+endpoints go through `SearchQueryExecutor`/`PaginatedSearchQueryExecutor`
+(`ristops_lib_sql.search`), which does the same mapping internally; override with `model_mapper=`
+only if the default isn't sufficient.
+
+### 5. `service.py`
+
+Flat `async def` functions, no service class or DI container. Fetch the session with
+`get_sql_session()` — never pass it as a parameter. Raise not-found/conflict as plain
+`fastapi.HTTPException` (no custom exception hierarchy exists in this codebase) — a shared
+`GenericHttpExceptionHandler` in lib-core turns any `HTTPException` into the standard
+`ErrorResponse` body app-wide.
+
+```python
+async def find_thing_or_throw(thing_id: UUID) -> ThingEntity:
+    session = get_sql_session()
+    result = await session.scalars(select(ThingEntity).where(ThingEntity.id == thing_id).limit(1))
+    thing = result.one_or_none()
+    if thing is None:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Thing not found")
+    return thing
+
+
+async def create_thing_entity(request: ThingCreationRequest) -> ThingEntity:
+    if await _thing_name_taken(request.venue_id, request.name):
+        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail="A thing with this name already exists")
+    session = get_sql_session()
+    thing = ThingEntity(**request.model_dump())
+    session.add(thing)
+    await session.flush()
+    return thing
+```
+
+**Cross-service checks go over HTTP**, the same way the BFF talks to backends: instantiate an
+`HttpClient`/`HttpClientService` for the target service (see
+`ristops-be-venue/.../services/http.py` + `services/reservation.py`'s `reservation_client`,
+used by `has_active_service()` to call `be-reservation`'s `GET /services` endpoint) and call it
+from `service.py`. Direct same-process function calls between subdomains are only valid *within*
+one package — e.g. `be-reservation`'s schedule service calling its own local `venue` subdomain
+directly, because that subdomain is a local read-model of venue data synced via Redis stream, not
+a real cross-service call. Treat that as the exception for local read-model subdomains, not the
+general rule for talking to another microservice.
+
+### 6. Mirroring on the BFF (`ristops-bff-web`)
+
+The BFF is a thin mirror for fetching/mutating data through the backends — it holds no business
+logic or validation of its own, and backend-to-backend orchestration inside the BFF is
+discouraged. Today the only exception is login, which does orchestrate across services; don't
+treat it as a pattern to repeat for a new domain.
+
+* Add a `<domain>_client = HttpClient(...)` instance (see `ristops_bff_web/http.py`), bound to
+  `RISTOPS_BE_<DOMAIN>_URL` in `app.py`'s `with_clients(...)` lifespan setup.
+* `domain/<x>/service.py` in the BFF calls
+  `<domain>_client.client.get/post/patch/delete(url=..., params=..., json=...)` with relative
+  paths, using a `ResponseTransformer` to coerce date/datetime strings back to Python types.
+* `domain/<x>/graphql.py` — define `@strawberry.type`/`@strawberry.input` classes with snake_case
+  fields (Strawberry auto-exposes them as camelCase in the schema) and a `from_dict(obj)`
+  classmethod mapping the REST JSON 1:1 onto the type.
+* Query resolvers call the service function and wrap the result, e.g.
+  `Page.from_dict(page, Thing.from_dict)`. Mutation resolvers call the service function and map
+  the returned dict(s) the same way.
+* Wire resolvers as `strawberry.field` / `strawberry.mutation(resolver=...)` on the domain's
+  `Query`/`Mutation` type, merged into the root schema via `merge_types` in
+  `ristops_bff_web/graphql/schema.py`.
+* Errors need no manual translation: `HttpClient`'s `raise_for_status` hook already converts any
+  non-2xx REST response into an `HTTPException`; `ErrorHandlingExtension` on the GraphQL schema
+  rewrites that into a GraphQL error with `extensions.code` set to the original REST status.

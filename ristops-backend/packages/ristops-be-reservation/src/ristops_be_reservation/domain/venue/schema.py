@@ -31,7 +31,8 @@ class VenueClosingCreateRequest(BaseModel):
 
 
 class VenueClosingUpdateRequest(BaseModel):
-    """Request body for updating a venue closing. Unset fields are not modified."""
+    """Request body for updating a venue closing. Unset fields are not modified. The ``weekday``
+    scope is immutable — delete and recreate to re-scope it."""
 
     date_start: date | None = Field(
         default=None,
@@ -40,10 +41,6 @@ class VenueClosingUpdateRequest(BaseModel):
     date_end: date | None = Field(
         default=None,
         description="New last date of the closing period (inclusive).",
-    )
-    weekday: Weekday | None = Field(
-        default=None,
-        description="New weekday the closing applies to; null means every day in the range.",
     )
     description: str | None = Field(
         default=None,
