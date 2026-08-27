@@ -14,10 +14,12 @@ import {
   DeleteServiceClosingDocument,
   DeleteOpeningOverrideDocument,
   ListServiceOpeningsDocument,
+  type OpeningConflictCheckInput,
   type OpeningOverrideCreateInput,
   type OpeningOverrideUpdateInput,
   OpeningOverrideConflictsDocument,
   type OpeningUpsertInput,
+  ServiceOpeningConflictsDocument,
   type PaginationInput,
   type ScheduleDateFilter,
   SearchCapacityOverridesDocument,
@@ -42,6 +44,13 @@ export const scheduleApi = {
     gqlRequest(ListServiceOpeningsDocument, { serviceId, includeDeleted }),
   upsertServiceOpenings: (serviceId: string, openings: OpeningUpsertInput[]) =>
     gqlRequest(UpsertServiceOpeningsDocument, { serviceId, openings }),
+  serviceOpeningConflicts: (
+    serviceId: string,
+    input: OpeningConflictCheckInput,
+  ) =>
+    gqlRequest(ServiceOpeningConflictsDocument, { serviceId, input }).then(
+      (res) => res.serviceOpeningConflicts,
+    ),
 
   searchOpeningOverrides: (
     serviceId: string,

@@ -1,0 +1,92 @@
+fragment ReservationFields on Reservation {
+  id
+  venueId
+  status
+  reservationDate
+  partySize
+  arrivalTime
+  contactName
+  contactPhoneNumber
+  contactEmail
+  notes
+  violation
+  createdAt
+  updatedAt
+}
+
+query GetReservation($id: ID!) {
+  reservation(id: $id) {
+    ...ReservationFields
+  }
+}
+
+query SearchReservations($input: ReservationSearchInput!) {
+  reservations(input: $input) {
+    items {
+      ...ReservationFields
+    }
+    total
+    page
+    pageSize
+    totalPages
+  }
+}
+
+query ReservationOverCapacity($venueId: ID!) {
+  reservationOverCapacity(venueId: $venueId) {
+    serviceId
+    serviceName
+    businessDate
+    capacity
+    peakBooked
+    reservationIds
+  }
+}
+
+mutation CreateReservation($input: CreateReservationInput!) {
+  createReservation(input: $input) {
+    ...ReservationFields
+  }
+}
+
+mutation UpdateReservation($id: ID!, $input: UpdateReservationInput!) {
+  updateReservation(id: $id, input: $input) {
+    ...ReservationFields
+  }
+}
+
+mutation ConfirmReservation($id: ID!, $notes: String) {
+  confirmReservation(id: $id, notes: $notes) {
+    ...ReservationFields
+  }
+}
+
+mutation RejectReservation($id: ID!, $notes: String) {
+  rejectReservation(id: $id, notes: $notes) {
+    ...ReservationFields
+  }
+}
+
+mutation CancelReservation($id: ID!, $notes: String) {
+  cancelReservation(id: $id, notes: $notes) {
+    ...ReservationFields
+  }
+}
+
+mutation CheckInReservation($id: ID!, $arrivalTime: Time, $notes: String) {
+  checkInReservation(id: $id, arrivalTime: $arrivalTime, notes: $notes) {
+    ...ReservationFields
+  }
+}
+
+mutation NoShowReservation($id: ID!, $notes: String) {
+  noShowReservation(id: $id, notes: $notes) {
+    ...ReservationFields
+  }
+}
+
+mutation WithdrawReservation($id: ID!, $notes: String) {
+  withdrawReservation(id: $id, notes: $notes) {
+    ...ReservationFields
+  }
+}

@@ -8,6 +8,7 @@ class ResourceType(StrEnum):
     APP = 'app'
     VENUE = 'venue'
     SERVICE = 'service'
+    RESERVATION = 'reservation'
     PERMISSION = 'permission'
     ROLE = 'role'
     ACL = 'acl'

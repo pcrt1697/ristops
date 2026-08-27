@@ -1,6 +1,8 @@
 import logging
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
 from http import HTTPStatus
+from typing import NamedTuple
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -19,8 +21,9 @@ from ristops_be_reservation.domain.schedule.schema import (
     ServiceClosingResponse, ServiceClosingSearchQuery, DateRangeFilter,
     CapacityOverrideCreateRequest, CapacityOverrideUpdateRequest,
     CapacityOverrideResponse, CapacityOverrideSearchQuery,
-    ConflictQuery, ConflictSource, ConflictsResponse, ScheduleConflict,
+    ConflictQuery, ConflictSource, ConflictsResponse, ScheduleConflict, OpeningConflictQuery,
 )
+from ristops_be_reservation.domain.service.entities import ServiceEntity
 from ristops_be_reservation.domain.service.service import find_service_or_throw
 from ristops_be_reservation.domain.venue.entities import VenueClosingEntity
 from ristops_be_reservation.domain.venue.service import (
@@ -79,7 +82,6 @@ _capacity_override_search_executor = PaginatedSearchQueryExecutor[
 )
 
 
-# --- Conflict detection ------------------------------------------------------
 #
 # Each exception kind only conflicts with its own kind on the same service (service closings
 # additionally check venue closings — handled in `_ensure_no_service_closing_conflict`). Two rows
@@ -185,7 +187,12 @@ async def upsert_service_openings(
     (`OpeningsUpsertRequest`).
     """
     service = await find_service_or_throw(service_id)
-    await ensure_venue_accepts_config_changes(service.venue_id)
+    # Lock the venue row to serialize concurrent schedule writes across the venue's services while
+    # the cross-service overlap check reads their openings.
+    await ensure_venue_accepts_config_changes(service.venue_id, for_update=True)
+    await ensure_no_cross_service_opening_overlap_for_openings(
+        service_id, service.venue_id, request.openings
+    )
 
     session = get_sql_session()
     await session.execute(
@@ -249,12 +256,20 @@ async def create_service_opening_overrides(
     row). Overrides are one-off special cases, so unlike openings this is a plain bulk create,
     not a reconcile. Raises HTTP 409 if any row would overlap an existing opening override."""
     service = await find_service_or_throw(service_id, for_update=True)
-    await ensure_venue_accepts_config_changes(service.venue_id)
+    await ensure_venue_accepts_config_changes(service.venue_id, for_update=True)
     weekdays = normalize_weekdays(request.weekdays)
     for weekday in weekdays:
         await _ensure_no_opening_override_conflict(
             service_id, request.date_start, request.date_end, weekday
         )
+        override_candidate = _OverrideCandidate(
+            request.date_start, request.date_end, weekday,
+            request.start_time, request.end_time,
+        )
+        await ensure_no_cross_service_opening_overlap_for_override(
+            service_id, service.venue_id, override_candidate,
+        )
+        await ensure_no_self_overnight_overlap_for_override(service, override_candidate)
     session = get_sql_session()
     overrides = [
         OpeningOverrideEntity(
@@ -289,7 +304,7 @@ async def update_service_opening_override(
     override."""
     override = await find_service_opening_override_or_throw(service_id, override_id)
     service = await find_service_or_throw(service_id, for_update=True)
-    await ensure_venue_accepts_config_changes(service.venue_id)
+    await ensure_venue_accepts_config_changes(service.venue_id, for_update=True)
     fields_to_update = request.model_fields_set
 
     if "date_start" in fields_to_update and request.date_start is not None:
@@ -305,12 +320,23 @@ async def update_service_opening_override(
     if "description" in fields_to_update:
         override.description = request.description
 
+    override_weekday = Weekday(override.weekday) if override.weekday is not None else None
     await _ensure_no_opening_override_conflict(
         service_id,
         override.date_start,
         override.date_end,
-        Weekday(override.weekday) if override.weekday is not None else None,
+        override_weekday,
         exclude_id=override.id,
+    )
+    override_candidate = _OverrideCandidate(
+        override.date_start, override.date_end, override_weekday,
+        override.start_time, override.end_time,
+    )
+    await ensure_no_cross_service_opening_overlap_for_override(
+        service_id, service.venue_id, override_candidate,
+    )
+    await ensure_no_self_overnight_overlap_for_override(
+        service, override_candidate, exclude_override_id=override.id,
     )
 
     session = get_sql_session()
@@ -555,7 +581,6 @@ async def search_service_capacity_overrides(
     return await _capacity_override_search_executor.execute(query, service_id)
 
 
-# --- Conflict previews (read-only) -------------------------------------------
 
 def _to_schedule_conflict(
         candidate_weekday: Weekday | None,
@@ -578,8 +603,10 @@ async def find_service_opening_override_conflicts_for(
         service_id: UUID,
         query: ConflictQuery,
 ) -> ConflictsResponse:
-    """Read-only preview: which existing opening overrides a candidate period+weekdays would
-    conflict with. Lock-free — mirrors what `create_service_opening_overrides` would reject."""
+    """Read-only preview: which existing opening overrides (same service) a candidate
+    period+weekdays would conflict with, plus any cross-service opening overlaps (SERVICE_OPENING)
+    when the candidate carries hours. Lock-free — mirrors what `create_service_opening_overrides`
+    would reject."""
     await find_service_or_throw(service_id)
     conflicts: list[ScheduleConflict] = []
     for weekday in normalize_weekdays(query.weekdays):
@@ -590,6 +617,9 @@ async def find_service_opening_override_conflicts_for(
         conflicts.extend(
             _to_schedule_conflict(weekday, ConflictSource.OPENING_OVERRIDE, row) for row in rows
         )
+    conflicts.extend(
+        await find_service_opening_override_cross_service_conflicts_for(service_id, query)
+    )
     return ConflictsResponse(conflicts=conflicts)
 
 
@@ -638,3 +668,532 @@ async def find_service_closing_conflicts_for(
             _to_schedule_conflict(weekday, ConflictSource.VENUE_CLOSING, row) for row in venue_rows
         )
     return ConflictsResponse(conflicts=conflicts)
+
+
+#
+# Infer which of a venue's services is open at a candidate reservation instant and resolve its
+# effective opening window + seat capacity, applying the same precedence the config CRUD enforces.
+# Used by the reservation domain to decide whether a slot is bookable. Reservations carry no
+# service reference — the service is derived from venue + datetime here. The candidate is a naive
+# venue-local datetime; the caller converts the reservation instant into the venue timezone first.
+#
+# Openings run overnight when their end_time is not after their start_time (e.g. 18:00–02:00):
+# such an opening belongs to the calendar date it *opens* on (its weekday), and its window spills
+# into the next calendar day. So a candidate's "business date" — the date whose weekday/closings/
+# capacity apply — is not always its own calendar date: an early-morning booking attaches to the
+# previous day's overnight opening. `resolve_opening_or_throw` returns the window as concrete
+# datetimes (the close may land on the following day) so the caller needs no wrap-around math.
+
+# Weekday enum in Python's Monday=0..Sunday=6 order, matching date.weekday().
+_WEEKDAYS: tuple[Weekday, ...] = tuple(Weekday)
+
+
+def _opening_window(on_date: date, start_time: time, end_time: time) -> tuple[datetime, datetime]:
+    """Concrete open/close datetimes for an opening on ``on_date``. An opening whose ``end_time``
+    is not after its ``start_time`` runs overnight, so its close lands on the following day."""
+    opens_at = datetime.combine(on_date, start_time)
+    close_date = on_date if end_time > start_time else on_date + timedelta(days=1)
+    return opens_at, datetime.combine(close_date, end_time)
+
+
+#
+# Enforce that no two services of a venue are *effectively* open at the same instant, so a
+# reservation's service is unambiguous (see `resolve_bookable_slot_or_throw`). A service
+# occupies a window on a date when it has an effective opening (override-for-that-date else base
+# weekday opening) AND no service/venue closing removes that date. Overlap splits in two:
+#   * permanent (base vs base): same weekday + time overlap recurs forever — closings (bounded)
+#     can never eliminate all occurrences, so they're irrelevant. Overnight openings are compared
+#     as per-weekday minute segments (an 18:00–02:00 Friday opening also occupies Saturday 00:00–02:00).
+#   * bounded (an override on either side): confined to concrete dates — iterate them, resolve each
+#     side's effective window per date (subtracting closings), and compare. This honours "a closed
+#     service frees the slot for another".
+# Intervals are half-open, so touching boundaries (15:00 end vs 15:00 start) do not conflict.
+
+
+@dataclass
+class _OpeningCandidate:
+    """A proposed base weekly opening (indefinite) being validated for overlap."""
+
+    weekday: Weekday
+    start_time: time
+    end_time: time
+
+
+@dataclass
+class _OverrideCandidate:
+    """A proposed opening override (bounded date range) being validated for overlap."""
+
+    date_start: date
+    date_end: date
+    weekday: Weekday | None
+    start_time: time
+    end_time: time
+
+
+@dataclass
+class _ServiceSchedule:
+    """A sibling service's schedule, preloaded for in-memory overlap checks."""
+
+    service: ServiceEntity
+    base_by_weekday: dict[Weekday, OpeningEntity]
+    overrides: list[OpeningOverrideEntity]
+    closings: list[ServiceClosingEntity]
+
+
+@dataclass
+class _OverlapContext:
+    """Everything needed to check a candidate against a venue's other services."""
+
+    siblings: list[_ServiceSchedule]
+    venue_closings: list[VenueClosingEntity]
+    candidate_closings: list[ServiceClosingEntity]
+
+
+def _time_to_min(t: time) -> int:
+    return t.hour * 60 + t.minute
+
+
+def _opening_minute_segments(weekday: Weekday, start: time, end: time) -> list[tuple[Weekday, int, int]]:
+    """Split an opening into half-open minute segments `(weekday, start_min, end_min)` within a
+    day. A same-day opening is one segment; an overnight opening (``end <= start``) becomes an
+    evening segment on its weekday plus an early-morning segment on the following weekday."""
+    s, e = _time_to_min(start), _time_to_min(end)
+    if e > s:
+        return [(weekday, s, e)]
+    segments = [(weekday, s, 24 * 60)]
+    if e > 0:
+        next_weekday = _WEEKDAYS[(_WEEKDAYS.index(weekday) + 1) % 7]
+        segments.append((next_weekday, 0, e))
+    return segments
+
+
+def _minute_segments_overlap(
+        a: list[tuple[Weekday, int, int]], b: list[tuple[Weekday, int, int]],
+) -> bool:
+    """Whether two sets of weekday minute segments overlap (same weekday, half-open time overlap)."""
+    return any(
+        aw == bw and a_start < b_end and b_start < a_end
+        for (aw, a_start, a_end) in a
+        for (bw, b_start, b_end) in b
+    )
+
+
+def _windows_overlap(a_open: datetime, a_close: datetime, b_open: datetime, b_close: datetime) -> bool:
+    """Half-open overlap of two concrete datetime windows."""
+    return a_open < b_close and b_open < a_close
+
+
+def _covers_date(date_start: date, date_end: date, weekday_value: str | None, d: date) -> bool:
+    """Whether a date-ranged, optionally weekday-scoped row applies on date ``d`` (null weekday =
+    every day)."""
+    if not (date_start <= d <= date_end):
+        return False
+    return weekday_value is None or weekday_value == _WEEKDAYS[d.weekday()]
+
+
+def _service_closed_on(schedule: _ServiceSchedule, venue_closings: list[VenueClosingEntity], d: date) -> bool:
+    """Whether a sibling service is closed on ``d`` by its own or a venue-wide closing."""
+    if any(_covers_date(c.date_start, c.date_end, c.weekday, d) for c in schedule.closings):
+        return True
+    return any(_covers_date(c.date_start, c.date_end, c.weekday, d) for c in venue_closings)
+
+
+def _candidate_closed_on(ctx: _OverlapContext, d: date) -> bool:
+    """Whether the service being edited is closed on ``d`` (its own or a venue-wide closing)."""
+    if any(_covers_date(c.date_start, c.date_end, c.weekday, d) for c in ctx.candidate_closings):
+        return True
+    return any(_covers_date(c.date_start, c.date_end, c.weekday, d) for c in ctx.venue_closings)
+
+
+def _effective_row_on(
+        schedule: _ServiceSchedule, d: date,
+) -> tuple[OpeningEntity | OpeningOverrideEntity, time, time] | None:
+    """A sibling's effective opening row + hours on ``d``: an override covering the date wins over
+    the base weekday opening; ``None`` if the sibling has no opening that day."""
+    for override in schedule.overrides:
+        if _covers_date(override.date_start, override.date_end, override.weekday, d):
+            return override, override.start_time, override.end_time
+    base = schedule.base_by_weekday.get(_WEEKDAYS[d.weekday()])
+    if base is not None:
+        return base, base.start_time, base.end_time
+    return None
+
+
+def _service_opening_conflict(
+        candidate_weekday: Weekday | None,
+        schedule: _ServiceSchedule,
+        conflicting_id: UUID,
+        start_time: time,
+        end_time: time,
+        conflicting_weekday: Weekday | None,
+        conflicting_date: date | None,
+) -> ScheduleConflict:
+    return ScheduleConflict(
+        weekday=candidate_weekday,
+        source=ConflictSource.SERVICE_OPENING,
+        conflicting_id=conflicting_id,
+        conflicting_date_start=conflicting_date,
+        conflicting_date_end=conflicting_date,
+        conflicting_weekday=conflicting_weekday,
+        conflicting_service_id=schedule.service.id,
+        conflicting_service_name=schedule.service.name,
+        conflicting_start_time=start_time,
+        conflicting_end_time=end_time,
+    )
+
+
+def _iter_dates(date_start: date, date_end: date):
+    d = date_start
+    while d <= date_end:
+        yield d
+        d += timedelta(days=1)
+
+
+def _base_candidate_conflicts(candidate: _OpeningCandidate, ctx: _OverlapContext) -> list[ScheduleConflict]:
+    """Conflicts of a proposed base opening against sibling services: permanent (base vs base,
+    weekday + time) plus bounded (vs each sibling override over its date range, minus closings)."""
+    conflicts: list[ScheduleConflict] = []
+    candidate_segments = _opening_minute_segments(
+        candidate.weekday, candidate.start_time, candidate.end_time
+    )
+    for sibling in ctx.siblings:
+        for opening in sibling.base_by_weekday.values():
+            sibling_segments = _opening_minute_segments(
+                Weekday(opening.weekday), opening.start_time, opening.end_time
+            )
+            if _minute_segments_overlap(candidate_segments, sibling_segments):
+                conflicts.append(_service_opening_conflict(
+                    candidate.weekday, sibling, opening.id,
+                    opening.start_time, opening.end_time, Weekday(opening.weekday), None,
+                ))
+                break
+        for override in sibling.overrides:
+            hit_date = _base_vs_override_hit(candidate, override, sibling, ctx)
+            if hit_date is not None:
+                conflicts.append(_service_opening_conflict(
+                    candidate.weekday, sibling, override.id,
+                    override.start_time, override.end_time,
+                    Weekday(override.weekday) if override.weekday is not None else None, hit_date,
+                ))
+    return conflicts
+
+
+def _base_vs_override_hit(
+        candidate: _OpeningCandidate,
+        override: OpeningOverrideEntity,
+        sibling: _ServiceSchedule,
+        ctx: _OverlapContext,
+) -> date | None:
+    """Earliest date in the sibling override's range where the candidate base opening overlaps it
+    (candidate open that weekday and not closed, sibling not closed), or ``None``."""
+    for d in _iter_dates(override.date_start, override.date_end):
+        if not _covers_date(override.date_start, override.date_end, override.weekday, d):
+            continue
+        if _service_closed_on(sibling, ctx.venue_closings, d):
+            continue
+        sibling_open, sibling_close = _opening_window(d, override.start_time, override.end_time)
+        for delta in (-1, 0, 1):
+            x = d + timedelta(days=delta)
+            if _WEEKDAYS[x.weekday()] != candidate.weekday or _candidate_closed_on(ctx, x):
+                continue
+            cand_open, cand_close = _opening_window(x, candidate.start_time, candidate.end_time)
+            if _windows_overlap(cand_open, cand_close, sibling_open, sibling_close):
+                return d
+    return None
+
+
+def _override_candidate_conflicts(candidate: _OverrideCandidate, ctx: _OverlapContext) -> list[ScheduleConflict]:
+    """Conflicts of a proposed opening override against sibling services: iterate the candidate's
+    dates, resolve each sibling's effective window (minus closings) around each date, and compare.
+    At most one conflict per sibling (the earliest date)."""
+    hits: dict[UUID, ScheduleConflict] = {}
+    for d in _iter_dates(candidate.date_start, candidate.date_end):
+        if not _covers_date(candidate.date_start, candidate.date_end, candidate.weekday, d):
+            continue
+        if _candidate_closed_on(ctx, d):
+            continue
+        cand_open, cand_close = _opening_window(d, candidate.start_time, candidate.end_time)
+        for sibling in ctx.siblings:
+            if sibling.service.id in hits:
+                continue
+            for delta in (-1, 0, 1):
+                x = d + timedelta(days=delta)
+                if _service_closed_on(sibling, ctx.venue_closings, x):
+                    continue
+                effective = _effective_row_on(sibling, x)
+                if effective is None:
+                    continue
+                row, s_start, s_end = effective
+                sibling_open, sibling_close = _opening_window(x, s_start, s_end)
+                if _windows_overlap(cand_open, cand_close, sibling_open, sibling_close):
+                    hits[sibling.service.id] = _service_opening_conflict(
+                        candidate.weekday, sibling, row.id, s_start, s_end,
+                        Weekday(row.weekday) if row.weekday is not None else None, d,
+                    )
+                    break
+    return list(hits.values())
+
+
+def _self_overnight_overlap_dates(
+        candidate: _OverrideCandidate, own: _ServiceSchedule, venue_closings: list[VenueClosingEntity],
+) -> list[date]:
+    """Dates where the candidate override's overnight spillover would overlap the service's own
+    opening (base or another override) on the adjacent day, or vice versa. Same-day is excluded —
+    an override intentionally replaces the base for that day, that's not a conflict."""
+    hits: list[date] = []
+    for d in _iter_dates(candidate.date_start, candidate.date_end):
+        if not _covers_date(candidate.date_start, candidate.date_end, candidate.weekday, d):
+            continue
+        if _service_closed_on(own, venue_closings, d):
+            continue
+        cand_open, cand_close = _opening_window(d, candidate.start_time, candidate.end_time)
+        for delta in (-1, 1):
+            x = d + timedelta(days=delta)
+            if _service_closed_on(own, venue_closings, x):
+                continue
+            effective = _effective_row_on(own, x)
+            if effective is None:
+                continue
+            _, s_start, s_end = effective
+            x_open, x_close = _opening_window(x, s_start, s_end)
+            if _windows_overlap(cand_open, cand_close, x_open, x_close):
+                hits.append(d)
+    return hits
+
+
+async def ensure_no_self_overnight_overlap_for_override(
+        service: ServiceEntity, candidate: _OverrideCandidate, exclude_override_id: UUID | None = None,
+) -> None:
+    """Raise HTTP 422 if a candidate override's overnight hours would overlap the service's own
+    opening (base or another override) on the adjacent day. A 422, not 409, since this is the
+    candidate being internally inconsistent with the rest of its own service's schedule, not a
+    conflict with another service (which has its own preview UI — see SERVICE_OPENING)."""
+    snapshot = await load_venue_schedule_snapshot(service.venue_id)
+    own = next((s for s in snapshot.schedules if s.service.id == service.id), None)
+    if own is None:
+        return
+    if exclude_override_id is not None:
+        own = _ServiceSchedule(
+            service=own.service,
+            base_by_weekday=own.base_by_weekday,
+            overrides=[o for o in own.overrides if o.id != exclude_override_id],
+            closings=own.closings,
+        )
+    if _self_overnight_overlap_dates(candidate, own, snapshot.venue_closings):
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail="This override's overnight hours would overlap the service's own opening "
+                   "on the following day",
+        )
+
+
+async def _load_overlap_context(service_id: UUID, venue_id: UUID) -> _OverlapContext:
+    """Split the venue snapshot into the cross-service overlap context: sibling schedules (every
+    service except the one being edited), venue closings, and the edited service's own closings."""
+    snapshot = await load_venue_schedule_snapshot(venue_id)
+    siblings = [s for s in snapshot.schedules if s.service.id != service_id]
+    candidate_closings = next(
+        (s.closings for s in snapshot.schedules if s.service.id == service_id), []
+    )
+    return _OverlapContext(siblings, snapshot.venue_closings, candidate_closings)
+
+
+async def ensure_no_cross_service_opening_overlap_for_openings(
+        service_id: UUID, venue_id: UUID, openings: list[OpeningUpsertRequest],
+) -> None:
+    """Raise HTTP 409 if any proposed base opening overlaps another service of the venue."""
+    ctx = await _load_overlap_context(service_id, venue_id)
+    for opening in openings:
+        candidate = _OpeningCandidate(opening.weekday, opening.start_time, opening.end_time)
+        conflicts = _base_candidate_conflicts(candidate, ctx)
+        if conflicts:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail=f"These hours overlap another service ({conflicts[0].conflicting_service_name}) "
+                       f"of the venue",
+            )
+
+
+async def ensure_no_cross_service_opening_overlap_for_override(
+        service_id: UUID, venue_id: UUID, candidate: _OverrideCandidate,
+) -> None:
+    """Raise HTTP 409 if a proposed opening override overlaps another service of the venue."""
+    ctx = await _load_overlap_context(service_id, venue_id)
+    conflicts = _override_candidate_conflicts(candidate, ctx)
+    if conflicts:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail=f"This override overlaps another service ({conflicts[0].conflicting_service_name}) "
+                   f"of the venue",
+        )
+
+
+async def find_service_opening_conflicts_for(
+        service_id: UUID, query: OpeningConflictQuery,
+) -> ConflictsResponse:
+    """Read-only preview: which of the venue's other services a candidate base opening would
+    overlap. Lock-free mirror of the openings-upsert cross-service check."""
+    service = await find_service_or_throw(service_id)
+    ctx = await _load_overlap_context(service_id, service.venue_id)
+    candidate = _OpeningCandidate(query.weekday, query.start_time, query.end_time)
+    return ConflictsResponse(conflicts=_base_candidate_conflicts(candidate, ctx))
+
+
+async def find_service_opening_override_cross_service_conflicts_for(
+        service_id: UUID, query: ConflictQuery,
+) -> list[ScheduleConflict]:
+    """Cross-service overlaps a candidate opening override would introduce, one candidate per
+    weekday in the query. Returns empty when the query carries no times to compare."""
+    if query.start_time is None or query.end_time is None:
+        return []
+    service = await find_service_or_throw(service_id)
+    ctx = await _load_overlap_context(service_id, service.venue_id)
+    conflicts: list[ScheduleConflict] = []
+    for weekday in normalize_weekdays(query.weekdays):
+        candidate = _OverrideCandidate(
+            query.date_start, query.date_end, weekday, query.start_time, query.end_time,
+        )
+        conflicts.extend(_override_candidate_conflicts(candidate, ctx))
+    return conflicts
+
+
+#
+# A read-only, in-memory snapshot of a venue's whole schedule, so the reservation domain can
+# re-validate existing bookings against the *current* schedule without a query per reservation
+# (see the reservation-schedule-invalidation policy: schedule edits are non-destructive; the
+# reservation section flags what no longer fits). Reasons are plain strings the caller maps to
+# its own enum (keeps this layer free of a reservation-schema import).
+
+
+@dataclass
+class VenueScheduleSnapshot:
+    """All services of a venue with their openings/overrides/closings, plus venue closings and
+    per-service capacity overrides, preloaded once for repeated in-memory slot resolution."""
+
+    schedules: list[_ServiceSchedule]
+    venue_closings: list[VenueClosingEntity]
+    capacity_overrides_by_service: dict[UUID, list[CapacityOverrideEntity]]
+
+
+async def load_venue_schedule_snapshot(venue_id: UUID) -> VenueScheduleSnapshot:
+    """Preload the full current schedule of a venue's non-deleted services for violation and
+    over-capacity checks."""
+    session = get_sql_session()
+    services = list((await session.scalars(
+        select(ServiceEntity).where(
+            ServiceEntity.venue_id == venue_id,
+            ServiceEntity.deleted_at.is_(None),
+        )
+    )).all())
+    service_ids = [s.id for s in services]
+    openings = list((await session.scalars(
+        select(OpeningEntity).where(OpeningEntity.service_id.in_(service_ids))
+    )).all()) if service_ids else []
+    overrides = list((await session.scalars(
+        select(OpeningOverrideEntity).where(OpeningOverrideEntity.service_id.in_(service_ids))
+    )).all()) if service_ids else []
+    closings = list((await session.scalars(
+        select(ServiceClosingEntity).where(ServiceClosingEntity.service_id.in_(service_ids))
+    )).all()) if service_ids else []
+    capacity_overrides = list((await session.scalars(
+        select(CapacityOverrideEntity).where(CapacityOverrideEntity.service_id.in_(service_ids))
+    )).all()) if service_ids else []
+    venue_closings = list((await session.scalars(
+        select(VenueClosingEntity).where(VenueClosingEntity.venue_id == venue_id)
+    )).all())
+    schedules = [
+        _ServiceSchedule(
+            service=service,
+            base_by_weekday={Weekday(o.weekday): o for o in openings if o.service_id == service.id},
+            overrides=[o for o in overrides if o.service_id == service.id],
+            closings=[c for c in closings if c.service_id == service.id],
+        )
+        for service in services
+    ]
+    capacity_overrides_by_service: dict[UUID, list[CapacityOverrideEntity]] = {
+        service.id: [c for c in capacity_overrides if c.service_id == service.id]
+        for service in services
+    }
+    return VenueScheduleSnapshot(
+        schedules=schedules,
+        venue_closings=venue_closings,
+        capacity_overrides_by_service=capacity_overrides_by_service,
+    )
+
+
+class SlotInfo(NamedTuple):
+    """The open slot a reservation instant falls in: the service, the business date, the effective
+    seat capacity (opening capacity + capacity-override deltas), and the open/close window."""
+
+    service: ServiceEntity
+    business_date: date
+    capacity: int
+    opens_at: datetime
+    closes_at: datetime
+
+
+def resolve_slot(snapshot: VenueScheduleSnapshot, reservation_local: datetime) -> SlotInfo | str:
+    """Resolve the venue slot a reservation at ``reservation_local`` (naive venue-local) falls in.
+
+    Returns a `SlotInfo` when a service is open then, or a reason string when not: ``"closed"`` (a
+    venue/service closing covers the date) or ``"no_service"`` (nothing opens then). The instant is
+    matched against its own date's opening first, then the previous date's (which only reaches it
+    if that opening runs overnight); the first covering service wins, and that opening's date is the
+    business date whose closings and capacity overrides apply. Turn-fit is not checked here — that's
+    a hard violation, separate from capacity.
+    """
+    for schedule in snapshot.schedules:
+        for business_date in (reservation_local.date(), reservation_local.date() - timedelta(days=1)):
+            effective = _effective_row_on(schedule, business_date)
+            if effective is None:
+                continue
+            row, start_time, end_time = effective
+            opens_at, closes_at = _opening_window(business_date, start_time, end_time)
+            if not (opens_at <= reservation_local < closes_at):
+                continue
+            if _service_closed_on(schedule, snapshot.venue_closings, business_date):
+                return "closed"
+            delta = sum(
+                c.capacity_delta
+                for c in snapshot.capacity_overrides_by_service.get(schedule.service.id, [])
+                if _covers_date(c.date_start, c.date_end, c.weekday, business_date)
+            )
+            return SlotInfo(
+                service=schedule.service,
+                business_date=business_date,
+                capacity=row.capacity + delta,
+                opens_at=opens_at,
+                closes_at=closes_at,
+            )
+    return "no_service"
+
+
+def resolve_bookable_slot_or_throw(
+        snapshot: VenueScheduleSnapshot, reservation_local: datetime,
+) -> SlotInfo:
+    """The slot a reservation must be booked into, or HTTP 409 if no service is open then.
+    Reservations are anchored to venue + datetime, not to a service — the service is derived here
+    (so a reservation survives later service edits)."""
+    slot = resolve_slot(snapshot, reservation_local)
+    if slot == "closed":
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail="The venue is closed at the requested time",
+        )
+    if isinstance(slot, str):
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail="No service is open at the requested time",
+        )
+    return slot
+
+
+def reservation_violation(snapshot: VenueScheduleSnapshot, reservation_local: datetime) -> str | None:
+    """Why a reservation at ``reservation_local`` no longer fits the current schedule, or ``None``
+    if it still does. ``"closed"``/``"no_service"`` come from `resolve_slot`; ``"outside_hours"``
+    means the turn no longer fits the open window. Capacity is handled separately (over-capacity)."""
+    slot = resolve_slot(snapshot, reservation_local)
+    if isinstance(slot, str):
+        return slot
+    turn = timedelta(minutes=slot.service.turn_time_m)
+    if reservation_local < slot.opens_at or reservation_local + turn > slot.closes_at:
+        return "outside_hours"
+    return None

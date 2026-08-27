@@ -45,6 +45,17 @@ MERGE (:Permission {id: "schedule:edit"});
 MERGE (:Permission {id: "schedule:remove"});
 MERGE (:Permission {id: "schedule:list"});
 
+MERGE (:Permission {id: "reservation:add"});
+MERGE (:Permission {id: "reservation:get"});
+MERGE (:Permission {id: "reservation:edit"});
+MERGE (:Permission {id: "reservation:list"});
+MERGE (:Permission {id: "reservation:confirm"});
+MERGE (:Permission {id: "reservation:reject"});
+MERGE (:Permission {id: "reservation:cancel"});
+MERGE (:Permission {id: "reservation:check-in"});
+MERGE (:Permission {id: "reservation:no-show"});
+MERGE (:Permission {id: "reservation:withdraw"});
+
 // -- Admin role --
 MERGE (:Role {id: "admin", name: "Admin", description: "Administrator role with full access", scope: "app"});
 
@@ -89,7 +100,7 @@ MERGE (:Role {id: "venue.manager", name: "Venue Manager", description: "Role wit
 // app resource — inert on a venue-scoped role) and venue:remove (no endpoint checks it).
 MATCH (r:Role {id: "venue.manager"})
 MATCH (p:Permission)
-WHERE p.id IN ["acl:list", "acl:remove", "acl:add", "venue:get", "venue:edit", "service:add", "service:get", "service:edit", "service:remove", "service:list", "schedule:add", "schedule:get", "schedule:edit", "schedule:remove", "schedule:list"]
+WHERE p.id IN ["acl:list", "acl:remove", "acl:add", "venue:get", "venue:edit", "service:add", "service:get", "service:edit", "service:remove", "service:list", "schedule:add", "schedule:get", "schedule:edit", "schedule:remove", "schedule:list", "reservation:add", "reservation:get", "reservation:edit", "reservation:list", "reservation:confirm", "reservation:reject", "reservation:cancel", "reservation:check-in", "reservation:no-show", "reservation:withdraw"]
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Venue Bartender role --
@@ -98,7 +109,7 @@ MERGE (:Role {id: "venue.bartender", name: "Venue Bartender", description: "Role
 // Assign permissions to venue bartender role
 MATCH (r:Role {id: "venue.bartender"})
 MATCH (p:Permission)
-WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list"]
+WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list", "reservation:get", "reservation:list"]
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Venue Chef role --
@@ -107,14 +118,16 @@ MERGE (:Role {id: "venue.chef", name: "Venue Chef", description: "Role with base
 // Assign permissions to venue chef role
 MATCH (r:Role {id: "venue.chef"})
 MATCH (p:Permission)
-WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list"]
+WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list", "reservation:get", "reservation:list"]
 MERGE (r)-[:GRANTS]->(p);
 
 // -- Venue Server role --
 MERGE (:Role {id: "venue.server", name: "Venue Server", description: "Role with base access to venue orders", scope: "venue"});
 
 // Assign permissions to venue server role
+// Front-of-house: view schedule/reservations plus mark arrivals (check-in) and no-shows.
+// confirm/reject/cancel stay manager-only (owner covers everything via its wildcard grant).
 MATCH (r:Role {id: "venue.server"})
 MATCH (p:Permission)
-WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list"]
+WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list", "reservation:get", "reservation:list", "reservation:check-in", "reservation:no-show"]
 MERGE (r)-[:GRANTS]->(p);

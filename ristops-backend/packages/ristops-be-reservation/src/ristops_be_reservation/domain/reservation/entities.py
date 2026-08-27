@@ -30,15 +30,17 @@ class ReservationEntity(Base):
     )
     reservation_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        doc="Date of reservation",
+        index=True,
+        doc="Reservation date and time, as a UTC instant (venue-local wall-clock on the API)",
     )
     party_size: Mapped[int] = mapped_column(
         Integer,
         doc="Number of people",
     )
-    arrival_time: Mapped[time] = mapped_column(
+    arrival_time: Mapped[time | None] = mapped_column(
         Time,
-        doc="Actual time of arrival",
+        default=None,
+        doc="Actual time of arrival; set once the reservation is checked in",
     )
     contact_name: Mapped[str] = mapped_column(
         String(120),
@@ -51,6 +53,11 @@ class ReservationEntity(Base):
     contact_email: Mapped[str | None] = mapped_column(
         String(320),
         doc="Email of the customer",
+    )
+    notes: Mapped[str | None] = mapped_column(
+        String(1000),
+        default=None,
+        doc="Free-form staff notes about the reservation",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { Form, type FormInstance, message } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo } from 'react';
@@ -8,6 +13,7 @@ import type {
   CapacityOverrideCreateInput,
   CapacityOverrideUpdateInput,
   ConflictCheckInput,
+  OpeningConflictCheckInput,
   OpeningOverrideCreateInput,
   OpeningOverrideUpdateInput,
   OpeningUpsertInput,
@@ -51,9 +57,7 @@ export function useUpsertServiceOpenings(serviceId: string) {
       });
       void message.success('Weekly hours saved');
     },
-    onError: () => {
-      void message.error('Could not save the weekly hours');
-    },
+    onError: toastUnlessConflict('Could not save the weekly hours'),
   });
 }
 
@@ -409,6 +413,10 @@ export function useConflictCandidate<T extends ConflictFormFields>(
     | Weekday
     | Weekday[]
     | undefined;
+  // Only opening-override forms have hours; other schedule forms leave these undefined, and the
+  // backend only uses them for the cross-service opening-overlap check.
+  const startTime = Form.useWatch('startTime', form) as Dayjs | undefined;
+  const endTime = Form.useWatch('endTime', form) as Dayjs | undefined;
 
   const candidate = useMemo<ConflictCheckInput | undefined>(() => {
     if (!dates?.[0] || !dates[1]) return undefined;
@@ -422,10 +430,36 @@ export function useConflictCandidate<T extends ConflictFormFields>(
       dateEnd: dates[1].format('YYYY-MM-DD'),
       weekdays,
       excludeId,
+      startTime: startTime ? startTime.format('HH:mm:ss') : undefined,
+      endTime: endTime ? endTime.format('HH:mm:ss') : undefined,
     };
-  }, [dates, weekday, excludeId]);
+  }, [dates, weekday, startTime, endTime, excludeId]);
 
   return useDebounced(candidate);
+}
+
+/**
+ * Preview cross-service opening overlaps for a set of candidate weekly openings (the weekly-hours
+ * editor edits up to seven days at once). One query per candidate via `useQueries`; results are
+ * flattened into a single conflict list with combined loading/error state.
+ */
+export function useServiceOpeningConflictsForCandidates(
+  serviceId: string,
+  candidates: OpeningConflictCheckInput[],
+) {
+  const results = useQueries({
+    queries: candidates.map((candidate) => ({
+      queryKey: ['schedule.openings', serviceId, 'conflicts', candidate],
+      queryFn: () => scheduleApi.serviceOpeningConflicts(serviceId, candidate),
+      enabled: !!serviceId,
+    })),
+  });
+  return {
+    conflicts: results.flatMap((result) => result.data ?? []),
+    isFetching: results.some((result) => result.isFetching),
+    isError: results.some((result) => result.isError),
+    refetch: () => results.forEach((result) => void result.refetch()),
+  };
 }
 
 export function useOpeningOverrideConflicts(

@@ -178,6 +178,10 @@ query OpeningOverrideConflicts($serviceId: ID!, $input: ConflictCheckInput!) {
         conflictingDateStart
         conflictingDateEnd
         conflictingWeekday
+        conflictingServiceId
+        conflictingServiceName
+        conflictingStartTime
+        conflictingEndTime
     }
 }
 
@@ -189,6 +193,10 @@ query ServiceClosingConflicts($serviceId: ID!, $input: ConflictCheckInput!) {
         conflictingDateStart
         conflictingDateEnd
         conflictingWeekday
+        conflictingServiceId
+        conflictingServiceName
+        conflictingStartTime
+        conflictingEndTime
     }
 }
 
@@ -200,6 +208,10 @@ query CapacityOverrideConflicts($serviceId: ID!, $input: ConflictCheckInput!) {
         conflictingDateStart
         conflictingDateEnd
         conflictingWeekday
+        conflictingServiceId
+        conflictingServiceName
+        conflictingStartTime
+        conflictingEndTime
     }
 }
 
@@ -211,5 +223,24 @@ query VenueClosingConflicts($venueId: ID!, $input: ConflictCheckInput!) {
         conflictingDateStart
         conflictingDateEnd
         conflictingWeekday
+        conflictingServiceId
+        conflictingServiceName
+        conflictingStartTime
+        conflictingEndTime
+    }
+}
+
+query ServiceOpeningConflicts($serviceId: ID!, $input: OpeningConflictCheckInput!) {
+    serviceOpeningConflicts(id: $serviceId, input: $input) {
+        weekday
+        source
+        conflictingId
+        conflictingDateStart
+        conflictingDateEnd
+        conflictingWeekday
+        conflictingServiceId
+        conflictingServiceName
+        conflictingStartTime
+        conflictingEndTime
     }
 }

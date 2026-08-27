@@ -143,13 +143,13 @@ export default function ServiceFormModal({
             { required: true, message: 'Minimum notice is required.' },
             {
               type: 'integer',
-              min: 0,
+              min: 1,
               message:
-                'Minimum notice must be a whole number of minutes (0 or more).',
+                'Minimum notice must be a whole number of minutes (at least 1).',
             },
           ]}
         >
-          <InputNumber min={0} step={1} placeholder="e.g. 120" style={{ width: '100%' }} />
+          <InputNumber min={1} step={1} placeholder="e.g. 120" style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item
           name="gracePeriodM"

@@ -70,6 +70,40 @@ export function formatDateRange(start: string, end: string): string {
   return `${s.format('MMM D')} – ${e.format('MMM D')}`;
 }
 
+export interface WeeklyOpeningCandidate {
+  weekday: Weekday;
+  start: Dayjs;
+  end: Dayjs;
+}
+
+/**
+ * Mirrors the backend's same-service overnight self-overlap validator
+ * (`OpeningsUpsertRequest._validate_no_overnight_self_overlap`): the whole week is edited as one
+ * set, so if an overnight opening (`end <= start`) spills past midnight into the next weekday's
+ * own opening, this returns a message describing the clash; otherwise `null`. Client-side mirror
+ * only — override self-overlap needs the service's existing DB schedule and has no live preview,
+ * surfaced instead via the backend's 422 on submit.
+ */
+export function findOvernightSelfOverlap(
+  candidates: WeeklyOpeningCandidate[],
+): string | null {
+  const byWeekday = new Map(candidates.map((c) => [c.weekday, c]));
+  for (const candidate of candidates) {
+    const startMin = candidate.start.hour() * 60 + candidate.start.minute();
+    const endMin = candidate.end.hour() * 60 + candidate.end.minute();
+    if (endMin > startMin || endMin === 0) continue; // same-day, or ends exactly at midnight
+    const index = WEEKDAY_ORDER.indexOf(candidate.weekday);
+    const nextWeekday = WEEKDAY_ORDER[(index + 1) % WEEKDAY_ORDER.length];
+    const next = byWeekday.get(nextWeekday);
+    if (!next) continue;
+    const nextStartMin = next.start.hour() * 60 + next.start.minute();
+    if (nextStartMin < endMin) {
+      return `${weekdayLabel(candidate.weekday)}'s overnight hours overlap ${weekdayLabel(nextWeekday)}'s opening`;
+    }
+  }
+  return null;
+}
+
 /** Human label for the kind of exception a conflicting row belongs to. */
 export function conflictSourceLabel(source: ConflictSource): string {
   switch (source) {
@@ -81,5 +115,7 @@ export function conflictSourceLabel(source: ConflictSource): string {
       return 'opening override';
     case ConflictSource.CapacityOverride:
       return 'capacity change';
+    case ConflictSource.ServiceOpening:
+      return 'another service';
   }
 }

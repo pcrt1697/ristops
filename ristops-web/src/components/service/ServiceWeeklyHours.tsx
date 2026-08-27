@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   Button,
   Flex,
   Input,
@@ -14,10 +15,17 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import {
   type ListServiceOpeningsQuery,
+  type OpeningConflictCheckInput,
   type OpeningUpsertInput,
   Weekday,
 } from '../../services/graphql/graphql.ts';
-import { useUpsertServiceOpenings } from '../../domain/schedule/schedule.hooks.ts';
+import {
+  useServiceOpeningConflictsForCandidates,
+  useUpsertServiceOpenings,
+} from '../../domain/schedule/schedule.hooks.ts';
+import { findOvernightSelfOverlap } from '../../domain/schedule/schedule.utils.ts';
+import { useDebounced } from '../../commons/hooks.ts';
+import ScheduleConflictWarning from '../schedule/ScheduleConflictWarning.tsx';
 
 const { Text } = Typography;
 
@@ -124,6 +132,41 @@ export default function ServiceWeeklyHours({
     return !d.open || (d.start && d.end && d.capacity);
   });
 
+  // Live cross-service overlap check: each open day with a full time range is a candidate opening.
+  // Debounced so we don't query on every keystroke; Save is blocked while any overlap exists.
+  const candidates = useMemo<OpeningConflictCheckInput[]>(
+    () =>
+      WEEKDAYS.filter(({ key }) => {
+        const d = state[key];
+        return d.open && d.start && d.end;
+      }).map(({ key }) => ({
+        weekday: key,
+        startTime: (state[key].start as Dayjs).format('HH:mm:ss'),
+        endTime: (state[key].end as Dayjs).format('HH:mm:ss'),
+      })),
+    [state],
+  );
+  const debouncedCandidates = useDebounced(candidates);
+  const openingConflicts = useServiceOpeningConflictsForCandidates(
+    serviceId,
+    debouncedCandidates,
+  );
+  const hasConflicts = openingConflicts.conflicts.length > 0;
+
+  // Same-service overnight self-overlap (e.g. Friday 22:00–02:00 spilling into Saturday's own
+  // opening): the whole week is in this form already, so this is a pure client-side mirror of
+  // the backend validator — no query needed.
+  const selfOverlapError = useMemo(() => {
+    const opens = WEEKDAYS.filter(({ key }) => state[key].open && state[key].start && state[key].end).map(
+      ({ key }) => ({
+        weekday: key,
+        start: state[key].start as Dayjs,
+        end: state[key].end as Dayjs,
+      }),
+    );
+    return findOvernightSelfOverlap(opens);
+  }, [state]);
+
   const handleSave = () => {
     const payload: OpeningUpsertInput[] = WEEKDAYS.filter(
       ({ key }) => state[key].open,
@@ -229,22 +272,40 @@ export default function ServiceWeeklyHours({
       />
 
       {canEdit && (
-        <Flex justify="space-between" align="center" style={{ marginTop: 16 }}>
-          <Text type="secondary">{dirty ? 'Unsaved changes' : ''}</Text>
-          <Space>
-            <Button disabled={!dirty} onClick={() => setState(baseline)}>
-              Discard
-            </Button>
-            <Button
-              type="primary"
-              loading={upsert.isPending}
-              disabled={!dirty || !valid}
-              onClick={handleSave}
-            >
-              Save hours
-            </Button>
-          </Space>
-        </Flex>
+        <>
+          <div style={{ marginTop: 16 }}>
+            {selfOverlapError && (
+              <Alert
+                type="error"
+                showIcon
+                message={selfOverlapError}
+                style={{ marginBottom: 8 }}
+              />
+            )}
+            <ScheduleConflictWarning
+              conflicts={openingConflicts.conflicts}
+              isLoading={openingConflicts.isFetching}
+              isError={openingConflicts.isError}
+              onRetry={openingConflicts.refetch}
+            />
+          </div>
+          <Flex justify="space-between" align="center">
+            <Text type="secondary">{dirty ? 'Unsaved changes' : ''}</Text>
+            <Space>
+              <Button disabled={!dirty} onClick={() => setState(baseline)}>
+                Discard
+              </Button>
+              <Button
+                type="primary"
+                loading={upsert.isPending}
+                disabled={!dirty || !valid || hasConflicts || !!selfOverlapError}
+                onClick={handleSave}
+              >
+                Save hours
+              </Button>
+            </Space>
+          </Flex>
+        </>
       )}
     </>
   );

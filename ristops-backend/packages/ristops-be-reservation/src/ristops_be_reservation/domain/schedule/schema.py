@@ -48,10 +48,17 @@ class ConflictSource(StrEnum):
     SERVICE_CLOSING = "service_closing"
     OPENING_OVERRIDE = "opening_override"
     CAPACITY_OVERRIDE = "capacity_override"
+    SERVICE_OPENING = "service_opening"  # another service of the venue is open at the same time
 
 
 class ScheduleConflict(BaseModel):
-    """A single existing row that conflicts with a candidate period+weekday being checked."""
+    """A single existing row that conflicts with a candidate period+weekday being checked.
+
+    Same-service exception conflicts (closings, overrides, capacity) carry the conflicting row's
+    date range. A cross-service opening conflict (``SERVICE_OPENING``) instead identifies the
+    other service and the overlapping window; for a permanent base-vs-base overlap it has no date
+    range (``conflicting_date_start/end`` are null).
+    """
 
     weekday: Weekday | None = Field(
         default=None,
@@ -59,18 +66,42 @@ class ScheduleConflict(BaseModel):
     )
     source: ConflictSource = Field(description="Which kind of exception the conflicting row is.")
     conflicting_id: UUID = Field(description="Identifier of the existing conflicting row.")
-    conflicting_date_start: date = Field(description="First date of the conflicting row (inclusive).")
-    conflicting_date_end: date = Field(description="Last date of the conflicting row (inclusive).")
+    conflicting_date_start: date | None = Field(
+        default=None,
+        description="First date of the conflicting row (inclusive); null for a permanent opening.",
+    )
+    conflicting_date_end: date | None = Field(
+        default=None,
+        description="Last date of the conflicting row (inclusive); null for a permanent opening.",
+    )
     conflicting_weekday: Weekday | None = Field(
         default=None,
         description="Weekday scope of the conflicting row; null means every day.",
+    )
+    conflicting_service_id: UUID | None = Field(
+        default=None,
+        description="For a SERVICE_OPENING conflict, the other service that is open.",
+    )
+    conflicting_service_name: str | None = Field(
+        default=None,
+        description="For a SERVICE_OPENING conflict, the name of the other service.",
+    )
+    conflicting_start_time: time | None = Field(
+        default=None,
+        description="For a SERVICE_OPENING conflict, the other service's opening time.",
+    )
+    conflicting_end_time: time | None = Field(
+        default=None,
+        description="For a SERVICE_OPENING conflict, the other service's closing time.",
     )
 
 
 class ConflictQuery(BaseModel):
     """Query for a read-only conflict preview: the candidate period a client is about to write.
     Mirrors the create-request shape (bulk `weekdays`), plus an optional `exclude_id` to preview
-    an in-place edit without the row conflicting with itself."""
+    an in-place edit without the row conflicting with itself. ``start_time``/``end_time`` are the
+    candidate's hours, needed to detect cross-service opening overlaps (ignored by the same-service
+    date/weekday exception checks)."""
 
     date_start: date = Field(description="First date of the candidate period (inclusive).")
     date_end: date = Field(description="Last date of the candidate period (inclusive).")
@@ -83,6 +114,23 @@ class ConflictQuery(BaseModel):
         default=None,
         description="Exclude this row from the check (use when previewing an edit of it).",
     )
+    start_time: time | None = Field(
+        default=None,
+        description="Candidate opening time (for cross-service overlap detection).",
+    )
+    end_time: time | None = Field(
+        default=None,
+        description="Candidate closing time (for cross-service overlap detection).",
+    )
+
+
+class OpeningConflictQuery(BaseModel):
+    """Query for the base-openings cross-service conflict preview: a single candidate weekly
+    opening (weekday + hours). Base openings are indefinite, so there is no date range."""
+
+    weekday: Weekday = Field(description="Weekday of the candidate opening.")
+    start_time: time = Field(description="Candidate opening time.")
+    end_time: time = Field(description="Candidate closing time.")
 
 
 class ConflictsResponse(BaseModel):
@@ -137,6 +185,30 @@ class OpeningsUpsertRequest(BaseModel):
         weekdays = {opening.weekday for opening in self.openings}
         if len(self.openings) != len(weekdays):
             raise ValueError("Duplicate weekday in openings list")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_no_overnight_self_overlap(self) -> "OpeningsUpsertRequest":
+        """Reject the set if an overnight opening (``end_time <= start_time``) spills past
+        midnight into the next weekday's own submitted opening. The whole week is self-contained
+        in this request, so this is checked here rather than in the DB-backed cross-service engine."""
+        by_weekday = {opening.weekday: opening for opening in self.openings}
+        order = list(Weekday)
+        for opening in self.openings:
+            start_min = opening.start_time.hour * 60 + opening.start_time.minute
+            end_min = opening.end_time.hour * 60 + opening.end_time.minute
+            if end_min > start_min or end_min == 0:
+                continue  # same-day opening, or closes exactly at midnight: no spillover
+            next_weekday = order[(order.index(opening.weekday) + 1) % 7]
+            next_opening = by_weekday.get(next_weekday)
+            if next_opening is None:
+                continue
+            next_start_min = next_opening.start_time.hour * 60 + next_opening.start_time.minute
+            if next_start_min < end_min:
+                raise ValueError(
+                    f"{opening.weekday.value.capitalize()}'s overnight hours overlap "
+                    f"{next_weekday.value.capitalize()}'s opening"
+                )
         return self
 
 

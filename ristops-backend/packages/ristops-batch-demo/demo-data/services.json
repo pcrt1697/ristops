@@ -123,9 +123,6 @@
         { "weekday": "wednesday", "capacity": 40, "start_time": "12:30", "end_time": "15:00" },
         { "weekday": "thursday", "capacity": 40, "start_time": "12:30", "end_time": "15:00" },
         { "weekday": "friday", "capacity": 45, "start_time": "12:30", "end_time": "15:30" }
-      ],
-      "overrides": [
-        { "dates": { "month_day_start": "05-15", "month_day_end": "05-16", "year_offsets": [-1, 0, 1] }, "capacity": 75, "start_time": "18:30", "end_time": "23:59", "description": "Royal banquet" }
       ]
     },
     {
@@ -145,6 +142,7 @@
         { "weekday": "sunday", "capacity": 55, "start_time": "18:30", "end_time": "22:30" }
       ],
       "overrides": [
+        { "dates": { "month_day_start": "05-15", "month_day_end": "05-16", "year_offsets": [-1, 0, 1] }, "capacity": 75, "start_time": "18:30", "end_time": "23:59", "description": "Royal banquet" },
         { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] }, "weekday": "friday", "capacity": 65, "start_time": "18:00", "end_time": "23:59", "description": "Extended service every Friday (summer)" },
         { "dates": { "month_day_start": "04-04", "month_day_end": "04-05", "year_offsets": [-1, 0, 1] }, "capacity": 65, "start_time": "18:30", "end_time": "23:00", "description": "Maiden's Day at Lannisport" },
         { "dates": { "month_day_start": "12-24", "month_day_end": "12-26", "year_offsets": [-1, 0, 1] }, "capacity": 70, "start_time": "18:30", "end_time": "23:30", "description": "Casterly Rock Yule feast" },

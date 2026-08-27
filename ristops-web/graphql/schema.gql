@@ -144,7 +144,7 @@ input CapacityOverrideUpdateInput {
 }
 
 """
-Candidate period+weekdays to check for conflicts before writing. Bulk `weekdays` mirror a create; omit/empty or all seven means every day.
+Candidate period+weekdays to check for conflicts before writing. Bulk `weekdays` mirror a create; omit/empty or all seven means every day. Pass `start_time`/`end_time` to also detect cross-service opening overlaps.
 """
 input ConflictCheckInput {
   """First date of the candidate period (inclusive)."""
@@ -158,6 +158,12 @@ input ConflictCheckInput {
 
   """Exclude this row from the check (use when previewing an edit of it)."""
   excludeId: ID = null
+
+  """Candidate opening time (for cross-service overlap detection)."""
+  startTime: Time = null
+
+  """Candidate closing time (for cross-service overlap detection)."""
+  endTime: Time = null
 }
 
 """Which kind of exception a conflicting row belongs to."""
@@ -166,6 +172,33 @@ enum ConflictSource {
   SERVICE_CLOSING
   OPENING_OVERRIDE
   CAPACITY_OVERRIDE
+  SERVICE_OPENING
+}
+
+"""Information to create a reservation."""
+input CreateReservationInput {
+  """Venue to book at."""
+  venueId: ID!
+
+  """Customer name."""
+  contactName: String!
+
+  """Number of people."""
+  partySize: Int!
+
+  """
+  Reservation date and time as venue-local wall-clock (naive, no offset).
+  """
+  reservationDate: DateTime!
+
+  """Customer phone number."""
+  contactPhoneNumber: String = null
+
+  """Customer email."""
+  contactEmail: String = null
+
+  """Staff notes."""
+  notes: String = null
 }
 
 """Service information."""
@@ -545,6 +578,66 @@ type Mutation {
     """Venue closing ID."""
     closingId: ID!
   ): Boolean!
+
+  """Create a reservation."""
+  createReservation(
+    """Reservation information."""
+    input: CreateReservationInput!
+  ): Reservation!
+
+  """Update a reservation's editable fields."""
+  updateReservation(
+    """Entity identifier."""
+    id: ID!
+
+    """Reservation fields to update."""
+    input: UpdateReservationInput!
+  ): Reservation!
+
+  """Confirm (accept) a reservation."""
+  confirmReservation(
+    """Entity identifier."""
+    id: ID!
+    notes: String = null
+  ): Reservation!
+
+  """Reject (decline) a pending reservation."""
+  rejectReservation(
+    """Entity identifier."""
+    id: ID!
+    notes: String = null
+  ): Reservation!
+
+  """Cancel a reservation (customer-initiated)."""
+  cancelReservation(
+    """Entity identifier."""
+    id: ID!
+    notes: String = null
+  ): Reservation!
+
+  """Check a reservation in (records arrival)."""
+  checkInReservation(
+    """Entity identifier."""
+    id: ID!
+
+    """Venue-local arrival time; defaults to now if omitted."""
+    arrivalTime: Time = null
+    notes: String = null
+  ): Reservation!
+
+  """Mark a reservation as a no-show."""
+  noShowReservation(
+    """Entity identifier."""
+    id: ID!
+    notes: String = null
+  ): Reservation!
+
+  """Withdraw a booking the venue can no longer honor (venue-initiated)."""
+  withdrawReservation(
+    """Entity identifier."""
+    id: ID!
+    notes: String = null
+  ): Reservation!
 }
 
 """A service's weekly opening for a given weekday."""
@@ -575,6 +668,20 @@ type Opening {
 
   """Last update date."""
   updatedAt: DateTime!
+}
+
+"""
+A candidate weekly opening (weekday + hours) to check for cross-service overlaps. Base openings are indefinite — no date range.
+"""
+input OpeningConflictCheckInput {
+  """Weekday of the candidate opening."""
+  weekday: Weekday!
+
+  """Candidate opening time."""
+  startTime: Time!
+
+  """Candidate closing time."""
+  endTime: Time!
 }
 
 """A one-off opening override replacing base hours for a date range."""
@@ -729,6 +836,27 @@ input OpeningUpsertInput {
   description: String = null
 }
 
+"""A service+date whose booked seats exceed the effective capacity."""
+type OverCapacitySlot {
+  """Service the overbooked slot belongs to."""
+  serviceId: String!
+
+  """Name of that service."""
+  serviceName: String!
+
+  """Venue-local service date of the slot."""
+  businessDate: Date!
+
+  """Effective seat capacity for that date."""
+  capacity: Int!
+
+  """Peak concurrent booked seats."""
+  peakBooked: Int!
+
+  """Live reservations in this slot."""
+  reservationIds: [String!]!
+}
+
 """Pagination parameters."""
 input PaginationInput {
   """0-indexed page number."""
@@ -871,7 +999,18 @@ type Query {
   ): CapacityOverridePage!
 
   """
-  Preview which existing opening overrides a candidate period would conflict with.
+  Preview which other services of the venue a candidate weekly opening would overlap.
+  """
+  serviceOpeningConflicts(
+    """Entity identifier."""
+    id: ID!
+
+    """Candidate weekly opening to check."""
+    input: OpeningConflictCheckInput!
+  ): [ScheduleConflict!]!
+
+  """
+  Preview conflicts (same-service overrides + cross-service overlaps) for a candidate override.
   """
   serviceOpeningOverrideConflicts(
     """Entity identifier."""
@@ -913,6 +1052,152 @@ type Query {
     """Candidate period+weekdays to check."""
     input: ConflictCheckInput!
   ): [ScheduleConflict!]!
+
+  """Fetch a reservation by ID."""
+  reservation(
+    """Entity identifier."""
+    id: ID!
+  ): Reservation!
+
+  """Search a venue's reservations."""
+  reservations(
+    """Reservation search query."""
+    input: ReservationSearchInput!
+  ): ReservationPage!
+
+  """Slots of a venue whose bookings now exceed the effective capacity."""
+  reservationOverCapacity(
+    """Venue ID."""
+    venueId: ID!
+  ): [OverCapacitySlot!]!
+}
+
+"""A reservation."""
+type Reservation {
+  """Reservation identifier."""
+  id: String!
+
+  """Venue this reservation belongs to."""
+  venueId: String!
+
+  """Current status."""
+  status: ReservationStatus!
+
+  """
+  Reservation date and time as venue-local wall-clock (naive, no offset).
+  """
+  reservationDate: DateTime!
+
+  """Number of people."""
+  partySize: Int!
+
+  """Actual arrival time, once checked in."""
+  arrivalTime: Time
+
+  """Customer name."""
+  contactName: String!
+
+  """Customer phone number."""
+  contactPhoneNumber: String
+
+  """Customer email."""
+  contactEmail: String
+
+  """Free-form staff notes."""
+  notes: String
+
+  """
+  Set when the reservation no longer fits the current schedule (needs attention).
+  """
+  violation: ReservationViolation
+
+  """Creation date."""
+  createdAt: DateTime!
+
+  """Last update date."""
+  updatedAt: DateTime!
+}
+
+"""Reservation search filter."""
+input ReservationFilterInput {
+  """Venue to list reservations for. Mandatory."""
+  venueId: ID!
+
+  """Filter to reservations in any of these statuses."""
+  status: [ReservationStatus!] = null
+
+  """Include reservations on or after this venue-local date."""
+  dateFrom: Date = null
+
+  """Include reservations on or before this venue-local date."""
+  dateTo: Date = null
+
+  """Return only reservations that violate the current schedule."""
+  violationsOnly: Boolean! = false
+}
+
+"""A single page of results with pagination metadata."""
+type ReservationPage {
+  """Items in the current page."""
+  items: [Reservation!]!
+
+  """Total number of items across all pages."""
+  total: Int!
+
+  """0-indexed page number."""
+  page: Int!
+
+  """Number of items per page."""
+  pageSize: Int!
+
+  """Total number of pages."""
+  totalPages: Int!
+}
+
+"""Reservation search query."""
+input ReservationSearchInput {
+  """Filter parameters (venue mandatory)."""
+  filter: ReservationFilterInput!
+
+  """Pagination parameters."""
+  pagination: PaginationInput! = {page: 0}
+
+  """Sort instructions."""
+  sort: [ReservationSortFieldSortInput!]! = []
+}
+
+"""Fields a reservation search may be sorted by."""
+enum ReservationSortField {
+  ID
+  RESERVATION_DATE
+  CREATED_AT
+}
+
+"""A single sort instruction."""
+input ReservationSortFieldSortInput {
+  """Field to sort by."""
+  field: ReservationSortField!
+
+  """Sort direction."""
+  direction: SortDirection! = ASC
+}
+
+"""Lifecycle status of a reservation."""
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELED
+  CHECKED_IN
+  NO_SHOW
+  WITHDRAWN
+}
+
+"""Why a reservation no longer fits the current schedule."""
+enum ReservationViolation {
+  NO_SERVICE
+  CLOSED
+  OUTSIDE_HOURS
 }
 
 """Fields a resource grants search may be sorted by."""
@@ -956,6 +1241,7 @@ enum ResourceType {
   APP
   VENUE
   SERVICE
+  RESERVATION
   PERMISSION
   ROLE
   ACL
@@ -1056,14 +1342,26 @@ type ScheduleConflict {
   """Identifier of the existing conflicting row."""
   conflictingId: String!
 
-  """First date of the conflicting row (inclusive)."""
-  conflictingDateStart: Date!
+  """First date of the conflicting row; null for a permanent opening."""
+  conflictingDateStart: Date
 
-  """Last date of the conflicting row (inclusive)."""
-  conflictingDateEnd: Date!
+  """Last date of the conflicting row; null for a permanent opening."""
+  conflictingDateEnd: Date
 
   """Weekday scope of the conflicting row; null means every day."""
   conflictingWeekday: Weekday
+
+  """For a SERVICE_OPENING conflict, the other service that is open."""
+  conflictingServiceId: String
+
+  """For a SERVICE_OPENING conflict, the name of the other service."""
+  conflictingServiceName: String
+
+  """For a SERVICE_OPENING conflict, the other service's opening time."""
+  conflictingStartTime: Time
+
+  """For a SERVICE_OPENING conflict, the other service's closing time."""
+  conflictingEndTime: Time
 }
 
 """Date-range filter for schedule exceptions."""
@@ -1247,6 +1545,26 @@ enum SortDirection {
 
 """Time (isoformat)"""
 scalar Time
+
+"""Reservation fields to update (only provided fields change)."""
+input UpdateReservationInput {
+  """New customer name."""
+  contactName: String = null
+
+  """New party size."""
+  partySize: Int = null
+
+  """
+  New reservation date and time as venue-local wall-clock (naive, no offset).
+  """
+  reservationDate: DateTime = null
+
+  """New phone number (null clears it)."""
+  contactPhoneNumber: String
+
+  """New staff notes (null clears them)."""
+  notes: String
+}
 
 """Service information to update."""
 input UpdateServiceInput {

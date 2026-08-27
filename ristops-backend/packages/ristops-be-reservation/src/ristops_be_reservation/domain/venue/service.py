@@ -60,6 +60,17 @@ def check_venue_accepts_config_changes(venue: VenueEntity) -> None:
         )
 
 
+def check_venue_accepts_reservations(venue: VenueEntity) -> None:
+    """Raise HTTP 409 unless the venue is ACTIVE. Reservations are only accepted for a live
+    venue — deliberately stricter than ``check_venue_accepts_config_changes``, which also allows
+    PENDING (a venue still being configured takes no bookings)."""
+    if VenueStatus(venue.status) != VenueStatus.ACTIVE:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail=f"Venue is {venue.status}; reservations are not accepted",
+        )
+
+
 async def ensure_venue_accepts_config_changes(venue_id: UUID, for_update: bool = False) -> None:
     """Fetch the venue by ID and raise HTTP 409 if its status doesn't allow config writes.
 
@@ -96,7 +107,6 @@ async def on_venue_event(_: str, payload: StreamPayload) -> None:
             await upsert_venue(event.id, event.timezone, event.status)
 
 
-# --- Venue-wide closings -----------------------------------------------------
 
 def _venue_date_range_conditions(
         venue_id: UUID,

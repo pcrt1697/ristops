@@ -2,9 +2,13 @@ import { Alert, Button, Typography } from 'antd';
 import {
   conflictSourceLabel,
   formatDateRange,
+  formatTimeRange,
   weekdayLabel,
 } from '../../domain/schedule/schedule.utils.ts';
-import type { ScheduleConflict } from '../../services/graphql/graphql.ts';
+import {
+  ConflictSource,
+  type ScheduleConflict,
+} from '../../services/graphql/graphql.ts';
 
 interface ScheduleConflictWarningProps {
   conflicts: ScheduleConflict[] | undefined;
@@ -64,19 +68,48 @@ export default function ScheduleConflictWarning({
             <li
               key={`${conflict.source}-${conflict.conflictingId}-${conflict.weekday ?? 'all'}`}
             >
-              {conflictSourceLabel(conflict.source)} on{' '}
-              {formatDateRange(
-                conflict.conflictingDateStart,
-                conflict.conflictingDateEnd,
-              )}
-              {conflict.conflictingWeekday
-                ? ` (${weekdayLabel(conflict.conflictingWeekday)}s)`
-                : ''}
+              {conflict.source === ConflictSource.ServiceOpening
+                ? renderServiceOpening(conflict)
+                : renderException(conflict)}
             </li>
           ))}
         </ul>
       }
       style={{ marginBottom: 16 }}
     />
+  );
+}
+
+/** A same-service exception conflict: "<kind> on <date range> (<weekday>s)". */
+function renderException(conflict: ScheduleConflict) {
+  return (
+    <>
+      {conflictSourceLabel(conflict.source)} on{' '}
+      {formatDateRange(
+        conflict.conflictingDateStart ?? '',
+        conflict.conflictingDateEnd ?? '',
+      )}
+      {conflict.conflictingWeekday
+        ? ` (${weekdayLabel(conflict.conflictingWeekday)}s)`
+        : ''}
+    </>
+  );
+}
+
+/** A cross-service opening overlap: "<service> is open <HH:mm–HH:mm> on <weekday>s". */
+function renderServiceOpening(conflict: ScheduleConflict) {
+  const service = conflict.conflictingServiceName ?? 'another service';
+  const window =
+    conflict.conflictingStartTime && conflict.conflictingEndTime
+      ? ` (${formatTimeRange(conflict.conflictingStartTime, conflict.conflictingEndTime)})`
+      : '';
+  const on = conflict.conflictingWeekday
+    ? ` on ${weekdayLabel(conflict.conflictingWeekday)}s`
+    : '';
+  return (
+    <>
+      {service} is open{window}
+      {on}
+    </>
   );
 }

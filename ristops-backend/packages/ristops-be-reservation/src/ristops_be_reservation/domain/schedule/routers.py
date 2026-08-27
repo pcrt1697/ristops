@@ -13,7 +13,7 @@ from ristops_be_reservation.domain.schedule.schema import (
     ServiceClosingSearchQuery,
     CapacityOverrideCreateRequest, CapacityOverrideUpdateRequest,
     CapacityOverrideResponse, CapacityOverrideSearchQuery,
-    ConflictQuery, ConflictsResponse,
+    ConflictQuery, ConflictsResponse, OpeningConflictQuery,
 )
 from ristops_be_reservation.domain.schedule.service import (
     upsert_service_openings, list_service_openings,
@@ -23,6 +23,7 @@ from ristops_be_reservation.domain.schedule.service import (
     remove_service_closing, search_service_closings,
     create_service_capacity_overrides, update_service_capacity_override,
     remove_service_capacity_override, search_service_capacity_overrides,
+    find_service_opening_conflicts_for,
     find_service_opening_override_conflicts_for, find_service_closing_conflicts_for,
     find_service_capacity_override_conflicts_for,
 )
@@ -44,9 +45,15 @@ schedule_router = APIRouter(
     response_model=OpeningsResponse,
     responses={
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
-        HTTPStatus.CONFLICT: {"model": ErrorResponse, "description": "Venue is not accepting config changes"},
+        HTTPStatus.CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Venue is not accepting config changes, or an opening overlaps "
+                           "another service's hours",
+        },
         HTTPStatus.UNPROCESSABLE_ENTITY: {
-            "model": ErrorResponse, "description": "Duplicate weekday in openings list",
+            "model": ErrorResponse,
+            "description": "Duplicate weekday in openings list, or an overnight opening "
+                           "overlaps the next weekday's opening",
         },
     },
 )
@@ -63,6 +70,24 @@ async def upsert_openings(
     return OpeningsResponse(
         openings=[OpeningResponse.model_validate(opening, from_attributes=True) for opening in openings]
     )
+
+
+@schedule_router.get(
+    "/{service_id}/openings/conflicts",
+    response_model=ConflictsResponse,
+    responses={
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
+    },
+)
+@policy(Policy(_service_path_resolver, "schedule:list"))
+@sql_transactional
+async def get_service_opening_conflicts(
+        service_id: Annotated[UUID, Path(description="Service ID")],
+        query: Annotated[OpeningConflictQuery, Query()],
+) -> ConflictsResponse:
+    """Preview which of the venue's other services a candidate base opening (weekday + hours)
+    would overlap. Authorized against the service itself."""
+    return await find_service_opening_conflicts_for(service_id, query)
 
 
 @schedule_router.get(
@@ -95,8 +120,13 @@ async def get_service_openings(
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Service not found"},
         HTTPStatus.CONFLICT: {
             "model": ErrorResponse,
-            "description": "Venue is not accepting config changes, or the period conflicts with "
-                           "an existing opening override",
+            "description": "Venue is not accepting config changes, the period conflicts with an "
+                           "existing opening override, or it overlaps another service's hours",
+        },
+        HTTPStatus.UNPROCESSABLE_ENTITY: {
+            "model": ErrorResponse,
+            "description": "The override's overnight hours overlap the service's own opening "
+                           "on the following day",
         },
     },
 )
@@ -122,8 +152,13 @@ async def create_opening_override(
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Opening override not found"},
         HTTPStatus.CONFLICT: {
             "model": ErrorResponse,
-            "description": "Venue is not accepting config changes, or the new period conflicts "
-                           "with an existing opening override",
+            "description": "Venue is not accepting config changes, the new period conflicts with "
+                           "an existing opening override, or it overlaps another service's hours",
+        },
+        HTTPStatus.UNPROCESSABLE_ENTITY: {
+            "model": ErrorResponse,
+            "description": "The override's overnight hours overlap the service's own opening "
+                           "on the following day",
         },
     },
 )

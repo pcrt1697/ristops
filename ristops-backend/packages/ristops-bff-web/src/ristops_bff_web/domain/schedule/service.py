@@ -38,6 +38,8 @@ capacity_override_transformer = ResponseTransformer(
 conflict_transformer = ResponseTransformer(
     conflicting_date_start=date.fromisoformat,
     conflicting_date_end=date.fromisoformat,
+    conflicting_start_time=time.fromisoformat,
+    conflicting_end_time=time.fromisoformat,
 )
 
 
@@ -77,7 +79,6 @@ async def upsert_service_openings(
     return [opening_transformer.transform(item) for item in openings_]
 
 
-# --- Opening overrides -------------------------------------------------------
 
 async def search_service_opening_overrides(
         service_id: str | UUID,
@@ -128,15 +129,23 @@ async def delete_service_opening_override(
     )
 
 
+async def service_opening_conflicts(
+        service_id: str | UUID,
+        params: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Preview which other services of the venue a candidate weekly opening would overlap."""
+    return await _get_conflicts(f"services/{service_id}/openings/conflicts", params)
+
+
 async def service_opening_override_conflicts(
         service_id: str | UUID,
         params: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Preview which existing opening overrides a candidate period+weekdays would conflict with."""
+    """Preview which existing opening overrides a candidate period+weekdays would conflict with,
+    plus any cross-service opening overlaps."""
     return await _get_conflicts(f"services/{service_id}/opening-overrides/conflicts", params)
 
 
-# --- Closings ----------------------------------------------------------------
 
 async def search_service_closings(
         service_id: str | UUID,
@@ -196,7 +205,6 @@ async def service_closing_conflicts(
     return await _get_conflicts(f"services/{service_id}/closings/conflicts", params)
 
 
-# --- Capacity overrides ------------------------------------------------------
 
 async def search_service_capacity_overrides(
         service_id: str | UUID,
@@ -255,7 +263,6 @@ async def service_capacity_override_conflicts(
     return await _get_conflicts(f"services/{service_id}/capacity-overrides/conflicts", params)
 
 
-# --- Venue-wide closings -----------------------------------------------------
 
 venue_closing_transformer = ResponseTransformer(
     date_start=date.fromisoformat,

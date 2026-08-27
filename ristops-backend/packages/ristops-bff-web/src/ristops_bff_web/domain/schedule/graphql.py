@@ -9,7 +9,7 @@ from ristops_bff_web.domain.schedule.service import (
     list_service_openings, upsert_service_openings,
     search_service_opening_overrides, create_service_opening_overrides,
     update_service_opening_override, delete_service_opening_override,
-    service_opening_override_conflicts,
+    service_opening_conflicts, service_opening_override_conflicts,
     search_service_closings, create_service_closings,
     update_service_closing, delete_service_closing, service_closing_conflicts,
     search_service_capacity_overrides, create_service_capacity_overrides,
@@ -749,6 +749,7 @@ class ConflictSource(Enum):
     SERVICE_CLOSING = "service_closing"
     OPENING_OVERRIDE = "opening_override"
     CAPACITY_OVERRIDE = "capacity_override"
+    SERVICE_OPENING = "service_opening"
 
 
 @strawberry.type(description="An existing row that conflicts with a candidate period+weekday.")
@@ -758,10 +759,26 @@ class ScheduleConflict:
     )
     source: ConflictSource = strawberry.field(description="Which kind of exception the conflicting row is.")
     conflicting_id: str = strawberry.field(description="Identifier of the existing conflicting row.")
-    conflicting_date_start: date = strawberry.field(description="First date of the conflicting row (inclusive).")
-    conflicting_date_end: date = strawberry.field(description="Last date of the conflicting row (inclusive).")
+    conflicting_date_start: date | None = strawberry.field(
+        description="First date of the conflicting row; null for a permanent opening.",
+    )
+    conflicting_date_end: date | None = strawberry.field(
+        description="Last date of the conflicting row; null for a permanent opening.",
+    )
     conflicting_weekday: Weekday | None = strawberry.field(
         description="Weekday scope of the conflicting row; null means every day.",
+    )
+    conflicting_service_id: str | None = strawberry.field(
+        description="For a SERVICE_OPENING conflict, the other service that is open.",
+    )
+    conflicting_service_name: str | None = strawberry.field(
+        description="For a SERVICE_OPENING conflict, the name of the other service.",
+    )
+    conflicting_start_time: time | None = strawberry.field(
+        description="For a SERVICE_OPENING conflict, the other service's opening time.",
+    )
+    conflicting_end_time: time | None = strawberry.field(
+        description="For a SERVICE_OPENING conflict, the other service's closing time.",
     )
 
     @classmethod
@@ -770,14 +787,19 @@ class ScheduleConflict:
             weekday=Weekday(obj["weekday"]) if obj.get("weekday") else None,
             source=ConflictSource(obj["source"]),
             conflicting_id=obj["conflicting_id"],
-            conflicting_date_start=obj["conflicting_date_start"],
-            conflicting_date_end=obj["conflicting_date_end"],
+            conflicting_date_start=obj.get("conflicting_date_start"),
+            conflicting_date_end=obj.get("conflicting_date_end"),
             conflicting_weekday=Weekday(obj["conflicting_weekday"]) if obj.get("conflicting_weekday") else None,
+            conflicting_service_id=obj.get("conflicting_service_id"),
+            conflicting_service_name=obj.get("conflicting_service_name"),
+            conflicting_start_time=obj.get("conflicting_start_time"),
+            conflicting_end_time=obj.get("conflicting_end_time"),
         )
 
 
 @strawberry.input(description="Candidate period+weekdays to check for conflicts before writing. "
-                              "Bulk `weekdays` mirror a create; omit/empty or all seven means every day.")
+                              "Bulk `weekdays` mirror a create; omit/empty or all seven means every day. "
+                              "Pass `start_time`/`end_time` to also detect cross-service opening overlaps.")
 class ConflictCheckInput:
     date_start: date = strawberry.field(description="First date of the candidate period (inclusive).")
     date_end: date = strawberry.field(description="Last date of the candidate period (inclusive).")
@@ -787,6 +809,20 @@ class ConflictCheckInput:
     exclude_id: strawberry.ID | None = strawberry.field(
         default=None, description="Exclude this row from the check (use when previewing an edit of it).",
     )
+    start_time: time | None = strawberry.field(
+        default=None, description="Candidate opening time (for cross-service overlap detection).",
+    )
+    end_time: time | None = strawberry.field(
+        default=None, description="Candidate closing time (for cross-service overlap detection).",
+    )
+
+
+@strawberry.input(description="A candidate weekly opening (weekday + hours) to check for "
+                              "cross-service overlaps. Base openings are indefinite — no date range.")
+class OpeningConflictCheckInput:
+    weekday: Weekday = strawberry.field(description="Weekday of the candidate opening.")
+    start_time: time = strawberry.field(description="Candidate opening time.")
+    end_time: time = strawberry.field(description="Candidate closing time.")
 
 
 def _conflict_params(inp: ConflictCheckInput) -> dict[str, Any]:
@@ -798,7 +834,30 @@ def _conflict_params(inp: ConflictCheckInput) -> dict[str, Any]:
         params["weekdays"] = [w.value for w in inp.weekdays]
     if inp.exclude_id is not None:
         params["exclude_id"] = str(inp.exclude_id)
+    if inp.start_time is not None:
+        params["start_time"] = inp.start_time.isoformat()
+    if inp.end_time is not None:
+        params["end_time"] = inp.end_time.isoformat()
     return params
+
+
+def _opening_conflict_params(inp: OpeningConflictCheckInput) -> dict[str, Any]:
+    return {
+        "weekday": inp.weekday.value,
+        "start_time": inp.start_time.isoformat(),
+        "end_time": inp.end_time.isoformat(),
+    }
+
+
+async def resolve_service_opening_conflicts(
+        service_id: EntityId,
+        _input: Annotated[
+            OpeningConflictCheckInput,
+            strawberry.argument(description="Candidate weekly opening to check.", name="input")
+        ],
+) -> list[ScheduleConflict]:
+    rows = await service_opening_conflicts(service_id, _opening_conflict_params(_input))
+    return [ScheduleConflict.from_dict(row) for row in rows]
 
 
 async def resolve_service_opening_override_conflicts(
@@ -867,9 +926,13 @@ class ScheduleQuery:
         resolver=resolve_service_capacity_overrides,
         description="Search the capacity overrides for a service.",
     )
+    service_opening_conflicts: list[ScheduleConflict] = strawberry.field(
+        resolver=resolve_service_opening_conflicts,
+        description="Preview which other services of the venue a candidate weekly opening would overlap.",
+    )
     service_opening_override_conflicts: list[ScheduleConflict] = strawberry.field(
         resolver=resolve_service_opening_override_conflicts,
-        description="Preview which existing opening overrides a candidate period would conflict with.",
+        description="Preview conflicts (same-service overrides + cross-service overlaps) for a candidate override.",
     )
     service_closing_conflicts: list[ScheduleConflict] = strawberry.field(
         resolver=resolve_service_closing_conflicts,

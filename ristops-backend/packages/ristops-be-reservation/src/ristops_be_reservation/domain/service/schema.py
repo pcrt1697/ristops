@@ -28,8 +28,8 @@ class ServiceCreationRequest(BaseModel):
         gt=0,
     )
     advance_notice_m: int = Field(
-        description="Minimum notice required before a reservation slot, in minutes.",
-        ge=0,
+        description="Minimum notice required before a reservation slot, in minutes (at least 1).",
+        gt=0,
     )
     slot_interval_m: int = Field(
         description="Interval between reservation slots, in minutes.",
@@ -61,8 +61,8 @@ class ServiceUpdateRequest(BaseModel):
     )
     advance_notice_m: int | None = Field(
         default=None,
-        description="New minimum notice required before a reservation slot, in minutes.",
-        ge=0,
+        description="New minimum notice required before a reservation slot, in minutes (at least 1).",
+        gt=0,
     )
     slot_interval_m: int | None = Field(
         default=None,
