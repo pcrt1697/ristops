@@ -4,6 +4,7 @@ version = "0.1.0"
 dependencies = [
     "fastapi",
     "ristops-lib-core",
+    "ristops-lib-otel",
     "ristops-lib-be",
     "ristops-lib-sql",
     "ristops-lib-redis",

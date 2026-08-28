@@ -4,7 +4,9 @@
 #
 # Runs, in order:
 #   1. nuke  - drop the authn + venue + reservation SQL schemas and wipe the authz Neo4j graph
-#   2. seed  - recreate the admin user (authn) and the roles + admin ACL (authz)
+#   2. seed  - recreate the roles + admin ACL (authz) and the admin user (authn), in that
+#              order — authz first, since it creates the app:* root resource that authn's
+#              admin-created event (consumed asynchronously by be-authz) needs to exist
 #   3. demo  - create the Game-of-Thrones demo users, venues, services, role
 #              grants, and activate the venues
 #
@@ -61,10 +63,14 @@ step "Nuke authz Neo4j graph"
 ristops_with_env packages/ristops-be-authz/.env nuke-authz -f
 
 # 2. SEED SERVICES ----------------------------------------------------------
-step "Seed admin user (authn)"
-ristops_with_env packages/ristops-be-authn/.env seed-authn
+# authz first: it creates the app:* root resource that seed-authn's admin-created event
+# (consumed asynchronously by be-authz's Redis stream consumer) needs to already exist.
+# Seeding authn first races that consumer against seed-authz and produces a transient
+# "Failed to get resource app:*" 404 that only self-heals via Redis's XAUTOCLAIM retry.
 step "Seed roles + admin ACL (authz)"
 ristops_with_env packages/ristops-be-authz/.env seed-authz
+step "Seed admin user (authn)"
+ristops_with_env packages/ristops-be-authn/.env seed-authn
 
 # 3. SEED DEMO --------------------------------------------------------------
 step "Seed demo users, venues, services, role grants, and activation"

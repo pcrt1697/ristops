@@ -1,4 +1,3 @@
-import json
 import logging
 from pathlib import Path
 
@@ -83,10 +82,10 @@ async def seed(
     from ristops_batch_demo.settings import BackendServiceSettings
     from ristops_lib_core.http import with_clients
 
-    demo_users = DemoUsers.model_validate(json.loads(users.read_text()))
-    demo_venues = DemoVenues.model_validate(json.loads(venues.read_text()))
-    demo_services = DemoServices.model_validate(json.loads(services.read_text()))
-    demo_assignments = DemoAssignments.model_validate(json.loads(assignments.read_text()))
+    demo_users = DemoUsers.model_validate_json(users.read_text())
+    demo_venues = DemoVenues.model_validate_json(venues.read_text())
+    demo_services = DemoServices.model_validate_json(services.read_text())
+    demo_assignments = DemoAssignments.model_validate_json(assignments.read_text())
 
     be_settings = BackendServiceSettings.get()
     seeder = DemoSeeder(

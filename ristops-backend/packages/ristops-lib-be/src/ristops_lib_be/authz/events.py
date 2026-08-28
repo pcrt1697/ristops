@@ -7,7 +7,9 @@ from ristops_lib_core.schema.authz import AuthorizationResource, ResourceType
 from ristops_lib_core.schema.user import AppMember
 
 
-class UserLifecycleEvent(AppMember):
+class UserLifecycleEvent(AppMember, BaseEvent):
+    # was AppMember-only; without BaseEvent it carried no correlation_id/traceparent at all, so
+    # the be-authz consumer's trace continuation had nothing to extract for user events
     operation: Literal[
         LifecycleOperationType.CREATED,
         LifecycleOperationType.UPDATED,

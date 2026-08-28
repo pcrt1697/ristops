@@ -1,0 +1,320 @@
+# Full containerized stack: infrastructure + backend services + web frontend +
+# observability. Everything has an inline default, so this runs on a clean
+# checkout with no .env file:
+#
+#   docker compose -f docker/docker-compose.yaml up --build
+#
+# For host-based development (services via `ristops start`, frontend via
+# `npm run dev`) use docker-compose.local.yaml, which brings up infra only.
+
+name: ristops
+
+include:
+  - docker-compose.infra.yaml
+  - docker-compose.init.yaml
+
+x-postgres-env: &postgres-env
+  RISTOPS_PG_HOST: postgres:5432
+  RISTOPS_PG_USER: ${RISTOPS_PG_USER:-ristops}
+  RISTOPS_PG_PWD: ${RISTOPS_PG_PWD:-ristops}
+  RISTOPS_PG_DB_NAME: ${RISTOPS_PG_DB_NAME:-ristops}
+
+x-neo4j-env: &neo4j-env
+  RISTOPS_NEO4J_HOST: neo4j:7687
+  RISTOPS_NEO4J_USER: ${RISTOPS_NEO4J_USER:-neo4j}
+  RISTOPS_NEO4J_PWD: ${RISTOPS_NEO4J_PWD:-ristops1}
+
+x-service-urls: &service-urls
+  RISTOPS_BE_AUTHN_URL: http://be-authn:8001/api
+  RISTOPS_BE_AUTHZ_URL: http://be-authz:8002/api
+  RISTOPS_BE_VENUE_URL: http://be-venue:8003/api
+  RISTOPS_BE_RESERVATION_URL: http://be-reservation:8004/api
+
+x-telemetry-env: &telemetry-env
+  # single switch for the whole observability framework (see ristops-lib-otel)
+  RISTOPS_OTEL_ENABLED: ${RISTOPS_OTEL_ENABLED:-true}
+  RISTOPS_OTEL_ENDPOINT: ${RISTOPS_OTEL_ENDPOINT:-http://otel-collector:4317}
+  RISTOPS_LOG_LEVEL: ${RISTOPS_LOG_LEVEL:-INFO}
+
+# every backend service runs the same image and differs only by command and port
+x-backend-service: &backend-service
+  build:
+    context: ../ristops-backend
+    dockerfile: Dockerfile
+  image: ristops-backend:local
+  restart: unless-stopped
+  networks:
+    - ristops
+
+services:
+
+  # ---------------------------------------------------------------- init (one-shot)
+
+  init-keys:
+    container_name: ristops-init-keys
+    image: alpine/openssl:latest
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    # idempotent: regenerating would invalidate every token already issued
+    command: >
+      'test -f /keys/ec_private.pem && echo "JWT keys already present" && exit 0;
+       openssl ecparam -name prime256v1 -genkey -noout -out /keys/ec_private.pem &&
+       openssl ecparam -name prime256v1 -genkey -noout -out /keys/ec_refresh.pem &&
+       openssl ec -in /keys/ec_private.pem -pubout -out /keys/ec_public.pem &&
+       chmod 0644 /keys/*.pem &&
+       echo "generated JWT keys"'
+    volumes:
+      - jwt-keys:/keys
+    networks:
+      - ristops
+
+  seed-authz:
+    <<: *backend-service
+    container_name: ristops-seed-authz
+    restart: "no"
+    command: ["seed-authz"]
+    environment:
+      <<: [*neo4j-env, *service-urls, *telemetry-env]
+      RISTOPS_OTEL_ENABLED: "false"
+    depends_on:
+      neo4j:
+        condition: service_healthy
+
+  seed-authn:
+    <<: *backend-service
+    container_name: ristops-seed-authn
+    restart: "no"
+    command: ["seed-authn"]
+    environment:
+      <<: [*postgres-env, *service-urls, *telemetry-env]
+      RISTOPS_OTEL_ENABLED: "false"
+      RISTOPS_ADMIN_PWD: ${RISTOPS_ADMIN_PWD:-ristops1}
+      RISTOPS_JWT_KEYS_LOCATION: /keys/
+      RISTOPS_REDIS_URL: redis://ristops:${RISTOPS_REDIS_STREAM_PWD:-ristops}@redis-stream:6380
+    volumes:
+      - jwt-keys:/keys:ro
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+      init-keys:
+        condition: service_completed_successfully
+      redis-stream:
+        condition: service_healthy
+      # seeding the admin user calls be-authz over HTTP, so it must already serve
+      be-authz:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------- backend services
+
+  be-authz:
+    <<: *backend-service
+    container_name: ristops-be-authz
+    command: ["start", "be-authz"]
+    ports:
+      - 8002:8002
+    environment:
+      <<: [*neo4j-env, *service-urls, *telemetry-env]
+      RISTOPS_PORT: 8002
+      RISTOPS_OTEL_SERVICE_NAME: be-authz
+      RISTOPS_REDIS_URL: redis://ristops:${RISTOPS_REDIS_STREAM_PWD:-ristops}@redis-stream:6380
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      seed-authz:
+        condition: service_completed_successfully
+      redis-stream:
+        condition: service_healthy
+      # the collector image is distroless (no shell, no curl/wget), so there is no way to give
+      # it a real healthcheck — this only guarantees the container has started, not that its
+      # OTLP receiver is accepting connections yet. Not airtight, but it shrinks the startup
+      # race to a few seconds instead of the collector potentially not existing at all yet.
+      # The actual observed failure was collector -> otel-lgtm (fixed above with a real
+      # healthcheck): once a gRPC metrics channel forms against a target that isn't ready, it
+      # does NOT reliably self-heal later even after the target comes up — confirmed by hand,
+      # the fix was restarting the process holding that channel. Ordering avoids hitting this at
+      # all rather than relying on it recovering after the fact.
+      otel-collector:
+        condition: service_started
+
+  be-authn:
+    <<: *backend-service
+    container_name: ristops-be-authn
+    command: ["start", "be-authn"]
+    ports:
+      - 8001:8001
+    environment:
+      <<: [*postgres-env, *service-urls, *telemetry-env]
+      RISTOPS_PORT: 8001
+      RISTOPS_OTEL_SERVICE_NAME: be-authn
+      RISTOPS_JWT_KEYS_LOCATION: /keys/
+      RISTOPS_JWT_ACCESS_EXPIRATION_M: ${RISTOPS_JWT_ACCESS_EXPIRATION_M:-300}
+      RISTOPS_REDIS_URL: redis://ristops:${RISTOPS_REDIS_STREAM_PWD:-ristops}@redis-stream:6380
+    volumes:
+      - jwt-keys:/keys:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      seed-authn:
+        condition: service_completed_successfully
+      # see be-authz's otel-collector dependency for why this is service_started, not _healthy
+      otel-collector:
+        condition: service_started
+
+  be-venue:
+    <<: *backend-service
+    container_name: ristops-be-venue
+    command: ["start", "be-venue"]
+    ports:
+      - 8003:8003
+    environment:
+      <<: [*postgres-env, *service-urls, *telemetry-env]
+      RISTOPS_PORT: 8003
+      RISTOPS_OTEL_SERVICE_NAME: be-venue
+      RISTOPS_REDIS_URL: redis://ristops:${RISTOPS_REDIS_STREAM_PWD:-ristops}@redis-stream:6380
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      seed-authn:
+        condition: service_completed_successfully
+      # see be-authz's otel-collector dependency for why this is service_started, not _healthy
+      otel-collector:
+        condition: service_started
+
+  be-reservation:
+    <<: *backend-service
+    container_name: ristops-be-reservation
+    command: ["start", "be-reservation"]
+    ports:
+      - 8004:8004
+    environment:
+      <<: [*postgres-env, *service-urls, *telemetry-env]
+      RISTOPS_PORT: 8004
+      RISTOPS_OTEL_SERVICE_NAME: be-reservation
+      RISTOPS_REDIS_URL: redis://ristops:${RISTOPS_REDIS_STREAM_PWD:-ristops}@redis-stream:6380
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      seed-authn:
+        condition: service_completed_successfully
+      # see be-authz's otel-collector dependency for why this is service_started, not _healthy
+      otel-collector:
+        condition: service_started
+
+  bff-web:
+    <<: *backend-service
+    container_name: ristops-bff-web
+    command: ["start", "bff-web"]
+    ports:
+      - 8000:8000
+    environment:
+      <<: [*service-urls, *telemetry-env]
+      RISTOPS_PORT: 8000
+      RISTOPS_OTEL_SERVICE_NAME: bff-web
+      RISTOPS_LOG_FILTER: ristops_bff_web.logging:GraphQLRequestContextFilter
+      # the BFF's redis is the *session* store, not the event stream
+      RISTOPS_REDIS_URL: redis://ristops:${RISTOPS_REDIS_SESSION_PWD:-ristops}@redis-session:6379
+      RISTOPS_CORS_ORIGINS: '["${RISTOPS_WEB_ORIGIN:-http://localhost:5173}"]'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      redis-session:
+        condition: service_healthy
+      seed-authn:
+        condition: service_completed_successfully
+      # see be-authz's otel-collector dependency for why this is service_started, not _healthy
+      otel-collector:
+        condition: service_started
+
+  # ---------------------------------------------------------------- frontend
+
+  web:
+    container_name: ristops-web
+    build:
+      context: ../ristops-web
+      dockerfile: Dockerfile
+      args:
+        # baked into the bundle at build time, so these must be browser-reachable
+        VITE_RISTOPS_BFF_URL: ${RISTOPS_BFF_PUBLIC_URL:-http://localhost:8000}
+        VITE_RISTOPS_OTEL_URL: ${RISTOPS_OTEL_PUBLIC_URL:-http://localhost:4318}
+    image: ristops-web:local
+    restart: unless-stopped
+    ports:
+      - 5173:80
+    networks:
+      - ristops
+    depends_on:
+      bff-web:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------- observability
+
+  otel-collector:
+    container_name: ristops-otel-collector
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    restart: unless-stopped
+    command: ["--config=/etc/otel/collector-config.yaml"]
+    volumes:
+      - ./otel/collector-config.yaml:/etc/otel/collector-config.yaml:ro
+    ports:
+      - 4317:4317  # OTLP gRPC (backend services)
+      - 4318:4318  # OTLP HTTP (browser)
+    networks:
+      - ristops
+    depends_on:
+      # this is the exact ordering bug that caused the collector to boot before otel-lgtm's
+      # OTLP receiver was listening, log "connection refused", and silently drop metrics
+      # thereafter (traces recovered on retry, metrics didn't) — service_healthy closes that gap
+      otel-lgtm:
+        condition: service_healthy
+
+  otel-lgtm:
+    container_name: ristops-otel-lgtm
+    image: grafana/otel-lgtm:0.11.4
+    restart: unless-stopped
+    ports:
+      - 3000:3000  # Grafana UI
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      # same host-bind-mount convention as postgres/redis/neo4j, so Grafana/Loki/Tempo/
+      # Prometheus data is inspectable/removable on the host instead of living in a
+      # Docker-managed named volume
+      - /$HOME/.ristops/grafana:/data
+      # custom dashboards, provisioned from files baked into the repo rather than clicked
+      # together in the UI — additive to the image's own bundled RED/JVM dashboards, since
+      # Grafana loads every *.yaml file in the provisioning/dashboards directory
+      - ./otel/grafana-provisioning/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/ristops.yaml:ro
+      - ./otel/grafana-dashboards:/otel-lgtm/ristops-dashboards:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - ristops
+
+volumes:
+  jwt-keys:

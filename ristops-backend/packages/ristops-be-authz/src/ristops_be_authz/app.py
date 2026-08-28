@@ -16,6 +16,7 @@ from ristops_be_authz.settings import (
 )
 from ristops_lib_be.authn import JwtAuthNMiddleware
 from ristops_lib_be.authz.interceptor import AuthZInterceptor
+from ristops_lib_core.app.health import health_router
 from ristops_lib_core.app.openapi import OpenAPIConfiguration
 from ristops_lib_core.auth.authn import ClientTokenDecoder, PublicRoutesRegistry
 from ristops_lib_core.context import RequestContextMiddleware
@@ -25,6 +26,8 @@ from ristops_lib_core.exception import (
 )
 from ristops_lib_core.logging import RequestLoggingMiddleware
 from ristops_lib_neo4j.engine import neo4j_transaction_provider
+from ristops_lib_otel.instrumentation import instrument_app, instrument_clients
+from ristops_lib_otel.telemetry import configure_telemetry
 from ristops_lib_redis.engine import redis_client, RedisStreamConsumer
 
 _logger = logging.getLogger(__name__)
@@ -53,6 +56,9 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
+    configure_telemetry()
+    instrument_clients()
+
     settings = BackendServiceSettings.get()
     jwt_decoder = ClientTokenDecoder(settings.authn_url)
 
@@ -73,6 +79,8 @@ def create_app() -> FastAPI:
     api_router.include_router(roles_router)
     api_router.include_router(permissions_router)
     app.include_router(api_router)
+    # sits outside /api and is @public, so probes need neither auth nor a policy
+    app.include_router(health_router)
 
     public_registry = PublicRoutesRegistry(app)
 
@@ -87,12 +95,16 @@ def create_app() -> FastAPI:
     # sets user ID and JWT in context
     # noinspection PyTypeChecker
     app.add_middleware(JwtAuthNMiddleware, public_registry=public_registry, jwt_decoder=jwt_decoder)
-    # sets request/correlation ID
+    # sets request/correlation ID (from the active span, once instrumented below)
     app.add_middleware(RequestContextMiddleware)
     # wraps everything
     app.add_middleware(GenericExceptionMiddleware)
 
     openapi_configuration = OpenAPIConfiguration(app)
     app.openapi = openapi_configuration
+
+    # wraps the ASGI app itself, outside every middleware above, so a server span is already
+    # active by the time RequestContextMiddleware runs
+    instrument_app(app)
 
     return app

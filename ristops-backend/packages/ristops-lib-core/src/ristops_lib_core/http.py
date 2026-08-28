@@ -15,19 +15,9 @@ def get_trace_headers(headers: Headers) -> dict[str, str | None]:
     _headers = {}
     if not headers:
         return _headers
-    for header in [ContextHeader.CORRELATION_ID, ContextKey.REQUEST_ID]:
+    for header in [ContextHeader.CORRELATION_ID, ContextHeader.REQUEST_ID]:
         _headers[header] = headers.get(header)
     return _headers
-
-
-async def inject_trace_headers(request: Request) -> None:
-    for header, key in (
-            (ContextHeader.CORRELATION_ID, ContextKey.CORRELATION_ID),
-            (ContextHeader.REQUEST_ID, ContextKey.REQUEST_ID),
-    ):
-        value = APP_CONTEXT.get(key)
-        if value is not None:
-            request.headers[header] = value
 
 
 async def inject_auth_header(request: Request) -> None:
@@ -71,7 +61,11 @@ async def raise_for_status(response: Response) -> None:
 
 
 class HttpClient:
-    """A single httpx AsyncClient with trace/auth header injection and error raising.
+    """A single httpx AsyncClient with auth header injection and error raising.
+
+    Trace propagation across services is handled by ``HTTPXClientInstrumentor``
+    (``ristops_lib_otel``), which injects a W3C ``traceparent`` header when telemetry is enabled —
+    there is no manual header injection to configure here.
 
     Bind a base URL for the duration of a context::
 
@@ -88,7 +82,7 @@ class HttpClient:
         if "request" not in self._hooks:
             self._hooks["request"] = []
         self._hooks["request"].extend(
-            [inject_trace_headers, inject_auth_header, drop_empty_query_params]
+            [inject_auth_header, drop_empty_query_params]
         )
         if "response" not in self._hooks:
             self._hooks["response"] = []

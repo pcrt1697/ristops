@@ -4,4 +4,5 @@ version = "0.1.0"
 dependencies = [
     "neo4j>=6.1.0",
     "ristops-lib-core",
+    "opentelemetry-api>=1.44.0",
 ]

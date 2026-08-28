@@ -30,12 +30,16 @@ consumer = RedisStreamConsumer.create_composite(
 await consumer.start()
 ```
 
-## Correlation ID propagation
+## Trace and correlation ID propagation
 
 At the start of each message, the consumer calls `APP_CONTEXT.reset()` to clear any leftover
-state from the previous iteration, then restores `correlation_id` from the message payload.
-This means the trace context set by the original HTTP request — which published the message — is
-available in the consumer's log lines without any manual wiring in the handler code.
+state from the previous iteration. It then extracts a W3C `traceparent` from the message payload
+— set by the producer via `BaseEvent` (`ristops-lib-be`) — and opens its processing span inside
+that trace context, so the consumer-side span belongs to the *same* trace as the request that
+published the message rather than starting a disconnected one. `correlation_id` (the trace ID) is
+restored into `APP_CONTEXT` the same way, so it is available in the consumer's log lines with no
+manual wiring in handler code. Both are absent from the payload, and this is a no-op, when the
+producing service had telemetry disabled.
 
 ## Types
 

@@ -3,14 +3,35 @@ import logging
 from asyncio import Lock, Task
 from typing import Any, Callable, Awaitable, Protocol
 
+from opentelemetry import metrics, trace
+from opentelemetry.trace import SpanKind
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from redis import ResponseError
 from redis.asyncio import Redis
 
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
+from ristops_lib_core.tracing import get_trace_id
 from ristops_lib_redis.exception import RedisClientError
 from ristops_lib_redis.settings import RedisSettings
 
 _logger = logging.getLogger(__name__)
+
+# a trace normally dies at a queue boundary: the producer's HTTP request span ends long before a
+# consumer picks the message up. BaseEvent (ristops_lib_be.events) injects a W3C traceparent into
+# every event payload on publish; extracting it here and starting the consumer span inside that
+# context continues the *same* trace instead of starting a new, disconnected one.
+_tracer = trace.get_tracer(__name__)
+_propagator = TraceContextTextMapPropagator()
+
+# a failed message never produces an HTTP response, so it is invisible to the HTTP RED metrics
+# FastAPI instrumentation emits — this counter is the only queryable "number of errors" signal for
+# work that happens outside a request. A no-op instrument with no MeterProvider configured.
+_meter = metrics.get_meter(__name__)
+_consumer_errors = _meter.create_counter(
+    "messaging.consumer.errors",
+    unit="1",
+    description="Stream messages that raised while processing, by stream and consumer group.",
+)
 
 StreamPayload = dict[str, Any]
 RedisStream = tuple[str, StreamPayload]
@@ -106,24 +127,54 @@ class RedisStreamConsumer:
 
     async def _process_message(self, stream_id: str, data: StreamPayload) -> None:
         APP_CONTEXT.reset()
-        if correlation_id := data.get(ContextKey.CORRELATION_ID):
-            APP_CONTEXT.set(ContextKey.CORRELATION_ID, correlation_id)
-        _extra = {"redis_stream_id": stream_id}
-        if self._config.log_payload:
-            _logger.info("Processing message: %s", data, extra=_extra)
-        else:
-            _logger.info("Processing message", extra=_extra)
-        await self._do_process_message(stream_id, data)
-        _logger.info("Successfully processed message", extra=_extra)
-        await self._client.redis.xack(self._config.stream, self._config.group, stream_id)
+        # extracts "traceparent" from the payload if present, yielding a context that carries the
+        # producer's span as parent; absent (or telemetry disabled end to end) it's an empty
+        # context and the span below simply starts its own trace
+        parent_context = _propagator.extract(carrier=data)
+        with _tracer.start_as_current_span(
+                f"redis.consume {self._config.stream}",
+                context=parent_context,
+                kind=SpanKind.CONSUMER,
+                attributes={
+                    "messaging.system": "redis",
+                    "messaging.destination.name": self._config.stream,
+                    "messaging.consumer.group.name": self._config.group,
+                },
+        ):
+            correlation_id = get_trace_id() or data.get(ContextKey.CORRELATION_ID)
+            if correlation_id:
+                APP_CONTEXT.set(ContextKey.CORRELATION_ID, correlation_id)
+            _extra = {"redis_stream_id": stream_id}
+            if self._config.log_payload:
+                _logger.info("Processing message: %s", data, extra=_extra)
+            else:
+                _logger.info("Processing message", extra=_extra)
+            try:
+                await self._do_process_message(stream_id, data)
+            except Exception as e:
+                # logged here, still inside the span, so the line carries trace_id/correlation_id
+                # like every other log for this message — logging it one level up in
+                # _process_messages happens after this span has already closed, losing that link.
+                # The span itself is already marked ERROR by start_as_current_span's default
+                # exception recording; re-raising lets _process_messages record the failure metric.
+                _logger.exception(f"Error processing stream {stream_id}: {e}", extra=_extra)
+                raise
+            _logger.info("Successfully processed message", extra=_extra)
+            await self._client.redis.xack(self._config.stream, self._config.group, stream_id)
 
     async def _process_messages(self, messages: list[RedisStream]):
         """ Process a batch of messages. """
         for stream_id, data in messages:
             try:
                 await self._process_message(stream_id, data)
-            except Exception as e:
-                _logger.exception(f"Error processing stream {stream_id}: {e}", extra={"redis_stream_id": stream_id})
+            except Exception:
+                # a failure here never produces an HTTP response, so this counter is the only
+                # metrics-based "number of errors" signal for it; the log line and span status
+                # are already recorded inside _process_message, above
+                _consumer_errors.add(1, {
+                    "messaging.destination.name": self._config.stream,
+                    "messaging.consumer.group.name": self._config.group,
+                })
 
     async def _process_stale_messages(self) -> None:
         """ Reclaim and process messages stuck in-flight (other crashed workers). """

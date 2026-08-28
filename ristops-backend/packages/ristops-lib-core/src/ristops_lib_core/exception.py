@@ -50,8 +50,12 @@ class BaseHttpExceptionHandler[T: Exception](abc.ABC):
         self._exception_cls = exception_cls
 
     async def __call__(self, request: Request, exception: T) -> Response | Awaitable[Response]:
-        _logger.exception("Unhandled exception", exc_info=exception)
         http_status, content = self._do_handle(request, exception)
+        _logger.exception(
+            "Request failed: %s %s -> %s %s",
+            request.method, request.url.path, http_status, content.detail,
+            exc_info=exception,
+        )
         return create_error_response(
             http_status=http_status,
             content=content,

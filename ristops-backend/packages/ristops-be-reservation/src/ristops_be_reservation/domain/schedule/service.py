@@ -30,6 +30,7 @@ from ristops_be_reservation.domain.venue.service import (
     ensure_venue_accepts_config_changes, find_venue_closing_conflicts,
 )
 from ristops_lib_core.schema.pagination import Page
+from ristops_lib_otel.tracing import traced
 from ristops_lib_sql.engine import get_sql_session
 from ristops_lib_sql.search import PaginatedSearchQueryExecutor
 
@@ -1028,6 +1029,7 @@ async def ensure_no_cross_service_opening_overlap_for_override(
         )
 
 
+@traced("schedule.find_opening_conflicts")
 async def find_service_opening_conflicts_for(
         service_id: UUID, query: OpeningConflictQuery,
 ) -> ConflictsResponse:

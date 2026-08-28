@@ -1,0 +1,58 @@
+# The apps only ever speak OTLP to this collector; it is the single place where
+# the storage backend is chosen. Today all three signals are forwarded as OTLP to
+# grafana/otel-lgtm, whose bundled collector fans them out to Tempo, Loki and
+# Prometheus — so swapping in ClickHouse later means replacing one exporter here,
+# with no application change.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        # the browser exports directly to this receiver, so it needs CORS
+        cors:
+          allowed_origins:
+            - http://localhost:5173  # frontend (nginx in the full stack, Vite in dev)
+            - http://localhost:3000
+          allowed_headers:
+            - "*"
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: local
+        action: upsert
+
+exporters:
+  otlp/lgtm:
+    endpoint: otel-lgtm:4317
+    tls:
+      insecure: true
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/lgtm]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/lgtm]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/lgtm]

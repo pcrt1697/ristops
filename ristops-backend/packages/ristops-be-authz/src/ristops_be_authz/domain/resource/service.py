@@ -26,6 +26,7 @@ async def find_resource_or_throw(resource_type: str, resource_id: str) -> Resour
     """Fetch a resource node or raise 404."""
     record = await _find_resource(resource_type, resource_id)
     if record is None:
+        _logger.error("Failed to get resource %s:%s", resource_type, resource_id)
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Resource not found")
     return ResourceNode.model_validate(record["r"])
 

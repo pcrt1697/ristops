@@ -27,6 +27,7 @@ from ristops_be_reservation.services.resource import publish_resource_created_ev
 from ristops_lib_core.schema.authz import ResourceType
 from ristops_lib_core.schema.pagination import Page
 from ristops_lib_core.utils import to_local_naive, to_utc_instant
+from ristops_lib_otel.tracing import traced
 from ristops_lib_sql.engine import get_sql_session
 from ristops_lib_sql.search import PaginatedSearchQueryExecutor
 
@@ -103,6 +104,7 @@ def _violation_for(
     return ReservationViolation(reason) if reason is not None else None
 
 
+@traced("reservation.ensure_slot_available")
 async def _ensure_slot_available(
         venue: VenueEntity,
         reservation_local: datetime,

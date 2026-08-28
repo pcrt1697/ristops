@@ -15,6 +15,9 @@
   - [lib-sql](libraries/lib-sql.md)
   - [lib-redis](libraries/lib-redis.md)
   - [lib-neo4j](libraries/lib-neo4j.md)
+  - [lib-otel](libraries/lib-otel.md)
+
+- [Local Environment](deployment.md)
 
 - [Event-Driven Architecture](events.md)
 

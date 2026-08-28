@@ -1,0 +1,13 @@
+[project]
+name = "ristops-lib-otel"
+version = "0.1.0"
+dependencies = [
+    "ristops-lib-core",
+    "opentelemetry-sdk>=1.44.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.44.0",
+    "opentelemetry-instrumentation-fastapi>=0.65b0",
+    "opentelemetry-instrumentation-httpx>=0.65b0",
+    "opentelemetry-instrumentation-redis>=0.65b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.65b0",
+    "opentelemetry-instrumentation-logging>=0.65b0",
+]

@@ -14,6 +14,7 @@ dependencies = [
     "ristops-lib-sql",
     "ristops-lib-redis",
     "ristops-lib-neo4j",
+    "ristops-lib-otel",
 ]
 
 [tool.uv.sources]
@@ -28,6 +29,7 @@ ristops-lib-be = { workspace = true }
 ristops-lib-sql = { workspace = true }
 ristops-lib-redis = { workspace = true }
 ristops-lib-neo4j = { workspace = true }
+ristops-lib-otel = { workspace = true }
 
 
 [tool.uv.workspace]

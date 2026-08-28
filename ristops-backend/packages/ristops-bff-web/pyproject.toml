@@ -6,6 +6,7 @@ dependencies = [
     "strawberry-graphql[fastapi]>=0.314.3",
     "starsessions[redis]>=2.2.1",
     "ristops-lib-core",
+    "ristops-lib-otel",
 ]
 
 [project.scripts]

@@ -5,9 +5,17 @@ from functools import wraps
 from typing import Callable, Optional, AsyncGenerator
 
 from neo4j import AsyncTransaction, AsyncDriver, AsyncGraphDatabase
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind
 
 from ristops_lib_neo4j.exception import Neo4TransactionError
 from ristops_lib_neo4j.settings import Neo4jSettings
+
+# there is no maintained OTel instrumentation package for the Neo4j driver, so the transaction
+# boundary is traced by hand here — this is the one place all Neo4j access in the workspace goes
+# through (@neo4j_transactional / with_neo4j_db), so every ACL check gets a span for free.
+# opentelemetry-api alone (no SDK) makes this a no-op when telemetry is disabled.
+_tracer = trace.get_tracer(__name__)
 
 _NEO4J_TRANSACTION_CONTEXT: ContextVar[Optional[AsyncTransaction]] = ContextVar("neo4j_transaction", default=None)
 
@@ -109,17 +117,22 @@ class AsyncNeo4jTransactionProvider:
 
     @asynccontextmanager
     async def _provide(self) -> AsyncGenerator[AsyncTransaction, None]:
-        async with self.driver.session(database="neo4j") as session:
-            async with await session.begin_transaction() as transaction:
-                token = _NEO4J_TRANSACTION_CONTEXT.set(transaction)
-                try:
-                    yield transaction
-                    await transaction.commit()
-                except Exception:
-                    await transaction.rollback()
-                    raise
-                finally:
-                    _NEO4J_TRANSACTION_CONTEXT.reset(token)
+        with _tracer.start_as_current_span(
+                "neo4j.transaction",
+                kind=SpanKind.CLIENT,
+                attributes={"db.system": "neo4j"},
+        ):
+            async with self.driver.session(database="neo4j") as session:
+                async with await session.begin_transaction() as transaction:
+                    token = _NEO4J_TRANSACTION_CONTEXT.set(transaction)
+                    try:
+                        yield transaction
+                        await transaction.commit()
+                    except Exception:
+                        await transaction.rollback()
+                        raise
+                    finally:
+                        _NEO4J_TRANSACTION_CONTEXT.reset(token)
 
     @asynccontextmanager
     async def context(self) -> AsyncGenerator[AsyncTransaction, None]:

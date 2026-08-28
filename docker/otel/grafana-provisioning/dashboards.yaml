@@ -1,0 +1,18 @@
+# Provisions dashboards from files baked into the repo, so a dashboard is defined in version
+# control instead of living only in Grafana's own storage. This file is additive — grafana/otel-lgtm
+# ships its own provider (bundled RED/JVM dashboards) at
+# /otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml; Grafana loads every
+# *.yaml file in that folder, so this one sits alongside it rather than replacing it.
+#
+# To add a dashboard: drop its exported JSON into docker/otel/grafana-dashboards/ (see README) —
+# no provisioning change needed, this provider picks up anything in the mounted folder.
+apiVersion: 1
+
+providers:
+  - name: "RistOps"
+    type: file
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /otel-lgtm/ristops-dashboards
+      foldersFromFilesStructure: false

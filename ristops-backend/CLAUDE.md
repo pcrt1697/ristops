@@ -21,6 +21,9 @@ ristops seed-authz
 # Generate SQL DDL for a service
 ristops sql-database generate-ddl be-authn
 
+# Create the schema and any missing tables (idempotent, non-destructive)
+ristops sql-database create-tables be-authn
+
 # Reset a database (DESTRUCTIVE, schema only — reseed separately)
 ristops sql-database nuke be-authn   # drop + recreate tables (SQL services)
 ristops nuke-authz                   # delete all nodes (authz/Neo4j)
@@ -48,6 +51,7 @@ Sub-prefixes used by each concern:
 | `RISTOPS_PG_`           | PostgreSQL               |
 | `RISTOPS_REDIS_`        | Redis (session + stream) |
 | `RISTOPS_NEO4J_`        | Neo4j                    |
+| `RISTOPS_OTEL_`         | Telemetry (`ristops-lib-otel`) |
 
 ## Architecture
 
@@ -70,14 +74,21 @@ be-venue   ──HTTP──────────► be-reservation   (venue a
 ### Middleware stack (order of execution, outermost first)
 
 Every FastAPI service uses the same layered middleware. Middlewares are added last-to-first so
-the first `add_middleware` call ends up innermost.
+the first `add_middleware` call ends up innermost. Outermost of all is FastAPI instrumentation
+itself (`ristops_lib_otel.instrument_app`, a no-op when `RISTOPS_OTEL_ENABLED` is unset) — it
+wraps the ASGI app, so a server span is already active by the time any of the middleware below
+runs.
 
 1. `GenericExceptionMiddleware` — catches all unhandled exceptions
-2. `RequestContextMiddleware` — generates/propagates `x-request-id` and `x-correlation-id`
-   into `AsyncContext`
+2. `RequestContextMiddleware` — sets `request_id`/`correlation_id` in `AsyncContext` from the
+   active span (`span_id`/`trace_id`) and mirrors them onto `x-request-id`/`x-correlation-id`,
+   falling back to a generated UUID with no active span (telemetry disabled)
 3. `JwtAuthNMiddleware` / `SessionAuthNMiddleware` — validates JWT or session, sets `user_id`
    and `jwt` in context
-4. `RequestLoggingMiddleware` — logs request and response with timing
+4. `RequestLoggingMiddleware` — logs request and response with timing, `[BEFORE]`/`[AFTER]`. This
+   was dropped during the OTel rollout on the assumption that the FastAPI instrumentation's server
+   span made it redundant — it doesn't, for `docker logs`/host stdout, which isn't Tempo. Kept
+   alongside tracing rather than instead of it.
 
 ### Authentication & authorization
 
@@ -89,6 +100,9 @@ the first `add_middleware` call ends up innermost.
   endpoint via `AuthZInterceptor`.
 * Mark a route as public (no auth) with the `@public` decorator from
   `ristops_lib_core.auth.authn`.
+* Every service mounts the shared `health_router` from `ristops_lib_core.app.health` at
+  `/health` (outside `/api`). It is `@public`, so container probes need neither a token nor a
+  `@policy`, and it deliberately checks no downstream dependency.
 
 ### CLI plugin system
 
@@ -99,15 +113,25 @@ The `ristops start <app>` command discovers registered apps dynamically.
 
 ### Inter-service HTTP
 
-`HttpClientService` from `ristops-lib-core` wraps `httpx.AsyncClient`. It automatically injects
-`x-correlation-id`, `x-request-id`, and `Authorization: Bearer <jwt>` from the current
-`AsyncContext` into outgoing requests, enabling distributed tracing across services.
+`HttpClient` from `ristops-lib-core` wraps `httpx.AsyncClient`. It injects
+`Authorization: Bearer <jwt>` from the current `AsyncContext` into outgoing requests. Trace
+propagation across services is not manual: `HTTPXClientInstrumentor` (`ristops-lib-otel`) injects
+the W3C `traceparent` header automatically when telemetry is enabled, so a request into any
+service continues the caller's trace without any header-forwarding code.
 
 ### Redis streams
 
 `be-authz` consumes two Redis streams (user events, resource events) using
 `RedisStreamConsumer`. Producers publish via `RedisStreamProducer`. Consumer groups ensure
 at-least-once delivery; stale messages are reclaimed with `XAUTOCLAIM`.
+
+A trace normally ends at a queue boundary — the producer's request finishes long before a
+consumer picks the message up. `BaseEvent` (`ristops-lib-be`) carries this across the gap: every
+event published on a stream gets a `traceparent` field (W3C trace context of the span that
+published it) alongside `correlation_id` (the trace ID, same source). `RedisStreamConsumer`
+extracts `traceparent` from the payload and opens its processing span inside that context, so the
+consumer-side span is part of the *same* trace as the producing request, not a disconnected one.
+Both fields are `None`/absent with no active span (telemetry disabled).
 
 ### Database access patterns
 

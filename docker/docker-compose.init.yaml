@@ -1,0 +1,39 @@
+# Database schema initialization.
+#
+# Not meant to be run directly: both docker-compose.local.yaml (host development)
+# and docker-compose.yaml (full containerized stack) pull this in via `include`,
+# so a fresh Postgres volume is usable in either workflow.
+#
+# This replaces the hand-written docker/postgres/*.sql init scripts: the tables
+# are derived from each service's MODELS tuple instead of a parallel copy of the
+# DDL that had to be kept in sync by hand.
+
+services:
+
+  init-db:
+    container_name: ristops-init-db
+    build:
+      context: ../ristops-backend
+      dockerfile: Dockerfile
+    image: ristops-backend:local
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    # idempotent: CREATE SCHEMA IF NOT EXISTS + create_all(checkfirst=True),
+    # so this exits 0 against an already-initialized database
+    command: >
+      'ristops sql-database create-tables be-authn &&
+       ristops sql-database create-tables be-venue &&
+       ristops sql-database create-tables be-reservation'
+    environment:
+      RISTOPS_PG_HOST: postgres:5432
+      RISTOPS_PG_USER: ${RISTOPS_PG_USER:-ristops}
+      RISTOPS_PG_PWD: ${RISTOPS_PG_PWD:-ristops}
+      RISTOPS_PG_DB_NAME: ${RISTOPS_PG_DB_NAME:-ristops}
+      RISTOPS_LOG_LEVEL: ${RISTOPS_LOG_LEVEL:-INFO}
+      # schema creation is not worth a trace, and the collector may not be running
+      RISTOPS_OTEL_ENABLED: "false"
+    networks:
+      - ristops
+    depends_on:
+      ristops-postgres:
+        condition: service_healthy

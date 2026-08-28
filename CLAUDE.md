@@ -23,7 +23,11 @@ For area-specific guidance see:
 
 ```text
 ristops/
-  docker/                  # Docker Compose and infra config (Postgres, Redis x2, Neo4j)
+  docker/                  # Compose stacks and infra config (see docker/README.md)
+    docker-compose.infra.yaml   # shared infra definitions (Postgres, Redis x2, Neo4j)
+    docker-compose.init.yaml    # shared one-shot schema creation (init-db)
+    docker-compose.local.yaml   # development: infra only, apps run on the host
+    docker-compose.yaml         # full stack: infra + services + web + observability
   ristops-backend/         # Python uv workspace (all backend code)
     packages/
       ristops-lib-core/    # Base: FastAPI, Pydantic settings, CLI engine, HTTP client, JWT, context
@@ -31,6 +35,7 @@ ristops/
       ristops-lib-sql/     # SQLAlchemy async session + DDL CLI
       ristops-lib-redis/   # Redis client + stream consumer
       ristops-lib-neo4j/   # Neo4j async driver, transactions, migration engine
+      ristops-lib-otel/    # OpenTelemetry instrumentation: traces, metrics, logs over OTLP
       ristops-be-authn/    # Auth backend (users, JWT issuance, PostgreSQL)
       ristops-be-authz/    # AuthZ backend (ACL/roles/resources in Neo4j, Redis stream consumer)
       ristops-be-venue/    # Venue registry (PostgreSQL)

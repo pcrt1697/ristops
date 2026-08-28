@@ -5,6 +5,7 @@ dependencies = [
     "fastapi",
     "ristops-lib-neo4j",
     "ristops-lib-core",
+    "ristops-lib-otel",
     "ristops-lib-be",
     "ristops-lib-redis",
 ]

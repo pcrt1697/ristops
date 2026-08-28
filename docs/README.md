@@ -3,6 +3,16 @@
 Backend for a restaurant operations platform. The system manages users, locations, and role-based
 access control across multiple services that communicate via HTTP and Redis Streams.
 
+## Running locally
+
+Two Compose stacks cover development and the full containerized environment; neither needs a
+`.env` file. See [Local Environment](deployment.md).
+
+```bash
+docker compose -f docker/docker-compose.yaml up -d --build      # everything in containers
+docker compose -f docker/docker-compose.local.yaml up -d        # infrastructure only
+```
+
 ## Services
 
 | Service | Description |
@@ -24,6 +34,7 @@ access control across multiple services that communicate via HTTP and Redis Stre
 | [ristops-lib-sql](libraries/lib-sql.md) | SQLAlchemy async session management |
 | [ristops-lib-redis](libraries/lib-redis.md) | Redis client and stream consumer |
 | [ristops-lib-neo4j](libraries/lib-neo4j.md) | Neo4j async driver, transactions and migrations |
+| [ristops-lib-otel](libraries/lib-otel.md) | OpenTelemetry instrumentation: traces, metrics and logs |
 
 ## Architecture
 

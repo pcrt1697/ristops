@@ -1,88 +1,16 @@
+# Development stack: infrastructure, plus one-shot schema creation.
+#
+# Backend services and the frontend run on the host (`ristops start <app>`,
+# `npm run dev`) against these containers. No long-running application images, no
+# nginx and no observability stack — for those use docker-compose.yaml.
+#
+# init-db is the one exception: it runs to completion and exits, so a fresh
+# Postgres volume has its schemas without a manual step.
+#
+#   docker compose -f docker/docker-compose.local.yaml up
+
 name: ristops
-services:
 
-  ristops-postgres:
-    container_name: ristops-postgres
-    image: postgres:17-alpine
-    restart: always
-    hostname: postgres
-    ports:
-      - 5432:5432
-    volumes:
-      - /$HOME/.ristops/postgres/data:/var/lib/postgresql/data
-      - ./postgres/000.init-db.authn.sql:/docker-entrypoint-initdb.d/000.init-db.authn.sql
-      - ./postgres/001.init-db.venue.sql:/docker-entrypoint-initdb.d/001.init-db.venue.sql
-    environment:
-      - POSTGRES_PASSWORD=${RISTOPS_PG_PWD:-ristops}
-      - POSTGRES_USER=ristops
-    networks:
-      - postgres
-
-  redis-session:
-    container_name: ristops-redis-session
-    image: redis:7.2-alpine
-    restart: unless-stopped
-    ports:
-      - 6379:6379
-    command: sh -c "apk add --no-cache gettext && envsubst < /usr/local/etc/redis/redis.conf.template > /usr/local/etc/redis/redis.conf && redis-server /usr/local/etc/redis/redis.conf"
-    volumes:
-      - ./redis/redis-session.conf.template:/usr/local/etc/redis/redis.conf.template:ro
-      - /$HOME/.ristops/redis/session/data:/data
-
-    networks:
-      - redis-session
-
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "$RISTOPS_REDIS_SESSION_PWD", "PING"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
-    environment:
-      RISTOPS_REDIS_SESSION_PWD: ${RISTOPS_REDIS_SESSION_PWD}
-
-  redis-stream:
-    container_name: ristops-redis-stream
-    image: redis:7.2-alpine
-    restart: unless-stopped
-    ports:
-      - 6380:6380
-    command: sh -c "apk add --no-cache gettext && envsubst < /usr/local/etc/redis/redis.conf.template > /usr/local/etc/redis/redis.conf && redis-server /usr/local/etc/redis/redis.conf"
-    volumes:
-      - ./redis/redis-stream.conf.template:/usr/local/etc/redis/redis.conf.template:ro
-      - /$HOME/.ristops/redis/stream/data:/data
-
-    networks:
-      - redis-session
-
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "$RISTOPS_REDIS_STREAM_PWD", "PING"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
-    environment:
-      RISTOPS_REDIS_STREAM_PWD: ${RISTOPS_REDIS_STREAM_PWD}
-
-  neo4j:
-    container_name: ristops-neo4j
-    image: neo4j:latest
-    ports:
-      - "7474:7474"  # browser UI
-      - "7687:7687"  # bolt protocol
-    environment:
-      NEO4J_AUTH: neo4j/${RISTOPS_NEO4J_PWD}
-      NEO4J_PLUGINS: '["apoc"]'
-    volumes:
-      - /$HOME/.ristops/neo4j/data:/data
-      - /$HOME/.ristops/neo4j/logs:/logs
-    healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${RISTOPS_NEO4J_PWD}", "RETURN 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-networks:
-  postgres:
-  redis-session:
-    driver: bridge
+include:
+  - docker-compose.infra.yaml
+  - docker-compose.init.yaml

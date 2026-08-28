@@ -2,10 +2,10 @@ import importlib
 import logging
 
 import click
-from sqlalchemy import Table
+from sqlalchemy import MetaData, Table
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.sql.ddl import CreateTable, CreateIndex
+from sqlalchemy.sql.ddl import CreateIndex, CreateSchema, CreateTable
 
 from ristops_lib_core.cli.utils.command import async_command
 from ristops_lib_core.cli.utils.entrypoints import load_command_entrypoint, get_command_group_entrypoint_names
@@ -118,7 +118,45 @@ async def nuke(_: click.Context, app: str, force: bool) -> None:
     _logger.info("Schema for '%s' has been reset.", app)
 
 
+@click.command(
+    help="Create any tables missing for the service from its models. Idempotent and non-destructive.",
+)
+@click.argument(
+    "app",
+    type=click.Choice(_AVAILABLE_APPS),
+    required=True,
+)
+@click.pass_context
+@async_command
+@with_sql_db
+async def create_tables(_: click.Context, app: str) -> None:
+    """
+    Create the service's schema and any tables declared by its ``MODELS`` tuple that
+    do not exist yet.
+
+    Unlike ``nuke`` this never drops anything, and unlike ``generate-ddl`` it applies
+    the DDL instead of printing it, so it is safe to run on every startup. Reuses the
+    same entrypoint as the other commands and connects to the database resolved from
+    the current environment (``.env`` / ``RISTOPS_ENV_PATH``).
+    """
+    _logger = logging.getLogger(__name__)
+    metadata: MetaData = _load_models(app)[0].metadata
+
+    # entities bind their schema per-table via make_table_args(), not on the metadata
+    schemas = {table.schema for table in metadata.tables.values() if table.schema}
+
+    async with sql_session_provider.context() as session:
+        connection = await session.connection()
+        for schema in sorted(schemas):
+            await connection.execute(CreateSchema(schema, if_not_exists=True))
+        await connection.run_sync(metadata.create_all, checkfirst=True)
+
+    _logger.info("Schema for '%s' is up to date.", app)
+
+
 # noinspection PyTypeChecker
 sql_database.add_command(generate_ddl)
+# noinspection PyTypeChecker
+sql_database.add_command(create_tables)
 # noinspection PyTypeChecker
 sql_database.add_command(nuke)

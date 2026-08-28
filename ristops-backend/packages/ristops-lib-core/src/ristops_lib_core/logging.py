@@ -13,12 +13,13 @@ from uvicorn.config import LOGGING_CONFIG
 
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
 from ristops_lib_core.settings import BaseServiceSettings, ENVVARS_PREFIX
+from ristops_lib_core.tracing import get_trace_id
 from ristops_lib_core.utils import load_object
 
 _logger = logging.getLogger(__name__)
 LINE_FORMAT = (
     "%(asctime)s [%(levelname)-8s] [%(name)s:%(lineno)d] "
-    "[%(extras)s] "
+    "[trace_id=%(trace_id)s] [%(extras)s] "
     "- %(message)s "
 )
 
@@ -82,6 +83,13 @@ class ContextFilter(logging.Filter):
         # serialize any extra fields passed via extra={}
         extras = _get_context_keys(*self._context_keys)
         record.extras = json.dumps(extras) if extras else ""
+        # also set each key as its own record attribute, so the OTLP log exporter (when the
+        # service has telemetry enabled) ships them as structured, queryable attributes rather
+        # than fields buried inside one opaque JSON string
+        for key, value in extras.items():
+            setattr(record, key, value)
+        # always present, even with no active span, so LINE_FORMAT can reference it unconditionally
+        record.trace_id = get_trace_id() or ""
         return True
 
 

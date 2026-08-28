@@ -5,6 +5,7 @@ from typing import Any
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+from ristops_lib_core.tracing import get_span_id, get_trace_id
 from ristops_lib_core.utils import Singleton
 
 
@@ -61,11 +62,22 @@ class AsyncContext(metaclass=Singleton):
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
-    """ Middleware used to dump request context to context vars. """
+    """ Middleware used to dump request context to context vars.
+
+    ``request_id`` and ``correlation_id`` are sourced from the current OTel span when one is
+    active: ``span_id`` is unique per call per service (exactly what ``request_id`` means),
+    ``trace_id`` spans the whole cross-service lifecycle (exactly what ``correlation_id`` means).
+    For this to see a span, FastAPI instrumentation (``ristops_lib_otel``) must wrap the ASGI app
+    — which happens outside any ``add_middleware`` layer, so the span is always active by the time
+    this middleware runs, when instrumentation is enabled.
+
+    Falls back to generating both IDs when no span is active (``RISTOPS_OTEL_ENABLED=false``, the
+    default for host development), so nothing here depends on OTel being configured.
+    """
 
     async def dispatch(self, request: Request, call_next):
-        request_id = str(uuid.uuid4())
-        correlation_id = request.headers.get(ContextHeader.CORRELATION_ID, str(uuid.uuid4()))
+        request_id = get_span_id() or str(uuid.uuid4())
+        correlation_id = get_trace_id() or str(uuid.uuid4())
         APP_CONTEXT.set(ContextKey.REQUEST_ID, request_id)
         APP_CONTEXT.set(ContextKey.CORRELATION_ID, correlation_id)
         response = await call_next(request)

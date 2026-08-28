@@ -22,6 +22,7 @@ Python uv workspace containing all backend services and shared libraries.
 | [ristops-lib-sql](packages/ristops-lib-sql/README.md)     | SQLAlchemy async session management                                     |
 | [ristops-lib-redis](packages/ristops-lib-redis/README.md) | Redis client and stream consumer                                        |
 | [ristops-lib-neo4j](packages/ristops-lib-neo4j/README.md) | Neo4j async driver, transactions and migrations                         |
+| [ristops-lib-otel](packages/ristops-lib-otel/README.md)   | OpenTelemetry instrumentation: traces, metrics and logs over OTLP       |
 
 ## Architecture
 
@@ -71,4 +72,38 @@ via `AuthZInterceptor`.
 uv sync
 ```
 
-See each service's README for seed and start commands.
+Start the infrastructure the services depend on. This also runs `init-db`, which creates the
+SQL schemas and tables, so only the admin user has to be seeded on a fresh database:
+
+```bash
+docker compose -f ../docker/docker-compose.local.yaml up -d
+
+ristops seed-authz
+ristops seed-authn
+```
+
+To create or update the schemas by hand — after adding an entity, for example — run:
+
+```bash
+ristops sql-database create-tables be-authn   # and be-venue, be-reservation
+```
+
+Each service is started with `ristops start <app>`:
+
+```bash
+ristops start be-authn --port 8001
+ristops start be-authz --port 8002
+ristops start be-venue --port 8003
+ristops start be-reservation --port 8004
+ristops start bff-web --port 8000
+```
+
+See each service's README for the full command with its required environment variables.
+
+To run everything in containers instead — including the frontend and the observability stack —
+use the full Compose stack, which builds this workspace into a single image shared by all five
+services and seeds itself on startup:
+
+```bash
+docker compose -f ../docker/docker-compose.yaml up -d --build
+```
