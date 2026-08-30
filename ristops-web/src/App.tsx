@@ -20,6 +20,7 @@ import VenueStaffPage from './pages/venue/VenueStaffPage.tsx';
 import VenueSettingsPage from './pages/venue/VenueSettingsPage.tsx';
 import VenueServicesPage from './pages/venue/VenueServicesPage.tsx';
 import VenueServiceSchedulePage from './pages/venue/VenueServiceSchedulePage.tsx';
+import VenueReservationsPage from './pages/venue/VenueReservationsPage.tsx';
 
 export default function App() {
   return (
@@ -62,6 +63,7 @@ export default function App() {
                       path="services/:serviceId/schedule"
                       element={<VenueServiceSchedulePage />}
                     />
+                    <Route path="reservations" element={<VenueReservationsPage />} />
                     <Route path="staff" element={<VenueStaffPage />} />
                   </Route>
                 </Route>

@@ -49,6 +49,11 @@ For the decisions behind this design, see the be-reservation entries in the
   specific date (`(service, date)` unique), with an explicit open/close lifecycle (manager,
   owner, or server opens it; manager closes it) — the anchor for financial close-out and
   no-show handling.
+- **`Reservation`** — a booked party at a venue: `reservation_date`, `party_size`, contact
+  details, `notes`, and a `status`. Deliberately carries **no service reference**: the service is
+  derived from venue + datetime whenever it is needed, so a booking survives later edits to the
+  service it happens to fall under. `reservation_date` is stored as a UTC instant and presented
+  as naive venue-local wall-clock, to the minute.
 
 Rule precedence when resolving what applies on a given date: **base opening → opening override
 (replaces hours/capacity) → capacity override (adjusts the resolved capacity by a signed delta)
@@ -106,6 +111,90 @@ conflict" and both succeed), a conflict-checked write first takes a `SELECT ... 
 on the owning service or venue row, serializing writers against the same owner before the
 overlap check runs. The service-closing path takes both locks (service, then venue), since its
 check spans both tables.
+
+## Reservation lifecycle
+
+A booking is created `pending` and moves on through a single status-change operation, whose
+request is discriminated on `action` — the *verb* the caller performs — rather than on the
+resulting status, because the required permission differs per verb and several verbs would
+otherwise be indistinguishable from their target state.
+
+| Action | Result | Permission | Meaning |
+|---|---|---|---|
+| — | `pending` | `reservation:add` | The status a booking is created with; not an action. |
+| `confirm` | `confirmed` | `reservation:confirm` | The venue accepts it; the table is held. |
+| `reject` | `rejected` | `reservation:reject` | The venue declines a booking still awaiting an answer. |
+| `cancel` | `canceled` | `reservation:cancel` | The customer called it off. |
+| `check_in` | `checked_in` | `reservation:check-in` | The party arrived; records `arrival_time`. |
+| `no_show` | `no_show` | `reservation:no-show` | The party never arrived. |
+| `withdraw` | `withdrawn` | `reservation:withdraw` | The venue gives up a booking it had already accepted. |
+
+The three ways a booking can end without the party arriving are distinguished by *who* ended it
+and *when*: `rejected` is the venue declining before accepting, `canceled` is the customer's own
+doing, and `withdrawn` is the venue giving up a booking it had accepted — typically after a
+closure or schedule change made it impossible to honor.
+
+`check_in` records `arrival_time` from the request, defaulting to the current venue-local time.
+Any action may carry `notes`, which **replace** the reservation's existing notes rather than
+appending to them.
+
+**There is no from-state validation yet.** An action sets its target status directly, so nothing
+currently stops a `checked_in` booking being confirmed again; the state machine is a later task.
+The frontend applies its own reading of the lifecycle in the meantime, offering actions only from
+`pending` and `confirmed`.
+
+Only `pending`, `confirmed` and `checked_in` hold a seat, so only those count against capacity
+when availability is computed — a rejected or canceled booking frees its seats immediately.
+
+### Schedule violations
+
+Editing a schedule never rewrites the bookings underneath it: shrinking hours or closing a date
+leaves existing reservations untouched. Instead each booking is checked against the *current*
+schedule when read, and flagged with a `violation`:
+
+| Violation | Meaning |
+|---|---|
+| `no_service` | No service is open at that time any more. |
+| `closed` | A venue or service closing now covers the date. |
+| `outside_hours` | The turn no longer fits inside the (shrunk) opening hours. |
+
+Only future bookings in a live status (`pending`, `confirmed`) can be violated — a `checked_in`
+booking already happened, and the terminal statuses are resolved. Resolving a violation is a
+human decision, which is what `withdraw` exists for; the reservation search takes a
+violations-only filter that gives staff the list to work through.
+
+Capacity overflow is deliberately *not* a violation: it belongs to a slot rather than to any one
+booking, so it surfaces separately as its own over-capacity view.
+
+## Availability reads
+
+Two read-only views expose what the booking rules would decide, without attempting a write. Both
+are previews in the same sense as the schedule conflict queries: no lock is taken, and the
+definitive check still runs on the create path, under a `SELECT ... FOR UPDATE` on the resolved
+service.
+
+- **A calendar summary** over a date window — per business date, the services open that date with
+  their window, effective capacity, peak concurrent booked seats and whether they are over
+  capacity. This is what a month grid renders; a date with nothing open and no closing is simply
+  absent. The window is capped at 62 days, so one request can never scan an unbounded stretch of
+  reservations.
+- **An availability preview** for a single date and party size — per open service, the slot grid
+  with the seats already taken at each start time and whether the requested party fits. Slots at
+  or before `now + advance_notice_m` are omitted, so a past date returns its services with empty
+  slot lists: **history stays readable while booking remains now-onward**. An edited booking can
+  be excluded from the seat count, so its own seats are not counted against itself.
+
+Both build on the same helpers as the write path rather than restating the rules:
+`resolve_day_slots` resolves which services open on a date (base opening → override → closing,
+plus capacity deltas), and `slot_times` produces the grid — every `slot_interval_m` from the
+opening, for as long as a whole `turn_time_m` still fits before closing. `_ensure_slot_available`
+validates against that same `slot_times` output, so a preview and a create cannot disagree about
+which start times are legal.
+
+Seat counting is shared too: `_bookings_by_slot` buckets live bookings onto the slot each one
+currently resolves to, and `_peak_concurrent_seats` sweeps their `[start, start + turn)` windows.
+The over-capacity view and the calendar summary read the same numbers, which is why an
+overbooked day surfaces identically in both.
 
 ## Timekeeping conventions
 

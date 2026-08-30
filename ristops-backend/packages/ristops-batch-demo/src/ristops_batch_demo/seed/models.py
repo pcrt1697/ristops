@@ -163,6 +163,39 @@ class DemoServices(BaseModel):
     services: list[DemoService] = Field(default_factory=list)
 
 
+class DemoReservation(BaseModel):
+    """A demo booking to create through the reservation API (``reservations.json``).
+
+    Only future bookings can be seeded: the API enforces the service's advance notice, so an
+    occurrence that materializes in the past is skipped rather than created.
+    """
+
+    venue: str = Field(description="Venue key, matching a 'key' in venues.json.")
+    service: str = Field(description="Service name, matching a service in services.json.")
+    dates: DemoExceptionDates = Field(
+        description="When the booking occurs. A booking is a single day, so "
+                    "``month_day_start`` and ``month_day_end`` are the same value.",
+    )
+    time: str = Field(description="Preferred time, 'HH:MM'. The nearest open slot is used.")
+    party_size: int = Field(description="Number of people.", gt=0)
+    contact_name: str = Field(description="Name of the customer.")
+    contact_phone_number: str | None = Field(default=None, description="Customer phone number.")
+    contact_email: str | None = Field(default=None, description="Customer email.")
+    notes: str | None = Field(default=None, description="Staff notes for the booking.")
+    status: str | None = Field(
+        default=None,
+        description="Optional follow-up action applied after creation: 'confirmed', 'rejected' "
+                    "or 'canceled'. Check-in and no-show are not available — a future booking "
+                    "cannot already have arrived. Omit to leave the booking pending.",
+    )
+
+
+class DemoReservations(BaseModel):
+    """Top-level schema of ``reservations.json``."""
+
+    reservations: list[DemoReservation] = Field(default_factory=list)
+
+
 class DemoAssignment(BaseModel):
     """A role grant for a set of users on a venue (``assignments.json``)."""
 

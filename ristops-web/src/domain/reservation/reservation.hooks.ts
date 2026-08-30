@@ -17,6 +17,8 @@ function invalidateReservations(queryClient: QueryClient) {
   void queryClient.invalidateQueries({ queryKey: ['reservation'] });
   void queryClient.invalidateQueries({ queryKey: ['reservations'] });
   void queryClient.invalidateQueries({ queryKey: ['reservations.overCapacity'] });
+  void queryClient.invalidateQueries({ queryKey: ['reservations.calendar'] });
+  void queryClient.invalidateQueries({ queryKey: ['reservations.availability'] });
 }
 
 export function useReservation(id: string) {
@@ -40,6 +42,51 @@ export function useReservationOverCapacity(venueId: string) {
     queryKey: ['reservations.overCapacity', venueId],
     queryFn: () => reservationApi.reservationOverCapacity(venueId),
     enabled: !!venueId,
+  });
+}
+
+/** Per-day, per-service occupancy over a window — the month grid. */
+export function useReservationCalendar(
+  venueId: string,
+  dateFrom: string,
+  dateTo: string,
+  // The scrolling calendar mounts many months at once and only fetches those actually
+  // scrolled into view; months share a query key, so a visible month is fetched once.
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['reservations.calendar', venueId, dateFrom, dateTo],
+    queryFn: () => reservationApi.reservationCalendar(venueId, dateFrom, dateTo),
+    enabled: enabled && !!venueId && !!dateFrom && !!dateTo,
+  });
+}
+
+/**
+ * Slots a party could be booked into on a date. Disabled until a date and party size are
+ * entered, so the booking form doesn't query while the user is still filling it in.
+ */
+export function useReservationAvailability(
+  venueId: string,
+  businessDate: string | undefined,
+  partySize: number | undefined,
+  excludeReservationId?: string | null,
+) {
+  return useQuery({
+    queryKey: [
+      'reservations.availability',
+      venueId,
+      businessDate,
+      partySize,
+      excludeReservationId,
+    ],
+    queryFn: () =>
+      reservationApi.reservationAvailability(
+        venueId,
+        businessDate!,
+        partySize!,
+        excludeReservationId,
+      ),
+    enabled: !!venueId && !!businessDate && !!partySize,
   });
 }
 

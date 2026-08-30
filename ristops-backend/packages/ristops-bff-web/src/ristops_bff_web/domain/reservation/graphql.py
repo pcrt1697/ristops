@@ -6,7 +6,8 @@ import strawberry
 
 from ristops_bff_web.domain.reservation.service import (
     find_reservation, search_reservations, create_reservation, update_reservation,
-    perform_reservation_action, reservation_over_capacity,
+    perform_reservation_action, reservation_over_capacity, reservation_calendar,
+    reservation_availability,
 )
 from ristops_bff_web.graphql.pagination import Page, PaginationInput, SearchQueryParams, SortInput
 from ristops_bff_web.graphql.types import EntityId
@@ -33,6 +34,38 @@ async def resolve_reservation_over_capacity(
 ) -> list["OverCapacitySlot"]:
     slots = await reservation_over_capacity(venue_id)
     return [OverCapacitySlot.from_dict(slot) for slot in slots]
+
+
+async def resolve_reservation_calendar(
+        venue_id: Annotated[strawberry.ID, strawberry.argument(description="Venue ID.")],
+        date_from: Annotated[date, strawberry.argument(description="First business date (inclusive).")],
+        date_to: Annotated[date, strawberry.argument(description="Last business date (inclusive).")],
+) -> list["CalendarDay"]:
+    days = await reservation_calendar({
+        "venue_id": str(venue_id),
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+    })
+    return [CalendarDay.from_dict(day) for day in days]
+
+
+async def resolve_reservation_availability(
+        venue_id: Annotated[strawberry.ID, strawberry.argument(description="Venue ID.")],
+        business_date: Annotated[date, strawberry.argument(description="Business date to check.")],
+        party_size: Annotated[int, strawberry.argument(description="Number of people to seat.")],
+        exclude_reservation_id: Annotated[
+            strawberry.ID | None,
+            strawberry.argument(description="Reservation to leave out of the seat count (when editing)."),
+        ] = None,
+) -> "DayAvailability":
+    params: dict[str, Any] = {
+        "venue_id": str(venue_id),
+        "business_date": business_date.isoformat(),
+        "party_size": party_size,
+    }
+    if exclude_reservation_id is not None:
+        params["exclude_reservation_id"] = str(exclude_reservation_id)
+    return DayAvailability.from_dict(await reservation_availability(params))
 
 
 async def resolve_create_reservation(
@@ -223,6 +256,122 @@ class OverCapacitySlot:
 
 
 
+@strawberry.type(description="How full one service is on one business date.")
+class CalendarServiceSummary:
+    service_id: str = strawberry.field(description="Service the summary belongs to.")
+    service_name: str = strawberry.field(description="Name of that service.")
+    opens_at: datetime = strawberry.field(description="Venue-local opening datetime (naive).")
+    closes_at: datetime = strawberry.field(
+        description="Venue-local closing datetime (naive); the next day for an overnight opening.",
+    )
+    capacity: int = strawberry.field(description="Effective seat capacity for the date.")
+    peak_booked: int = strawberry.field(description="Peak concurrent booked seats.")
+    reservation_count: int = strawberry.field(description="Number of live bookings.")
+    over_capacity: bool = strawberry.field(description="Whether peak booked seats exceed capacity.")
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "CalendarServiceSummary":
+        return CalendarServiceSummary(
+            service_id=obj["service_id"],
+            service_name=obj["service_name"],
+            opens_at=obj["opens_at"],
+            closes_at=obj["closes_at"],
+            capacity=obj["capacity"],
+            peak_booked=obj["peak_booked"],
+            reservation_count=obj["reservation_count"],
+            over_capacity=obj["over_capacity"],
+        )
+
+
+@strawberry.type(description="One business date of the calendar window.")
+class CalendarDay:
+    business_date: date = strawberry.field(description="Venue-local business date.")
+    closed: bool = strawberry.field(
+        description="Whether a closing removes every service that would otherwise open.",
+    )
+    services: list[CalendarServiceSummary] = strawberry.field(description="Services open that date.")
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "CalendarDay":
+        return CalendarDay(
+            business_date=obj["business_date"],
+            closed=obj["closed"],
+            services=[CalendarServiceSummary.from_dict(s) for s in obj["services"]],
+        )
+
+
+@strawberry.enum(description="Why an otherwise-open slot cannot take the requested party.")
+class AvailabilityBlocker(Enum):
+    INSUFFICIENT_SEATS = "insufficient_seats"
+
+
+@strawberry.type(description="One start time on a service's slot grid.")
+class AvailabilitySlot:
+    slot_at: datetime = strawberry.field(
+        description="Venue-local start time (naive); usable as a reservation date as-is.",
+    )
+    booked: int = strawberry.field(description="Seats taken by bookings overlapping this slot.")
+    remaining: int = strawberry.field(description="Seats still free at this slot.")
+    bookable: bool = strawberry.field(description="Whether the requested party fits.")
+    blocker: AvailabilityBlocker | None = strawberry.field(
+        default=None, description="Why the party does not fit; null when bookable.",
+    )
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "AvailabilitySlot":
+        return AvailabilitySlot(
+            slot_at=obj["slot_at"],
+            booked=obj["booked"],
+            remaining=obj["remaining"],
+            bookable=obj["bookable"],
+            blocker=AvailabilityBlocker(obj["blocker"]) if obj.get("blocker") else None,
+        )
+
+
+@strawberry.type(description="A service open on the requested date, with its slot grid.")
+class ServiceAvailability:
+    service_id: str = strawberry.field(description="Service the slots belong to.")
+    service_name: str = strawberry.field(description="Name of that service.")
+    business_date: date = strawberry.field(description="Venue-local business date of the opening.")
+    opens_at: datetime = strawberry.field(description="Venue-local opening datetime (naive).")
+    closes_at: datetime = strawberry.field(description="Venue-local closing datetime (naive).")
+    capacity: int = strawberry.field(description="Effective seat capacity for the date.")
+    turn_time_m: int = strawberry.field(description="Reservation duration, in minutes.")
+    slot_interval_m: int = strawberry.field(description="Interval between slot start times.")
+    slots: list[AvailabilitySlot] = strawberry.field(
+        description="Start times still open to booking; empty for a past date.",
+    )
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "ServiceAvailability":
+        return ServiceAvailability(
+            service_id=obj["service_id"],
+            service_name=obj["service_name"],
+            business_date=obj["business_date"],
+            opens_at=obj["opens_at"],
+            closes_at=obj["closes_at"],
+            capacity=obj["capacity"],
+            turn_time_m=obj["turn_time_m"],
+            slot_interval_m=obj["slot_interval_m"],
+            slots=[AvailabilitySlot.from_dict(s) for s in obj["slots"]],
+        )
+
+
+@strawberry.type(description="Preview of what could be booked at a venue on one date.")
+class DayAvailability:
+    business_date: date = strawberry.field(description="The venue-local date the preview is for.")
+    closed: bool = strawberry.field(description="Whether a closing removes every service.")
+    services: list[ServiceAvailability] = strawberry.field(description="Services open that date.")
+
+    @classmethod
+    def from_dict(cls, obj: dict[str, Any]) -> "DayAvailability":
+        return DayAvailability(
+            business_date=obj["business_date"],
+            closed=obj["closed"],
+            services=[ServiceAvailability.from_dict(s) for s in obj["services"]],
+        )
+
+
 @strawberry.input(description="Information to create a reservation.")
 class CreateReservationInput:
     venue_id: strawberry.ID = strawberry.field(description="Venue to book at.")
@@ -314,6 +463,14 @@ class ReservationQuery:
     reservation_over_capacity: list[OverCapacitySlot] = strawberry.field(
         resolver=resolve_reservation_over_capacity,
         description="Slots of a venue whose bookings now exceed the effective capacity.",
+    )
+    reservation_calendar: list[CalendarDay] = strawberry.field(
+        resolver=resolve_reservation_calendar,
+        description="Per-day, per-service occupancy of a venue over a date window.",
+    )
+    reservation_availability: DayAvailability = strawberry.field(
+        resolver=resolve_reservation_availability,
+        description="Slots a party could be booked into at a venue on one date.",
     )
 
 

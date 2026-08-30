@@ -1,6 +1,6 @@
 import logging
-from collections import defaultdict
-from datetime import date, datetime, timedelta, UTC
+from typing import NamedTuple
+from datetime import date, datetime, time, timedelta, UTC
 from http import HTTPStatus
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -13,10 +13,13 @@ from ristops_be_reservation.domain.reservation.schema import (
     ReservationCreationRequest, ReservationUpdateRequest, ReservationResponse, ReservationSearchQuery,
     ReservationActionRequest, ReservationActionType, ReservationStatus, ReservationViolation,
     CheckInReservationAction, OverCapacitySlot,
+    CalendarQuery, CalendarResponse, CalendarDay, CalendarServiceSummary,
+    AvailabilityQuery, AvailabilityResponse, ServiceAvailability, AvailabilitySlot,
+    AvailabilityBlocker,
 )
 from ristops_be_reservation.domain.schedule.service import (
     resolve_bookable_slot_or_throw, load_venue_schedule_snapshot, reservation_violation,
-    resolve_slot, SlotInfo, VenueScheduleSnapshot,
+    resolve_slot, resolve_day_slots, slot_times, SlotInfo, VenueScheduleSnapshot,
 )
 from ristops_be_reservation.domain.service.service import find_service_or_throw
 from ristops_be_reservation.domain.venue.entities import VenueEntity
@@ -144,8 +147,7 @@ async def _ensure_slot_available(
             status_code=HTTPStatus.CONFLICT,
             detail="The requested time is outside the service opening hours",
         )
-    offset_minutes = int((reservation_local - slot.opens_at).total_seconds() // 60)
-    if offset_minutes % service.slot_interval_m != 0:
+    if reservation_local not in slot_times(slot):
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
             detail=f"The requested time is not a valid reservation slot "
@@ -359,53 +361,221 @@ def _peak_concurrent_seats(entries: list[tuple[datetime, int, int]]) -> int:
     return peak
 
 
-async def list_over_capacity_slots(venue_id: UUID) -> list[OverCapacitySlot]:
-    """Slots (service + venue-local date) where live future bookings now exceed the effective
-    capacity. Computed on read against the current schedule — a capacity/hours cut can push a slot
-    over without touching the reservations (see the invalidation policy). Bookings that no longer
-    resolve to any open slot are a hard violation (surfaced via the list's ``violation``), not an
-    overflow, so they're skipped here."""
-    venue = await find_venue_or_throw(venue_id)
-    tz = ZoneInfo(venue.timezone)
-    snapshot = await load_venue_schedule_snapshot(venue_id)
-    now = datetime.now(UTC)
-    session = get_sql_session()
-    rows = list((await session.scalars(
-        select(ReservationEntity).where(
-            ReservationEntity.venue_id == venue_id,
-            ReservationEntity.status.in_([s.value for s in _OCCUPYING_STATUSES]),
-            ReservationEntity.reservation_date > now,
-        )
-    )).all())
+class _SlotBookings(NamedTuple):
+    """The live bookings that currently resolve onto one (service, business date) slot.
 
-    entries_by_slot: dict[tuple[UUID, date], list[tuple[datetime, int, int]]] = defaultdict(list)
-    ids_by_slot: dict[tuple[UUID, date], list[UUID]] = defaultdict(list)
-    slot_by_key: dict[tuple[UUID, date], SlotInfo] = {}
+    The lists are filled after construction as reservations are bucketed, so they are passed in
+    explicitly rather than defaulted — a shared default would be the same list for every slot.
+    """
+
+    slot: SlotInfo
+    entries: list[tuple[datetime, int, int]]
+    reservation_ids: list[UUID]
+
+    @property
+    def peak_booked(self) -> int:
+        """Peak concurrent booked seats over the slot's window."""
+        return _peak_concurrent_seats(self.entries)
+
+
+async def _load_occupying_reservations(
+        venue_id: UUID, instant_from: datetime | None = None, instant_to: datetime | None = None,
+) -> list[ReservationEntity]:
+    """Reservations of a venue that hold a seat, optionally bounded to a half-open UTC instant
+    range."""
+    conditions: list[ColumnElement[bool]] = [
+        ReservationEntity.venue_id == venue_id,
+        ReservationEntity.status.in_([s.value for s in _OCCUPYING_STATUSES]),
+    ]
+    if instant_from is not None:
+        conditions.append(ReservationEntity.reservation_date >= instant_from)
+    if instant_to is not None:
+        conditions.append(ReservationEntity.reservation_date < instant_to)
+    session = get_sql_session()
+    result: ScalarResult[ReservationEntity] = await session.scalars(
+        select(ReservationEntity).where(*conditions)
+    )
+    return list(result.all())
+
+
+def _bookings_by_slot(
+        rows: list[ReservationEntity], snapshot: VenueScheduleSnapshot, tz: ZoneInfo,
+) -> dict[tuple[UUID, date], _SlotBookings]:
+    """Bucket reservations onto the slot each one currently resolves to.
+
+    Bookings that no longer resolve to any open slot are dropped: that is a hard violation
+    (surfaced per-reservation as ``violation``), not a capacity figure.
+    """
+    by_slot: dict[tuple[UUID, date], _SlotBookings] = {}
     for row in rows:
         local = to_local_naive(row.reservation_date, tz)
         slot = resolve_slot(snapshot, local)
         if not isinstance(slot, SlotInfo):
-            continue  # closed / no service — a hard violation, not a capacity overflow
-        key = (slot.service.id, slot.business_date)
-        entries_by_slot[key].append((local, row.party_size, slot.service.turn_time_m))
-        ids_by_slot[key].append(row.id)
-        slot_by_key[key] = slot
+            continue
+        bookings = by_slot.setdefault(
+            (slot.service.id, slot.business_date), _SlotBookings(slot, [], []),
+        )
+        bookings.entries.append((local, row.party_size, slot.service.turn_time_m))
+        bookings.reservation_ids.append(row.id)
+    return by_slot
 
-    over: list[OverCapacitySlot] = []
-    for key, entries in entries_by_slot.items():
-        slot = slot_by_key[key]
-        peak = _peak_concurrent_seats(entries)
-        if peak > slot.capacity:
-            over.append(OverCapacitySlot(
-                service_id=slot.service.id,
-                service_name=slot.service.name,
-                business_date=slot.business_date,
-                capacity=slot.capacity,
-                peak_booked=peak,
-                reservation_ids=ids_by_slot[key],
-            ))
+
+async def list_over_capacity_slots(venue_id: UUID) -> list[OverCapacitySlot]:
+    """Slots (service + venue-local date) where live future bookings now exceed the effective
+    capacity. Computed on read against the current schedule — a capacity/hours cut can push a slot
+    over without touching the reservations (see the invalidation policy)."""
+    venue = await find_venue_or_throw(venue_id)
+    tz = ZoneInfo(venue.timezone)
+    snapshot = await load_venue_schedule_snapshot(venue_id)
+    rows = await _load_occupying_reservations(venue_id, instant_from=datetime.now(UTC))
+
+    over = [
+        OverCapacitySlot(
+            service_id=bookings.slot.service.id,
+            service_name=bookings.slot.service.name,
+            business_date=bookings.slot.business_date,
+            capacity=bookings.slot.capacity,
+            peak_booked=bookings.peak_booked,
+            reservation_ids=bookings.reservation_ids,
+        )
+        for bookings in _bookings_by_slot(rows, snapshot, tz).values()
+        if bookings.peak_booked > bookings.slot.capacity
+    ]
     over.sort(key=lambda slot: (slot.business_date, slot.service_name))
     return over
+
+
+@traced("reservation.calendar")
+async def list_calendar_days(query: CalendarQuery) -> CalendarResponse:
+    """Per-day, per-service occupancy of a venue over a date window — the month-grid summary.
+
+    For each business date in the window, resolves which services open (`resolve_day_slots`) and
+    how full each is, reusing the same seat arithmetic as the over-capacity view. Dates with
+    neither an open service nor a closing are omitted, so a caller can render "nothing scheduled"
+    by absence. Read-only: no lock, no validation.
+    """
+    venue = await find_venue_or_throw(query.venue_id)
+    tz = ZoneInfo(venue.timezone)
+    snapshot = await load_venue_schedule_snapshot(venue.id)
+
+    # Widen the scan by a day on each side: an overnight opening on the day before the window
+    # can hold bookings that land inside it, and vice versa.
+    instant_from = to_utc_instant(datetime.combine(query.date_from - timedelta(days=1), time.min), tz)
+    instant_to = to_utc_instant(datetime.combine(query.date_to + timedelta(days=2), time.min), tz)
+    rows = await _load_occupying_reservations(query.venue_id, instant_from, instant_to)
+    by_slot = _bookings_by_slot(rows, snapshot, tz)
+
+    days: list[CalendarDay] = []
+    business_date = query.date_from
+    while business_date <= query.date_to:
+        slots, closed = resolve_day_slots(snapshot, business_date)
+        if slots or closed:
+            days.append(CalendarDay(
+                business_date=business_date,
+                closed=closed,
+                services=[_calendar_summary(slot, by_slot) for slot in slots],
+            ))
+        business_date += timedelta(days=1)
+    return CalendarResponse(days=days)
+
+
+def _calendar_summary(
+        slot: SlotInfo, by_slot: dict[tuple[UUID, date], _SlotBookings],
+) -> CalendarServiceSummary:
+    """Summarize one open service on one date against the bookings resolved onto it."""
+    bookings = by_slot.get((slot.service.id, slot.business_date))
+    peak = bookings.peak_booked if bookings is not None else 0
+    return CalendarServiceSummary(
+        service_id=slot.service.id,
+        service_name=slot.service.name,
+        opens_at=slot.opens_at,
+        closes_at=slot.closes_at,
+        capacity=slot.capacity,
+        peak_booked=peak,
+        reservation_count=len(bookings.reservation_ids) if bookings is not None else 0,
+        over_capacity=peak > slot.capacity,
+    )
+
+
+@traced("reservation.availability")
+async def list_availability(query: AvailabilityQuery) -> AvailabilityResponse:
+    """Read-only preview of the slots a party could be booked into on one date (what a create
+    would 409 on).
+
+    Every service open that date is listed with its window, so a caller can render the day's shape
+    even when nothing is bookable. Within a service, the slot grid comes from `slot_times` — the
+    same helper the write path validates against — and each slot is scored against the seats
+    already taken by overlapping bookings. Slots at or before ``now + advance_notice_m`` are
+    omitted, so a past date yields services with no slots. Authorization and the definitive
+    capacity check still happen on write, under a lock.
+    """
+    venue = await find_venue_or_throw(query.venue_id)
+    tz = ZoneInfo(venue.timezone)
+    snapshot = await load_venue_schedule_snapshot(venue.id)
+    slots, closed = resolve_day_slots(snapshot, query.business_date)
+
+    now_local = to_local_naive(datetime.now(UTC), tz)
+    # A day's slots can only overlap bookings on the day before or after (an overnight opening
+    # runs past midnight, and a turn started late still occupies the next morning).
+    instant_from = to_utc_instant(datetime.combine(query.business_date - timedelta(days=1), time.min), tz)
+    instant_to = to_utc_instant(datetime.combine(query.business_date + timedelta(days=2), time.min), tz)
+    rows = [
+        row for row in await _load_occupying_reservations(query.venue_id, instant_from, instant_to)
+        if row.id != query.exclude_reservation_id
+    ]
+    booked_entries = [
+        (to_local_naive(row.reservation_date, tz), row.party_size) for row in rows
+    ]
+
+    return AvailabilityResponse(
+        business_date=query.business_date,
+        closed=closed,
+        services=[
+            _service_availability(slot, booked_entries, now_local, query.party_size)
+            for slot in slots
+        ],
+    )
+
+
+def _service_availability(
+        slot: SlotInfo,
+        booked_entries: list[tuple[datetime, int]],
+        now_local: datetime,
+        party_size: int,
+) -> ServiceAvailability:
+    """Score one service's slot grid against the seats already booked around each slot."""
+    turn = timedelta(minutes=slot.service.turn_time_m)
+    earliest = now_local + timedelta(minutes=slot.service.advance_notice_m)
+
+    slots: list[AvailabilitySlot] = []
+    for slot_at in slot_times(slot):
+        if slot_at <= earliest:
+            continue
+        booked = sum(
+            party for start, party in booked_entries
+            if slot_at - turn < start < slot_at + turn
+        )
+        remaining = slot.capacity - booked
+        bookable = remaining >= party_size
+        slots.append(AvailabilitySlot(
+            slot_at=slot_at,
+            booked=booked,
+            remaining=remaining,
+            bookable=bookable,
+            blocker=None if bookable else AvailabilityBlocker.INSUFFICIENT_SEATS,
+        ))
+
+    return ServiceAvailability(
+        service_id=slot.service.id,
+        service_name=slot.service.name,
+        business_date=slot.business_date,
+        opens_at=slot.opens_at,
+        closes_at=slot.closes_at,
+        capacity=slot.capacity,
+        turn_time_m=slot.service.turn_time_m,
+        slot_interval_m=slot.service.slot_interval_m,
+        slots=slots,
+    )
 
 
 async def update_reservation_status(

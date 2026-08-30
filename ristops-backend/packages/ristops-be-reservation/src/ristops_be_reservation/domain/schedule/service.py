@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from http import HTTPStatus
 from typing import NamedTuple
@@ -711,8 +710,7 @@ def _opening_window(on_date: date, start_time: time, end_time: time) -> tuple[da
 # Intervals are half-open, so touching boundaries (15:00 end vs 15:00 start) do not conflict.
 
 
-@dataclass
-class _OpeningCandidate:
+class _OpeningCandidate(NamedTuple):
     """A proposed base weekly opening (indefinite) being validated for overlap."""
 
     weekday: Weekday
@@ -720,8 +718,7 @@ class _OpeningCandidate:
     end_time: time
 
 
-@dataclass
-class _OverrideCandidate:
+class _OverrideCandidate(NamedTuple):
     """A proposed opening override (bounded date range) being validated for overlap."""
 
     date_start: date
@@ -731,8 +728,7 @@ class _OverrideCandidate:
     end_time: time
 
 
-@dataclass
-class _ServiceSchedule:
+class _ServiceSchedule(NamedTuple):
     """A sibling service's schedule, preloaded for in-memory overlap checks."""
 
     service: ServiceEntity
@@ -741,8 +737,7 @@ class _ServiceSchedule:
     closings: list[ServiceClosingEntity]
 
 
-@dataclass
-class _OverlapContext:
+class _OverlapContext(NamedTuple):
     """Everything needed to check a candidate against a venue's other services."""
 
     siblings: list[_ServiceSchedule]
@@ -1067,8 +1062,7 @@ async def find_service_opening_override_cross_service_conflicts_for(
 # its own enum (keeps this layer free of a reservation-schema import).
 
 
-@dataclass
-class VenueScheduleSnapshot:
+class VenueScheduleSnapshot(NamedTuple):
     """All services of a venue with their openings/overrides/closings, plus venue closings and
     per-service capacity overrides, preloaded once for repeated in-memory slot resolution."""
 
@@ -1134,6 +1128,38 @@ class SlotInfo(NamedTuple):
     closes_at: datetime
 
 
+def _slot_for(
+        schedule: _ServiceSchedule,
+        snapshot: VenueScheduleSnapshot,
+        business_date: date,
+) -> tuple[SlotInfo, bool] | None:
+    """The slot a service occupies on ``business_date`` and whether a closing removes it, or
+    ``None`` when the service has no opening that day at all.
+
+    The window is returned even when closed, so callers matching an instant can tell "closed then"
+    from "closed, but the instant wasn't in this window anyway". Capacity folds in every capacity
+    override covering the date.
+    """
+    effective = _effective_row_on(schedule, business_date)
+    if effective is None:
+        return None
+    row, start_time, end_time = effective
+    opens_at, closes_at = _opening_window(business_date, start_time, end_time)
+    delta = sum(
+        c.capacity_delta
+        for c in snapshot.capacity_overrides_by_service.get(schedule.service.id, [])
+        if _covers_date(c.date_start, c.date_end, c.weekday, business_date)
+    )
+    slot = SlotInfo(
+        service=schedule.service,
+        business_date=business_date,
+        capacity=row.capacity + delta,
+        opens_at=opens_at,
+        closes_at=closes_at,
+    )
+    return slot, _service_closed_on(schedule, snapshot.venue_closings, business_date)
+
+
 def resolve_slot(snapshot: VenueScheduleSnapshot, reservation_local: datetime) -> SlotInfo | str:
     """Resolve the venue slot a reservation at ``reservation_local`` (naive venue-local) falls in.
 
@@ -1146,28 +1172,51 @@ def resolve_slot(snapshot: VenueScheduleSnapshot, reservation_local: datetime) -
     """
     for schedule in snapshot.schedules:
         for business_date in (reservation_local.date(), reservation_local.date() - timedelta(days=1)):
-            effective = _effective_row_on(schedule, business_date)
-            if effective is None:
+            resolved = _slot_for(schedule, snapshot, business_date)
+            if resolved is None:
                 continue
-            row, start_time, end_time = effective
-            opens_at, closes_at = _opening_window(business_date, start_time, end_time)
-            if not (opens_at <= reservation_local < closes_at):
+            slot, closed = resolved
+            if not (slot.opens_at <= reservation_local < slot.closes_at):
                 continue
-            if _service_closed_on(schedule, snapshot.venue_closings, business_date):
-                return "closed"
-            delta = sum(
-                c.capacity_delta
-                for c in snapshot.capacity_overrides_by_service.get(schedule.service.id, [])
-                if _covers_date(c.date_start, c.date_end, c.weekday, business_date)
-            )
-            return SlotInfo(
-                service=schedule.service,
-                business_date=business_date,
-                capacity=row.capacity + delta,
-                opens_at=opens_at,
-                closes_at=closes_at,
-            )
+            return "closed" if closed else slot
     return "no_service"
+
+
+def resolve_day_slots(
+        snapshot: VenueScheduleSnapshot, business_date: date,
+) -> tuple[list[SlotInfo], bool]:
+    """Every service of the venue open on ``business_date``, and whether the date is *closed out*.
+
+    The flag distinguishes "closed" from "never scheduled": it is True only when at least one
+    service has an opening that date but a closing removes every one of them. Unlike `resolve_slot`
+    this is not anchored to an instant, so an overnight opening is reported on the date it opens on.
+    """
+    slots: list[SlotInfo] = []
+    closed_any = False
+    for schedule in snapshot.schedules:
+        resolved = _slot_for(schedule, snapshot, business_date)
+        if resolved is None:
+            continue
+        slot, closed = resolved
+        if closed:
+            closed_any = True
+            continue
+        slots.append(slot)
+    return slots, closed_any and not slots
+
+
+def slot_times(slot: SlotInfo) -> list[datetime]:
+    """The bookable start times of a slot: every ``slot_interval_m`` minutes from the opening, for
+    as long as a whole turn still fits before closing. This is the grid a reservation must land on —
+    shared by the write path and the availability preview so the two cannot drift."""
+    turn = timedelta(minutes=slot.service.turn_time_m)
+    step = timedelta(minutes=slot.service.slot_interval_m)
+    times: list[datetime] = []
+    slot_at = slot.opens_at
+    while slot_at + turn <= slot.closes_at:
+        times.append(slot_at)
+        slot_at += step
+    return times
 
 
 def resolve_bookable_slot_or_throw(

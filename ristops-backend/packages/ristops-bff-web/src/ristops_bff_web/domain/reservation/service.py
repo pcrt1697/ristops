@@ -61,3 +61,46 @@ async def reservation_over_capacity(venue_id: str | UUID) -> list[dict[str, Any]
     )
     slots = response.json()["slots"]
     return [over_capacity_transformer.transform(slot) for slot in slots]
+
+
+calendar_day_transformer = ResponseTransformer(
+    business_date=date.fromisoformat,
+)
+
+calendar_service_transformer = ResponseTransformer(
+    opens_at=datetime.fromisoformat,
+    closes_at=datetime.fromisoformat,
+)
+
+availability_service_transformer = ResponseTransformer(
+    business_date=date.fromisoformat,
+    opens_at=datetime.fromisoformat,
+    closes_at=datetime.fromisoformat,
+)
+
+availability_slot_transformer = ResponseTransformer(
+    slot_at=datetime.fromisoformat,
+)
+
+
+async def reservation_calendar(params: dict[str, Any]) -> list[dict[str, Any]]:
+    """Per-day, per-service occupancy of a venue over a date window (the month-grid summary)."""
+    response = await reservation_client.client.get(url="reservations/calendar", params=params)
+    days = response.json()["days"]
+    for day in days:
+        calendar_day_transformer.transform(day)
+        for service in day["services"]:
+            calendar_service_transformer.transform(service)
+    return days
+
+
+async def reservation_availability(params: dict[str, Any]) -> dict[str, Any]:
+    """Bookable slots at a venue on one date, for a given party size."""
+    response = await reservation_client.client.get(url="reservations/availabilities", params=params)
+    availability = response.json()
+    availability["business_date"] = date.fromisoformat(availability["business_date"])
+    for service in availability["services"]:
+        availability_service_transformer.transform(service)
+        for slot in service["slots"]:
+            availability_slot_transformer.transform(slot)
+    return availability

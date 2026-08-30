@@ -39,6 +39,13 @@ def demo(_: click.Context):
     help="Path to the services JSON file.",
 )
 @click.option(
+    "-r",
+    "--reservations",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to the reservations JSON file.",
+)
+@click.option(
     "-a",
     "--assignments",
     type=click.Path(exists=True, path_type=Path),
@@ -67,13 +74,14 @@ async def seed(
         users: Path,
         venues: Path,
         services: Path,
+        reservations: Path,
         assignments: Path,
         admin_email: str,
         admin_password: str,
 ) -> None:
     """ Seed demo data by calling the authn, venue, reservation, and authz REST APIs. """
     from ristops_batch_demo.seed.models import (
-        DemoAssignments, DemoServices, DemoUsers, DemoVenues,
+        DemoAssignments, DemoReservations, DemoServices, DemoUsers, DemoVenues,
     )
     from ristops_batch_demo.seed.seeder import DemoSeeder
     from ristops_batch_demo.services.http import (
@@ -85,6 +93,7 @@ async def seed(
     demo_users = DemoUsers.model_validate_json(users.read_text())
     demo_venues = DemoVenues.model_validate_json(venues.read_text())
     demo_services = DemoServices.model_validate_json(services.read_text())
+    demo_reservations = DemoReservations.model_validate_json(reservations.read_text())
     demo_assignments = DemoAssignments.model_validate_json(assignments.read_text())
 
     be_settings = BackendServiceSettings.get()
@@ -92,6 +101,7 @@ async def seed(
         users=demo_users,
         venues=demo_venues,
         services=demo_services,
+        reservations=demo_reservations,
         assignments=demo_assignments,
         admin_email=admin_email,
         admin_password=admin_password,

@@ -46,6 +46,59 @@ export type AuthorizationResource = {
   resourceType: ResourceType;
 };
 
+/** Why an otherwise-open slot cannot take the requested party. */
+export const AvailabilityBlocker = {
+  InsufficientSeats: 'INSUFFICIENT_SEATS'
+} as const;
+
+export type AvailabilityBlocker = typeof AvailabilityBlocker[keyof typeof AvailabilityBlocker];
+/** One start time on a service's slot grid. */
+export type AvailabilitySlot = {
+  __typename?: 'AvailabilitySlot';
+  /** Why the party does not fit; null when bookable. */
+  blocker?: Maybe<AvailabilityBlocker>;
+  /** Whether the requested party fits. */
+  bookable: Scalars['Boolean']['output'];
+  /** Seats taken by bookings overlapping this slot. */
+  booked: Scalars['Int']['output'];
+  /** Seats still free at this slot. */
+  remaining: Scalars['Int']['output'];
+  /** Venue-local start time (naive); usable as a reservation date as-is. */
+  slotAt: Scalars['DateTime']['output'];
+};
+
+/** One business date of the calendar window. */
+export type CalendarDay = {
+  __typename?: 'CalendarDay';
+  /** Venue-local business date. */
+  businessDate: Scalars['Date']['output'];
+  /** Whether a closing removes every service that would otherwise open. */
+  closed: Scalars['Boolean']['output'];
+  /** Services open that date. */
+  services: Array<CalendarServiceSummary>;
+};
+
+/** How full one service is on one business date. */
+export type CalendarServiceSummary = {
+  __typename?: 'CalendarServiceSummary';
+  /** Effective seat capacity for the date. */
+  capacity: Scalars['Int']['output'];
+  /** Venue-local closing datetime (naive); the next day for an overnight opening. */
+  closesAt: Scalars['DateTime']['output'];
+  /** Venue-local opening datetime (naive). */
+  opensAt: Scalars['DateTime']['output'];
+  /** Whether peak booked seats exceed capacity. */
+  overCapacity: Scalars['Boolean']['output'];
+  /** Peak concurrent booked seats. */
+  peakBooked: Scalars['Int']['output'];
+  /** Number of live bookings. */
+  reservationCount: Scalars['Int']['output'];
+  /** Service the summary belongs to. */
+  serviceId: Scalars['String']['output'];
+  /** Name of that service. */
+  serviceName: Scalars['String']['output'];
+};
+
 /** A seat-count delta applied on top of the resolved capacity for a date range. */
 export type CapacityOverride = {
   __typename?: 'CapacityOverride';
@@ -207,6 +260,17 @@ export type CreateVenueInput = {
   description?: InputMaybe<Scalars['String']['input']>;
   /** Name of the venue. */
   name: Scalars['String']['input'];
+};
+
+/** Preview of what could be booked at a venue on one date. */
+export type DayAvailability = {
+  __typename?: 'DayAvailability';
+  /** The venue-local date the preview is for. */
+  businessDate: Scalars['Date']['output'];
+  /** Whether a closing removes every service. */
+  closed: Scalars['Boolean']['output'];
+  /** Services open that date. */
+  services: Array<ServiceAvailability>;
 };
 
 /** Request to grant a role to a user on a resource. */
@@ -774,6 +838,10 @@ export type Query = {
   myGrants: UserRoleGrants;
   /** Fetch a reservation by ID. */
   reservation: Reservation;
+  /** Slots a party could be booked into at a venue on one date. */
+  reservationAvailability: DayAvailability;
+  /** Per-day, per-service occupancy of a venue over a date window. */
+  reservationCalendar: Array<CalendarDay>;
   /** Slots of a venue whose bookings now exceed the effective capacity. */
   reservationOverCapacity: Array<OverCapacitySlot>;
   /** Search a venue's reservations. */
@@ -844,6 +912,21 @@ export type QueryMyGrantsArgs = {
 
 export type QueryReservationArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryReservationAvailabilityArgs = {
+  businessDate: Scalars['Date']['input'];
+  excludeReservationId?: InputMaybe<Scalars['ID']['input']>;
+  partySize: Scalars['Int']['input'];
+  venueId: Scalars['ID']['input'];
+};
+
+
+export type QueryReservationCalendarArgs = {
+  dateFrom: Scalars['Date']['input'];
+  dateTo: Scalars['Date']['input'];
+  venueId: Scalars['ID']['input'];
 };
 
 
@@ -1246,6 +1329,29 @@ export type Service = {
   updatedAt: Scalars['DateTime']['output'];
   /** Venue this service belongs to. */
   venue: Venue;
+};
+
+/** A service open on the requested date, with its slot grid. */
+export type ServiceAvailability = {
+  __typename?: 'ServiceAvailability';
+  /** Venue-local business date of the opening. */
+  businessDate: Scalars['Date']['output'];
+  /** Effective seat capacity for the date. */
+  capacity: Scalars['Int']['output'];
+  /** Venue-local closing datetime (naive). */
+  closesAt: Scalars['DateTime']['output'];
+  /** Venue-local opening datetime (naive). */
+  opensAt: Scalars['DateTime']['output'];
+  /** Service the slots belong to. */
+  serviceId: Scalars['String']['output'];
+  /** Name of that service. */
+  serviceName: Scalars['String']['output'];
+  /** Interval between slot start times. */
+  slotIntervalM: Scalars['Int']['output'];
+  /** Start times still open to booking; empty for a past date. */
+  slots: Array<AvailabilitySlot>;
+  /** Reservation duration, in minutes. */
+  turnTimeM: Scalars['Int']['output'];
 };
 
 /** A one-off closing for a date range. */
@@ -1658,27 +1764,21 @@ export type UpdateMeMutationVariables = Exact<{
 
 export type UpdateMeMutation = { __typename?: 'Mutation', updateMe: { __typename?: 'User', id: string, username: string, displayName?: string | null, email: string, createdAt: string, updatedAt: string } };
 
-export type ReservationFieldsFragment = { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } & { ' $fragmentName'?: 'ReservationFieldsFragment' };
+export type ReservationFieldsFragment = { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string };
 
 export type GetReservationQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type GetReservationQuery = { __typename?: 'Query', reservation: (
-    { __typename?: 'Reservation' }
-    & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-  ) };
+export type GetReservationQuery = { __typename?: 'Query', reservation: { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } };
 
 export type SearchReservationsQueryVariables = Exact<{
   input: ReservationSearchInput;
 }>;
 
 
-export type SearchReservationsQuery = { __typename?: 'Query', reservations: { __typename?: 'ReservationPage', total: number, page: number, pageSize: number, totalPages: number, items: Array<(
-      { __typename?: 'Reservation' }
-      & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-    )> } };
+export type SearchReservationsQuery = { __typename?: 'Query', reservations: { __typename?: 'ReservationPage', total: number, page: number, pageSize: number, totalPages: number, items: Array<{ __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string }> } };
 
 export type ReservationOverCapacityQueryVariables = Exact<{
   venueId: Scalars['ID']['input'];
@@ -1692,10 +1792,7 @@ export type CreateReservationMutationVariables = Exact<{
 }>;
 
 
-export type CreateReservationMutation = { __typename?: 'Mutation', createReservation: (
-    { __typename?: 'Reservation' }
-    & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-  ) };
+export type CreateReservationMutation = { __typename?: 'Mutation', createReservation: { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } };
 
 export type UpdateReservationMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -1703,10 +1800,7 @@ export type UpdateReservationMutationVariables = Exact<{
 }>;
 
 
-export type UpdateReservationMutation = { __typename?: 'Mutation', updateReservation: (
-    { __typename?: 'Reservation' }
-    & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-  ) };
+export type UpdateReservationMutation = { __typename?: 'Mutation', updateReservation: { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } };
 
 export type ConfirmReservationMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -1714,10 +1808,7 @@ export type ConfirmReservationMutationVariables = Exact<{
 }>;
 
 
-export type ConfirmReservationMutation = { __typename?: 'Mutation', confirmReservation: (
-    { __typename?: 'Reservation' }
-    & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-  ) };
+export type ConfirmReservationMutation = { __typename?: 'Mutation', confirmReservation: { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } };
 
 export type RejectReservationMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -1725,10 +1816,7 @@ export type RejectReservationMutationVariables = Exact<{
 }>;
 
 
-export type RejectReservationMutation = { __typename?: 'Mutation', rejectReservation: (
-    { __typename?: 'Reservation' }
-    & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-  ) };
+export type RejectReservationMutation = { __typename?: 'Mutation', rejectReservation: { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } };
 
 export type CancelReservationMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -1736,10 +1824,7 @@ export type CancelReservationMutationVariables = Exact<{
 }>;
 
 
-export type CancelReservationMutation = { __typename?: 'Mutation', cancelReservation: (
-    { __typename?: 'Reservation' }
-    & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-  ) };
+export type CancelReservationMutation = { __typename?: 'Mutation', cancelReservation: { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } };
 
 export type CheckInReservationMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -1748,10 +1833,7 @@ export type CheckInReservationMutationVariables = Exact<{
 }>;
 
 
-export type CheckInReservationMutation = { __typename?: 'Mutation', checkInReservation: (
-    { __typename?: 'Reservation' }
-    & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-  ) };
+export type CheckInReservationMutation = { __typename?: 'Mutation', checkInReservation: { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } };
 
 export type NoShowReservationMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -1759,10 +1841,7 @@ export type NoShowReservationMutationVariables = Exact<{
 }>;
 
 
-export type NoShowReservationMutation = { __typename?: 'Mutation', noShowReservation: (
-    { __typename?: 'Reservation' }
-    & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-  ) };
+export type NoShowReservationMutation = { __typename?: 'Mutation', noShowReservation: { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } };
 
 export type WithdrawReservationMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -1770,10 +1849,26 @@ export type WithdrawReservationMutationVariables = Exact<{
 }>;
 
 
-export type WithdrawReservationMutation = { __typename?: 'Mutation', withdrawReservation: (
-    { __typename?: 'Reservation' }
-    & { ' $fragmentRefs'?: { 'ReservationFieldsFragment': ReservationFieldsFragment } }
-  ) };
+export type WithdrawReservationMutation = { __typename?: 'Mutation', withdrawReservation: { __typename?: 'Reservation', id: string, venueId: string, status: ReservationStatus, reservationDate: string, partySize: number, arrivalTime?: string | null, contactName: string, contactPhoneNumber?: string | null, contactEmail?: string | null, notes?: string | null, violation?: ReservationViolation | null, createdAt: string, updatedAt: string } };
+
+export type ReservationCalendarQueryVariables = Exact<{
+  venueId: Scalars['ID']['input'];
+  dateFrom: Scalars['Date']['input'];
+  dateTo: Scalars['Date']['input'];
+}>;
+
+
+export type ReservationCalendarQuery = { __typename?: 'Query', reservationCalendar: Array<{ __typename?: 'CalendarDay', businessDate: string, closed: boolean, services: Array<{ __typename?: 'CalendarServiceSummary', serviceId: string, serviceName: string, opensAt: string, closesAt: string, capacity: number, peakBooked: number, reservationCount: number, overCapacity: boolean }> }> };
+
+export type ReservationAvailabilityQueryVariables = Exact<{
+  venueId: Scalars['ID']['input'];
+  businessDate: Scalars['Date']['input'];
+  partySize: Scalars['Int']['input'];
+  excludeReservationId?: InputMaybe<Scalars['ID']['input']>;
+}>;
+
+
+export type ReservationAvailabilityQuery = { __typename?: 'Query', reservationAvailability: { __typename?: 'DayAvailability', businessDate: string, closed: boolean, services: Array<{ __typename?: 'ServiceAvailability', serviceId: string, serviceName: string, businessDate: string, opensAt: string, closesAt: string, capacity: number, turnTimeM: number, slotIntervalM: number, slots: Array<{ __typename?: 'AvailabilitySlot', slotAt: string, booked: number, remaining: number, bookable: boolean, blocker?: AvailabilityBlocker | null }> }> } };
 
 export type ListServiceOpeningsQueryVariables = Exact<{
   serviceId: Scalars['ID']['input'];
@@ -2079,6 +2174,8 @@ export const CancelReservationDocument = {"kind":"Document","definitions":[{"kin
 export const CheckInReservationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CheckInReservation"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"arrivalTime"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Time"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"notes"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"checkInReservation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}},{"kind":"Argument","name":{"kind":"Name","value":"arrivalTime"},"value":{"kind":"Variable","name":{"kind":"Name","value":"arrivalTime"}}},{"kind":"Argument","name":{"kind":"Name","value":"notes"},"value":{"kind":"Variable","name":{"kind":"Name","value":"notes"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"ReservationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"ReservationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Reservation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"venueId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"reservationDate"}},{"kind":"Field","name":{"kind":"Name","value":"partySize"}},{"kind":"Field","name":{"kind":"Name","value":"arrivalTime"}},{"kind":"Field","name":{"kind":"Name","value":"contactName"}},{"kind":"Field","name":{"kind":"Name","value":"contactPhoneNumber"}},{"kind":"Field","name":{"kind":"Name","value":"contactEmail"}},{"kind":"Field","name":{"kind":"Name","value":"notes"}},{"kind":"Field","name":{"kind":"Name","value":"violation"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]} as unknown as DocumentNode<CheckInReservationMutation, CheckInReservationMutationVariables>;
 export const NoShowReservationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"NoShowReservation"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"notes"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"noShowReservation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}},{"kind":"Argument","name":{"kind":"Name","value":"notes"},"value":{"kind":"Variable","name":{"kind":"Name","value":"notes"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"ReservationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"ReservationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Reservation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"venueId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"reservationDate"}},{"kind":"Field","name":{"kind":"Name","value":"partySize"}},{"kind":"Field","name":{"kind":"Name","value":"arrivalTime"}},{"kind":"Field","name":{"kind":"Name","value":"contactName"}},{"kind":"Field","name":{"kind":"Name","value":"contactPhoneNumber"}},{"kind":"Field","name":{"kind":"Name","value":"contactEmail"}},{"kind":"Field","name":{"kind":"Name","value":"notes"}},{"kind":"Field","name":{"kind":"Name","value":"violation"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]} as unknown as DocumentNode<NoShowReservationMutation, NoShowReservationMutationVariables>;
 export const WithdrawReservationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"WithdrawReservation"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"notes"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"withdrawReservation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}},{"kind":"Argument","name":{"kind":"Name","value":"notes"},"value":{"kind":"Variable","name":{"kind":"Name","value":"notes"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"ReservationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"ReservationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Reservation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"venueId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"reservationDate"}},{"kind":"Field","name":{"kind":"Name","value":"partySize"}},{"kind":"Field","name":{"kind":"Name","value":"arrivalTime"}},{"kind":"Field","name":{"kind":"Name","value":"contactName"}},{"kind":"Field","name":{"kind":"Name","value":"contactPhoneNumber"}},{"kind":"Field","name":{"kind":"Name","value":"contactEmail"}},{"kind":"Field","name":{"kind":"Name","value":"notes"}},{"kind":"Field","name":{"kind":"Name","value":"violation"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]} as unknown as DocumentNode<WithdrawReservationMutation, WithdrawReservationMutationVariables>;
+export const ReservationCalendarDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ReservationCalendar"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"dateFrom"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Date"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"dateTo"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Date"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reservationCalendar"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"venueId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}}},{"kind":"Argument","name":{"kind":"Name","value":"dateFrom"},"value":{"kind":"Variable","name":{"kind":"Name","value":"dateFrom"}}},{"kind":"Argument","name":{"kind":"Name","value":"dateTo"},"value":{"kind":"Variable","name":{"kind":"Name","value":"dateTo"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"businessDate"}},{"kind":"Field","name":{"kind":"Name","value":"closed"}},{"kind":"Field","name":{"kind":"Name","value":"services"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"serviceName"}},{"kind":"Field","name":{"kind":"Name","value":"opensAt"}},{"kind":"Field","name":{"kind":"Name","value":"closesAt"}},{"kind":"Field","name":{"kind":"Name","value":"capacity"}},{"kind":"Field","name":{"kind":"Name","value":"peakBooked"}},{"kind":"Field","name":{"kind":"Name","value":"reservationCount"}},{"kind":"Field","name":{"kind":"Name","value":"overCapacity"}}]}}]}}]}}]} as unknown as DocumentNode<ReservationCalendarQuery, ReservationCalendarQueryVariables>;
+export const ReservationAvailabilityDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ReservationAvailability"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"businessDate"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Date"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"partySize"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"excludeReservationId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reservationAvailability"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"venueId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"venueId"}}},{"kind":"Argument","name":{"kind":"Name","value":"businessDate"},"value":{"kind":"Variable","name":{"kind":"Name","value":"businessDate"}}},{"kind":"Argument","name":{"kind":"Name","value":"partySize"},"value":{"kind":"Variable","name":{"kind":"Name","value":"partySize"}}},{"kind":"Argument","name":{"kind":"Name","value":"excludeReservationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"excludeReservationId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"businessDate"}},{"kind":"Field","name":{"kind":"Name","value":"closed"}},{"kind":"Field","name":{"kind":"Name","value":"services"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"serviceName"}},{"kind":"Field","name":{"kind":"Name","value":"businessDate"}},{"kind":"Field","name":{"kind":"Name","value":"opensAt"}},{"kind":"Field","name":{"kind":"Name","value":"closesAt"}},{"kind":"Field","name":{"kind":"Name","value":"capacity"}},{"kind":"Field","name":{"kind":"Name","value":"turnTimeM"}},{"kind":"Field","name":{"kind":"Name","value":"slotIntervalM"}},{"kind":"Field","name":{"kind":"Name","value":"slots"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"slotAt"}},{"kind":"Field","name":{"kind":"Name","value":"booked"}},{"kind":"Field","name":{"kind":"Name","value":"remaining"}},{"kind":"Field","name":{"kind":"Name","value":"bookable"}},{"kind":"Field","name":{"kind":"Name","value":"blocker"}}]}}]}}]}}]}}]} as unknown as DocumentNode<ReservationAvailabilityQuery, ReservationAvailabilityQueryVariables>;
 export const ListServiceOpeningsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ListServiceOpenings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"includeDeleted"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"serviceOpenings"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"includeDeleted"},"value":{"kind":"Variable","name":{"kind":"Name","value":"includeDeleted"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"weekday"}},{"kind":"Field","name":{"kind":"Name","value":"capacity"}},{"kind":"Field","name":{"kind":"Name","value":"startTime"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<ListServiceOpeningsQuery, ListServiceOpeningsQueryVariables>;
 export const UpsertServiceOpeningsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpsertServiceOpenings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"openings"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"OpeningUpsertInput"}}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"upsertServiceOpenings"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"openings"},"value":{"kind":"Variable","name":{"kind":"Name","value":"openings"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"weekday"}},{"kind":"Field","name":{"kind":"Name","value":"capacity"}},{"kind":"Field","name":{"kind":"Name","value":"startTime"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<UpsertServiceOpeningsMutation, UpsertServiceOpeningsMutationVariables>;
 export const SearchOpeningOverridesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SearchOpeningOverrides"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"OpeningOverrideSearchInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"serviceOpeningOverrides"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"serviceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"serviceId"}},{"kind":"Field","name":{"kind":"Name","value":"dateStart"}},{"kind":"Field","name":{"kind":"Name","value":"dateEnd"}},{"kind":"Field","name":{"kind":"Name","value":"weekday"}},{"kind":"Field","name":{"kind":"Name","value":"capacity"}},{"kind":"Field","name":{"kind":"Name","value":"startTime"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"page"}},{"kind":"Field","name":{"kind":"Name","value":"pageSize"}},{"kind":"Field","name":{"kind":"Name","value":"totalPages"}}]}}]}}]} as unknown as DocumentNode<SearchOpeningOverridesQuery, SearchOpeningOverridesQueryVariables>;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 /**
@@ -24,16 +24,20 @@ export function useSearchParamState(
 ): [string, (value: string) => void] {
   const [searchParams, setSearchParams] = useSearchParams();
   const value = searchParams.get(key) ?? '';
-  const setValue = (next: string) =>
-    setSearchParams(
-      (prev) => {
-        const params = new URLSearchParams(prev);
-        if (next) params.set(key, next);
-        else params.delete(key);
-        return params;
-      },
-      { replace: true },
-    );
+  // Stable identity, so callers can depend on it from an effect without re-running every render.
+  const setValue = useCallback(
+    (next: string) =>
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next) params.set(key, next);
+          else params.delete(key);
+          return params;
+        },
+        { replace: true },
+      ),
+    [key, setSearchParams],
+  );
   return [value, setValue];
 }
 

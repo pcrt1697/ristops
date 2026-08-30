@@ -131,3 +131,11 @@ MATCH (r:Role {id: "venue.server"})
 MATCH (p:Permission)
 WHERE p.id IN ["venue:get", "service:get", "service:list", "schedule:get", "schedule:list", "reservation:get", "reservation:list", "reservation:check-in", "reservation:no-show"]
 MERGE (r)-[:GRANTS]->(p);
+
+
+// Register the `expires_at` property key. A grant with no expiry sets it to null, which Cypher
+// treats as a delete, so the key would otherwise never exist and every authorization query
+// reading it would warn (UnknownPropertyKeyWarning). Writing it once registers the key
+// permanently — tokens are never garbage-collected — so the seed node goes away again.
+CREATE (a:Acl {id: '__expires_at_key_seed__', expires_at: '1970-01-01T00:00:00+00:00'});
+MATCH (a:Acl {id: '__expires_at_key_seed__'}) DELETE a;

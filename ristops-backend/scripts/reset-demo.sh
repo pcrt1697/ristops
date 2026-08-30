@@ -8,7 +8,7 @@
 #              order — authz first, since it creates the app:* root resource that authn's
 #              admin-created event (consumed asynchronously by be-authz) needs to exist
 #   3. demo  - create the Game-of-Thrones demo users, venues, services, role
-#              grants, and activate the venues
+#              grants, activate the venues, and book the demo reservations
 #
 # PREREQUISITES
 #   * Infra up (Postgres, Redis x2, Neo4j) from docker/.
@@ -73,11 +73,12 @@ step "Seed admin user (authn)"
 ristops_with_env packages/ristops-be-authn/.env seed-authn
 
 # 3. SEED DEMO --------------------------------------------------------------
-step "Seed demo users, venues, services, role grants, and activation"
+step "Seed demo users, venues, services, role grants, activation, and reservations"
 ristops_with_env packages/ristops-batch-demo/.env demo seed \
   --users "${DEMO_DATA}/users.json" \
   --venues "${DEMO_DATA}/venues.json" \
   --services "${DEMO_DATA}/services.json" \
+  --reservations "${DEMO_DATA}/reservations.json" \
   --assignments "${DEMO_DATA}/assignments.json"
 
 echo ""

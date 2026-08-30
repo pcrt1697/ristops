@@ -6,6 +6,11 @@ const config: CodegenConfig = {
   generates: {
     './src/services/graphql/': {
       preset: 'client',
+      presetConfig: {
+        // The app reads query results directly; nothing uses `useFragment`, so masking would
+        // only hide the fields of the one shared fragment behind a cast.
+        fragmentMasking: false,
+      },
       config: {
         scalars: {
           DateTime: 'string',

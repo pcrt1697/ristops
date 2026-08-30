@@ -25,6 +25,70 @@ type AuthorizationResource {
   resourceType: ResourceType!
 }
 
+"""Why an otherwise-open slot cannot take the requested party."""
+enum AvailabilityBlocker {
+  INSUFFICIENT_SEATS
+}
+
+"""One start time on a service's slot grid."""
+type AvailabilitySlot {
+  """Venue-local start time (naive); usable as a reservation date as-is."""
+  slotAt: DateTime!
+
+  """Seats taken by bookings overlapping this slot."""
+  booked: Int!
+
+  """Seats still free at this slot."""
+  remaining: Int!
+
+  """Whether the requested party fits."""
+  bookable: Boolean!
+
+  """Why the party does not fit; null when bookable."""
+  blocker: AvailabilityBlocker
+}
+
+"""One business date of the calendar window."""
+type CalendarDay {
+  """Venue-local business date."""
+  businessDate: Date!
+
+  """Whether a closing removes every service that would otherwise open."""
+  closed: Boolean!
+
+  """Services open that date."""
+  services: [CalendarServiceSummary!]!
+}
+
+"""How full one service is on one business date."""
+type CalendarServiceSummary {
+  """Service the summary belongs to."""
+  serviceId: String!
+
+  """Name of that service."""
+  serviceName: String!
+
+  """Venue-local opening datetime (naive)."""
+  opensAt: DateTime!
+
+  """
+  Venue-local closing datetime (naive); the next day for an overnight opening.
+  """
+  closesAt: DateTime!
+
+  """Effective seat capacity for the date."""
+  capacity: Int!
+
+  """Peak concurrent booked seats."""
+  peakBooked: Int!
+
+  """Number of live bookings."""
+  reservationCount: Int!
+
+  """Whether peak booked seats exceed capacity."""
+  overCapacity: Boolean!
+}
+
 """
 A seat-count delta applied on top of the resolved capacity for a date range.
 """
@@ -244,6 +308,18 @@ scalar Date
 
 """Date with time (isoformat)"""
 scalar DateTime
+
+"""Preview of what could be booked at a venue on one date."""
+type DayAvailability {
+  """The venue-local date the preview is for."""
+  businessDate: Date!
+
+  """Whether a closing removes every service."""
+  closed: Boolean!
+
+  """Services open that date."""
+  services: [ServiceAvailability!]!
+}
 
 """Request to grant a role to a user on a resource."""
 input GrantAccessInput {
@@ -1070,6 +1146,33 @@ type Query {
     """Venue ID."""
     venueId: ID!
   ): [OverCapacitySlot!]!
+
+  """Per-day, per-service occupancy of a venue over a date window."""
+  reservationCalendar(
+    """Venue ID."""
+    venueId: ID!
+
+    """First business date (inclusive)."""
+    dateFrom: Date!
+
+    """Last business date (inclusive)."""
+    dateTo: Date!
+  ): [CalendarDay!]!
+
+  """Slots a party could be booked into at a venue on one date."""
+  reservationAvailability(
+    """Venue ID."""
+    venueId: ID!
+
+    """Business date to check."""
+    businessDate: Date!
+
+    """Number of people to seat."""
+    partySize: Int!
+
+    """Reservation to leave out of the seat count (when editing)."""
+    excludeReservationId: ID = null
+  ): DayAvailability!
 }
 
 """A reservation."""
@@ -1430,6 +1533,36 @@ type Service {
 
   """Venue this service belongs to."""
   venue: Venue!
+}
+
+"""A service open on the requested date, with its slot grid."""
+type ServiceAvailability {
+  """Service the slots belong to."""
+  serviceId: String!
+
+  """Name of that service."""
+  serviceName: String!
+
+  """Venue-local business date of the opening."""
+  businessDate: Date!
+
+  """Venue-local opening datetime (naive)."""
+  opensAt: DateTime!
+
+  """Venue-local closing datetime (naive)."""
+  closesAt: DateTime!
+
+  """Effective seat capacity for the date."""
+  capacity: Int!
+
+  """Reservation duration, in minutes."""
+  turnTimeM: Int!
+
+  """Interval between slot start times."""
+  slotIntervalM: Int!
+
+  """Start times still open to booking; empty for a past date."""
+  slots: [AvailabilitySlot!]!
 }
 
 """A one-off closing for a date range."""

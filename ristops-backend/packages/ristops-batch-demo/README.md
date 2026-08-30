@@ -7,13 +7,14 @@ jobs integrate with the CLI and the rest of the platform.
 
 Populates a running stack with Game-of-Thrones-themed demo data by calling the real backend REST
 APIs (authn, venue, reservation, authz): it registers users, creates venues, adds services to each
-venue, grants venue roles, and activates the venues.
+venue, grants venue roles, activates the venues, and books demo reservations.
 
 ```bash
 ristops demo seed \
   --users packages/ristops-batch-demo/demo-data/users.json \
   --venues packages/ristops-batch-demo/demo-data/venues.json \
   --services packages/ristops-batch-demo/demo-data/services.json \
+  --reservations packages/ristops-batch-demo/demo-data/reservations.json \
   --assignments packages/ristops-batch-demo/demo-data/assignments.json \
   --admin-password <admin_pwd>
 ```
@@ -25,6 +26,7 @@ Options:
 | `-u/--users`          |                     | Path to the users JSON file (required).       |
 | `-v/--venues`         |                     | Path to the venues JSON file (required).      |
 | `-s/--services`       |                     | Path to the services JSON file (required).    |
+| `-r/--reservations`   |                     | Path to the reservations JSON file (required).|
 | `-a/--assignments`    |                     | Path to the assignments JSON file (required). |
 | `-e/--admin-email`    |                     | Admin email (default `admin@ristops.com`).    |
 | `-p/--admin-password` | `RISTOPS_ADMIN_PWD` | Admin password (required).                    |
@@ -99,6 +101,29 @@ range (same `dates` / optional `weekday` shape) — e.g. a summer garden that ad
 ]
 ```
 
+`reservations.json` (reservation) — books a party at a venue's service. Dates use the same fixed
+annual `dates` shape as the schedule exceptions, but a booking is a **single day**, so
+`month_day_start` and `month_day_end` are equal. `time` is a *preference*: the seeder asks
+`/reservations/availabilities` what is open that day and books the bookable slot nearest it, so the
+slot grid is never reimplemented here. Optional `status` applies a follow-up action
+(`confirmed` / `rejected` / `canceled`); omit it to leave the booking pending.
+
+```json
+{ "reservations": [ { "venue": "stark", "service": "A Feast in the Great Hall",
+  "dates": { "month_day_start": "09-04", "month_day_end": "09-04", "year_offsets": [0, 1] },
+  "time": "19:00", "party_size": 12, "contact_name": "Eddard Stark",
+  "contact_phone_number": "...", "contact_email": "...", "notes": "...",
+  "status": "confirmed" } ] }
+```
+
+Bookings are **future-only**: `POST /reservations` enforces the service's advance notice, so an
+occurrence that materializes on an elapsed date cannot be created. Those — along with occurrences
+falling on a closed day, or on a weekday the service does not open (a fixed `MM-DD` lands on a
+different weekday each year) — are skipped and counted in the completion log rather than failing
+the run. `year_offsets` is therefore `[0, 1]` rather than the schedule exceptions' `[-1, 0, 1]`:
+a previous-year booking would always be skipped. Check-in and no-show are deliberately not
+offered as a `status`, since a future booking cannot already have arrived.
+
 `assignments.json` (authz) — grants a role to users on a venue, referenced by key/username:
 
 ```json
@@ -135,5 +160,5 @@ ristops sql-database nuke be-reservation -f
 ristops nuke-authz -f
 ristops seed-authn -p <admin_pwd>
 ristops seed-authz
-ristops demo seed --users ... --venues ... --services ... --assignments ... --admin-password <admin_pwd>
+ristops demo seed --users ... --venues ... --services ... --reservations ... --assignments ... --admin-password <admin_pwd>
 ```

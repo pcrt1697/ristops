@@ -90,3 +90,54 @@ mutation WithdrawReservation($id: ID!, $notes: String) {
     ...ReservationFields
   }
 }
+
+query ReservationCalendar($venueId: ID!, $dateFrom: Date!, $dateTo: Date!) {
+  reservationCalendar(venueId: $venueId, dateFrom: $dateFrom, dateTo: $dateTo) {
+    businessDate
+    closed
+    services {
+      serviceId
+      serviceName
+      opensAt
+      closesAt
+      capacity
+      peakBooked
+      reservationCount
+      overCapacity
+    }
+  }
+}
+
+query ReservationAvailability(
+  $venueId: ID!
+  $businessDate: Date!
+  $partySize: Int!
+  $excludeReservationId: ID
+) {
+  reservationAvailability(
+    venueId: $venueId
+    businessDate: $businessDate
+    partySize: $partySize
+    excludeReservationId: $excludeReservationId
+  ) {
+    businessDate
+    closed
+    services {
+      serviceId
+      serviceName
+      businessDate
+      opensAt
+      closesAt
+      capacity
+      turnTimeM
+      slotIntervalM
+      slots {
+        slotAt
+        booked
+        remaining
+        bookable
+        blocker
+      }
+    }
+  }
+}
