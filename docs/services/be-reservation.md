@@ -182,11 +182,11 @@ what a month grid renders, and also what the booking form reads to offer a servi
 remaining seats — a date with nothing running and no closing is simply absent. The window is
 capped at 62 days, so one request can never scan an unbounded stretch of reservations.
 
-It is a preview in the same sense as the old conflict queries: no lock is taken, and the
-definitive check still runs on the create path, under a `SELECT ... FOR UPDATE` on the service
-being booked. That write path is the only place the rules are enforced — the service runs the
-date, no closing covers it, the instant falls inside `[opens_at, closes_at)`, and the seats
-already booked into the same window leave room for the party.
+It is a preview: no lock is taken, and the definitive check still runs on the create path, under a
+`SELECT ... FOR UPDATE` on the service being booked. That write path is the only place the rules
+are enforced — the service runs the date, no closing covers it, the instant falls inside
+`[opens_at, closes_at)`, and the seats already booked into the same window leave room for the
+party.
 
 Seat counting uses the window itself as the bucket: a service holds exactly one window per
 business date, so any live booking whose instant falls in it belongs to that date. Bookings left

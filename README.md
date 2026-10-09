@@ -10,10 +10,10 @@ access control across multiple services.
 To read the docs locally:
 
 ```bash
-cd docs && python3 -m http.server 3000
+cd docs && python3 -m http.server 3001
 ```
 
-Then open `http://localhost:3000`.
+Then open `http://localhost:3001`.
 
 ## Structure
 

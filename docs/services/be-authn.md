@@ -22,13 +22,20 @@ startup via `ClientTokenDecoder` — after the initial fetch there is no runtime
 ## User lifecycle and event propagation
 
 Every user write operation (create, delete) publishes an event to a Redis stream so that
-`be-authz` can keep its ACL graph in sync without polling. The event carries `correlation_id`
-so the trace context is preserved across the service boundary.
+`be-authz` can keep its ACL graph in sync without polling. The event carries `correlation_id` and a
+W3C `traceparent`, so the consumer continues the producer's trace across the service boundary.
 
 | Operation | Redis event | Effect in be-authz |
 |-----------|------------|---------------------|
-| Create user | `AuthZUserEvent(created)` | Creates `User` node + default ACL |
-| Delete user | `AuthZUserEvent(deleted)` | Removes `User` node and ACLs |
+| Create user | `UserLifecycleEvent(created)` | Creates `User` node + default ACL |
+| Delete user | `UserLifecycleEvent(deleted)` | Removes `User` node and ACLs |
+
+## Members
+
+Assigning a role needs to find a user, but a full user record includes the email address. Besides
+the user endpoints, `be-authn` therefore exposes a separate **member** view: any authenticated
+user can search members by display name and read one by ID, and gets back only what an assignment
+UI needs, with no email. Members are a projection of the same user records, not a second store.
 
 ## Key pair setup
 

@@ -8,7 +8,7 @@ from ristops_be_reservation.domain.reservation.routers import reservation_router
 from ristops_be_reservation.domain.service.routers import schedule_router, service_router
 from ristops_be_reservation.domain.venue.service import on_venue_event
 from ristops_be_reservation.services.authz import is_authorized
-from ristops_be_reservation.services.http import authn_client, authz_client
+from ristops_be_reservation.services.http import authz_client
 from ristops_be_reservation.settings import BackendServiceSettings, VenueLifecycleConsumerSettings
 from ristops_lib_be.authn import JwtAuthNMiddleware
 from ristops_lib_be.authz.interceptor import AuthZInterceptor
@@ -43,7 +43,6 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, Any]:
 
     be_settings = BackendServiceSettings.get()
     async with with_clients(
-            (authn_client, be_settings.authn_url),
             (authz_client, be_settings.authz_url),
     ):
         _logger.info("Startup complete")

@@ -14,8 +14,11 @@ graph it is a natural path traversal.
 
 ![Authorization data model](../assets/dm-ristops-authr.arrow.png "Authorization data model")
 
-Resources are typed (`app`, `venue`, `user`, `role`, `acl`, `permission`) and form a hierarchy
-via `BELONGS_TO`. Permission actions: `get`, `list`, `add`, `edit`, `remove`, `*` (manage).
+Resources are typed (`app`, `venue`, `service`, `reservation`, `user`, `role`, `acl`,
+`permission`) and form a hierarchy via `BELONGS_TO`. A permission id is `<scope>:<action>`. The
+actions are `get`, `list`, `add`, `edit`, `remove` and `*` (manage), plus domain verbs where a
+change is not plain CRUD — for reservations, `confirm`, `reject`, `cancel`, `check-in`, `no-show`
+and `withdraw`.
 
 ## Authorization check flow
 

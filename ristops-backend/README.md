@@ -9,7 +9,7 @@ Python uv workspace containing all backend services and shared libraries.
 | [be-authn](packages/ristops-be-authn/README.md)     | User management and JWT issuance    |
 | [be-authz](packages/ristops-be-authz/README.md)     | ACL, role and permission management |
 | [be-venue](packages/ristops-be-venue/README.md)     | Venue registry                      |
-| [be-reservation](packages/ristops-be-reservation/README.md) | Reservation config, tables and reservations |
+| [be-reservation](packages/ristops-be-reservation/README.md) | Services, openings, closings and reservations |
 | [bff-web](packages/ristops-bff-web/README.md)       | GraphQL BFF for the web frontend    |
 | [batch-demo](packages/ristops-batch-demo/README.md) | Dump demo data                      |
 
@@ -28,12 +28,18 @@ Python uv workspace containing all backend services and shared libraries.
 
 ```text
 browser
-  └─► bff-web        (GraphQL + REST, Redis sessions)
-        └─► be-authn (user management, JWT — PostgreSQL)
-        └─► be-authz (ACL checks — Neo4j)
+  └─► bff-web             (GraphQL + REST, Redis sessions)
+        ├─► be-authn      (login, token refresh, user management — PostgreSQL)
+        ├─► be-authz      (ACL checks, roles, resources — Neo4j)
+        ├─► be-venue      (venue registry — PostgreSQL)
+        └─► be-reservation (services, openings, closings, reservations — PostgreSQL)
 
-be-authn ──Redis stream──► be-authz  (user lifecycle events)
-any svc  ──Redis stream──► be-authz  (resource lifecycle events)
+be-authn  ──Redis stream──► be-authz        (user lifecycle events)
+any svc   ──Redis stream──► be-authz        (resource lifecycle events)
+be-venue  ──Redis stream──► be-reservation  (venue lifecycle events — local venue read model)
+be-venue  ──HTTP──────────► be-reservation  (venue activation requires at least one service)
+other svcs ──HTTP─────────► be-authn        (JWKS fetch, to verify JWTs locally)
+authn, venue, reservation ──HTTP──► be-authz (ACL check on every authorized request)
 ```
 
 Every service runs the same middleware stack: exception handling, request context

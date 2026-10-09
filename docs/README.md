@@ -1,7 +1,8 @@
 # RistOps
 
-Backend for a restaurant operations platform. The system manages users, locations, and role-based
-access control across multiple services that communicate via HTTP and Redis Streams.
+Restaurant operations platform. The system manages users, venues, reservation schedules and bookings,
+and role-based access control across multiple services that communicate via HTTP and Redis Streams,
+behind a GraphQL BFF consumed by a React web frontend.
 
 ## Running locally
 
@@ -20,9 +21,9 @@ docker compose -f docker/docker-compose.local.yaml up -d        # infrastructure
 | [be-authn](services/be-authn.md) | User management and JWT issuance |
 | [be-authz](services/be-authz.md) | ACL, role and permission management |
 | [be-venue](services/be-venue.md) | Venue registry |
-| [be-reservation](services/be-reservation.md) | Venue configuration, tables and reservations |
-| be-menu | Menus, sections and products |
-| be-order | Orders, order items, states and courses |
+| [be-reservation](services/be-reservation.md) | Services, openings, closings and reservations |
+| be-menu | Menus, sections and products (planned) |
+| be-order | Orders, order items, states and courses (planned) |
 | [bff-web](services/bff-web.md) | GraphQL BFF for the web frontend |
 
 ## Libraries
@@ -38,14 +39,24 @@ docker compose -f docker/docker-compose.local.yaml up -d        # infrastructure
 
 ## Architecture
 
+![RistOps architecture](assets/architecture.excalidraw.png "RistOps architecture")
+
+The same topology as text:
+
 ```text
 browser
-  └─► bff-web        (GraphQL + REST, Redis sessions)
-        └─► be-authn (user management, JWT — PostgreSQL)
-        └─► be-authz (ACL checks — Neo4j)
+  └─► bff-web             (GraphQL + REST, Redis sessions)
+        ├─► be-authn      (login, token refresh, user management — PostgreSQL)
+        ├─► be-authz      (ACL checks, roles, resources — Neo4j)
+        ├─► be-venue      (venue registry — PostgreSQL)
+        └─► be-reservation (services, openings, closings, reservations — PostgreSQL)
 
-be-authn ──Redis stream──► be-authz  (user lifecycle events)
-any svc  ──Redis stream──► be-authz  (resource lifecycle events)
+be-authn  ──Redis stream──► be-authz        (user lifecycle events)
+any svc   ──Redis stream──► be-authz        (resource lifecycle events)
+be-venue  ──Redis stream──► be-reservation  (venue lifecycle events — local venue read model)
+be-venue  ──HTTP──────────► be-reservation  (venue activation requires at least one service)
+other svcs ──HTTP─────────► be-authn        (JWKS fetch, to verify JWTs locally)
+authn, venue, reservation ──HTTP──► be-authz (ACL check on every authorized request)
 ```
 
 Every service runs the same middleware stack: exception handling, request context

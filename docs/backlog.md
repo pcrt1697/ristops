@@ -26,8 +26,9 @@ Open work that is known but not scheduled.
 ## Access control (`be-authz`, admin panel)
 
 1. **Role list disclosure**. `GET /roles` is open to any authenticated user and exposes the permission model.
-   Accepted as low severity. Preferred refinement: return `permissions` only to callers holding a management permission, keeping
-   id, name and description for assignment UIs. Stricter fallback: gate the whole query behind `role~list`.
+   Accepted as low severity. Preferred refinement: return `permissions` only to callers holding a
+   management permission, keeping id, name and description for assignment UIs. Stricter fallback:
+   gate the whole query behind `role~list`.
 
 ## Frontend workspace
 

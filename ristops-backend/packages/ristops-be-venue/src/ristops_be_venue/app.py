@@ -6,7 +6,7 @@ from fastapi import FastAPI, APIRouter, Depends
 
 from ristops_be_venue.domain.venue.routers import venue_router
 from ristops_be_venue.services.authz import is_authorized
-from ristops_be_venue.services.http import authn_client, authz_client, reservation_client
+from ristops_be_venue.services.http import authz_client, reservation_client
 from ristops_be_venue.settings import BackendServiceSettings
 from ristops_lib_be.authn import JwtAuthNMiddleware
 from ristops_lib_be.authz.interceptor import AuthZInterceptor
@@ -34,7 +34,6 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, Any]:
     await redis_client.connect()
     be_settings = BackendServiceSettings.get()
     async with with_clients(
-            (authn_client, be_settings.authn_url),
             (authz_client, be_settings.authz_url),
             (reservation_client, be_settings.reservation_url),
     ):

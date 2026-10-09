@@ -46,9 +46,11 @@ async def create_user(data: UserCreate) -> User:
 
 This module addresses the need to build paginated, filtered, and sorted list endpoints without
 re-writing the same `SELECT … WHERE … ORDER BY … LIMIT/OFFSET` plumbing for every entity.
-`SearchQueryExecutor` takes an entity class, a response model, and a condition builder, and turns
-a query object into a `Page` of response models (running a matching `COUNT` so the page carries the
-correct total).
+Two executors share the same shape. `SearchQueryExecutor` takes an entity class, a response model,
+and a condition builder, and turns a query object into a plain list of response models; it suits
+collections that are always small, such as a venue's services. `PaginatedSearchQueryExecutor` wraps
+it, adds offset and limit, and returns a `Page` of response models (running a matching `COUNT` so
+the page carries the correct total).
 
 | Constructor argument | Responsibility |
 |----------------------|----------------|
@@ -59,7 +61,7 @@ correct total).
 Filtering is deliberately generic: the executor only ANDs together whatever conditions the builder
 returns. Authorization scoping — "only the venues the user may access" — is therefore just another
 condition the caller injects, never something the executor knows about. See the pagination/search
-base types in [lib-core](libraries/lib-core.md#pagination--search).
+base types in [lib-core](lib-core.md#pagination--search).
 
 ```python
 search_query_executor = SearchQueryExecutor[VenueSearchQuery, VenueSearchScope, VenueEntity, VenueResponse](
@@ -68,3 +70,14 @@ search_query_executor = SearchQueryExecutor[VenueSearchQuery, VenueSearchScope, 
     condition_builder=_build_venue_conditions,
 )
 ```
+
+## Schema commands
+
+The `ristops sql-database` command group works from each service's `MODELS` tuple, registered
+through the same entry-point mechanism as the other CLI commands:
+
+| Command | Effect |
+|---------|--------|
+| `generate-ddl <app>` | Prints the SQL DDL for the service's models |
+| `create-tables <app>` | Creates the schema and any missing tables; idempotent and non-destructive |
+| `nuke <app>` | Drops and recreates the service's tables. Destructive, and it only touches tables still listed in `MODELS` |

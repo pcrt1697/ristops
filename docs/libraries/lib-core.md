@@ -12,10 +12,12 @@ parameter. Middleware sets values at the start of each request via `APP_CONTEXT`
 the call chain reads them by key. Standard keys are defined in `ContextKey`: `USER_ID`, `JWT`,
 `REQUEST_ID`, `CORRELATION_ID`.
 
-It is also the mechanism that ties distributed tracing together: `RequestContextMiddleware` sets
-the correlation ID from the incoming request header, `HttpClient` forwards it to downstream
-HTTP calls, and `BaseEvent` carries it into Redis stream messages — all automatically, without any
-code in the business layer needing to know about it.
+`RequestContextMiddleware` fills the request and correlation IDs. With telemetry enabled they are
+the active span's span ID and trace ID, so the correlation ID is the trace ID that follows the
+request across services; with it disabled they are generated. Both are echoed back as
+`x-request-id` and `x-correlation-id` response headers. Crossing a service boundary is handled by
+OpenTelemetry (`traceparent` on HTTP calls) and by `BaseEvent` (on Redis stream messages), not by
+this module, so no business code needs to know about it.
 
 ## Logging
 
@@ -79,13 +81,14 @@ Sub-prefixes by concern:
 | `RISTOPS_PG_` | PostgreSQL |
 | `RISTOPS_REDIS_` | Redis |
 | `RISTOPS_NEO4J_` | Neo4j |
+| `RISTOPS_OTEL_` | Telemetry (see [lib-otel](lib-otel.md)) |
 
 ## HTTP client
 
 `HttpClient` wraps a single `httpx.AsyncClient` bound to one downstream service. On every outgoing
-request it automatically injects `x-correlation-id`, `x-request-id`, and
-`Authorization: Bearer <jwt>` from `APP_CONTEXT`, so distributed traces are propagated without any
-manual wiring.
+request it automatically injects `Authorization: Bearer <jwt>` from `APP_CONTEXT`, so the caller's
+identity travels with the call. Trace context is not set here: when telemetry is enabled the httpx
+instrumentation adds the W3C `traceparent` header, with no manual wiring.
 
 A service declares one client per downstream dependency and binds them all for the application
 lifetime with `with_clients`:

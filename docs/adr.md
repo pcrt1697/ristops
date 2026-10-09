@@ -24,16 +24,17 @@ and the CI pipeline stays unified.
 
 ### Microservices over monolith
 
-**Context:** The backend covers distinct concerns — authentication, authorization, and
-frontend aggregation — each with different storage backends and different expected
-scaling profiles. This is also a training project designed to practice distributed systems
+**Context:** The backend covers distinct concerns — authentication, authorization, the venue
+registry, reservations, and frontend aggregation — each with different storage backends and
+different expected scaling profiles. This is also a training project designed to practice distributed systems
 patterns.
 
 **Decision:** Split the backend into focused microservices rather than a single monolith.
 
 **Why:** Each service has a clear bounded context; `be-authn` owns user identity,
-`be-authz` owns access control, `bff-web` owns frontend aggregation. The separation
-allows each to evolve and scale independently.
+`be-authz` owns access control, `be-venue` owns the venue registry, `be-reservation` owns
+schedules and bookings, `bff-web` owns frontend aggregation. The separation allows each to
+evolve and scale independently.
 
 **Trade-off:** Higher operational complexity for a single developer. Acceptable here
 because the explicit goal is learning those patterns.
@@ -177,7 +178,8 @@ service is compromised.
 
 ### PostgreSQL for transactional data
 
-**Context:** `be-authn` needs a reliable store for user records and credentials.
+**Context:** `be-authn`, `be-venue` and `be-reservation` need a reliable store for transactional
+records — users and credentials, venues, schedules and bookings.
 
 **Decision:** PostgreSQL via SQLAlchemy async.
 
@@ -391,20 +393,43 @@ services. New packages self-register; the core discovers them dynamically.
 
 ---
 
-### AsyncContext for correlation ID propagation (temporary)
+### AsyncContext for request-scoped values
 
-**Context:** `x-request-id`, `x-correlation-id`, and the JWT need to flow through all
+**Context:** The user ID, the JWT, and the request and correlation IDs need to flow through all
 service layers without being threaded through every function signature.
 
-**Decision:** Use `AsyncContext` (contextvars-based) to propagate these values implicitly.
-`HttpClientService` reads from context and injects headers into outgoing requests
-automatically.
+**Decision:** Use `AsyncContext` (contextvars-based) to carry them implicitly. Middleware fills
+it for each request, `HttpClient` reads the JWT from it to set the `Authorization` header on
+outgoing calls, and the logging filter attaches the IDs to every log record.
 
-**Why temporary:** This is a workaround until the Elastic stack is integrated for
-distributed tracing, possibly via OpenTelemetry. At that point, trace context propagation
-will be handled by the OTel SDK and the `AsyncContext` mechanism can be retired.
+**Why:** Business code stays free of plumbing. Trace propagation is not part of this mechanism:
+with OpenTelemetry the request ID is the span ID and the correlation ID is the trace ID, and
+`traceparent` crosses HTTP and Redis boundaries through instrumentation and `BaseEvent`. With
+telemetry disabled the IDs are generated, so nothing depends on it.
 
-**Status:** Accepted — provisional, OTel migration planned
+**Status:** Accepted
+
+---
+
+### OpenTelemetry through a collector, with Grafana LGTM
+
+**Context:** A request crosses several services and sometimes a Redis stream, and hand-propagated
+correlation headers could not show where time was spent or follow a trace over a queue.
+
+**Decision:** Services export traces, metrics and logs over OTLP to an OpenTelemetry Collector,
+which forwards them to `grafana/otel-lgtm` (Loki, Tempo, Prometheus and Grafana in one
+container). Instrumentation is switched per service by `RISTOPS_OTEL_ENABLED`, off by default.
+
+**Why:** The collector is the only component that knows where telemetry is stored, so replacing
+Grafana LGTM with another backend changes one exporter and no application code. One bundled
+container keeps the local footprint small. The per-service flag allows an incremental rollout and
+leaves host development with no overhead and no dependency on a running collector.
+
+**Trade-off:** Two boundaries are not covered by library instrumentation and need code of our own:
+Neo4j transactions (a span opened by hand) and Redis Streams (a `traceparent` carried in the event
+payload).
+
+**Status:** Accepted
 
 ---
 
@@ -412,17 +437,17 @@ will be handled by the OTel SDK and the `AsyncContext` mechanism can be retired.
 
 ### `be-reservation` is a single deployable with a single database
 
-**Context:** Venue configuration (opening times, services, slot duration, reservable seats,
-closures, exceptions), tables, and reservations are all required to answer "is this slot
-available?". That check must be atomic — it is the foundation of the double-booking
-prevention strategy.
+**Context:** Venue configuration (services, their openings and closings) and reservations are
+all required to answer "can this booking be accepted?". That check must be atomic — it is the
+foundation of the overbooking prevention strategy.
 
 **Decision:** Single service, single DB (`be-reservation`). Module boundaries in code,
 not service boundaries.
 
-**Why:** Splitting config, tables, and reservations across services would turn a DB
-transaction into a distributed coordination problem. The atomic `INSERT WHERE` that
-prevents double-booking is impossible across service boundaries.
+**Why:** Splitting config and reservations across services would turn a DB transaction into a
+distributed coordination problem. The capacity check and the insert must run under one lock
+(`SELECT ... FOR UPDATE` on the service being booked), which is impossible across service
+boundaries.
 
 **Status:** Accepted
 
@@ -479,6 +504,30 @@ makes the number staff see the one the rule enforces.
 weekday-scoped seasonal change, for instance, has no single-row equivalent), and a closing cannot
 be shrunk or deleted when doing so would re-expose an overlap it was hiding. Both are accepted in
 exchange for a model with no precedence order to learn.
+
+**Status:** Accepted
+
+---
+
+### Schedule changes never rewrite existing reservations
+
+**Context:** Editing a schedule — shrinking hours, closing a date, lowering capacity, retiring a
+service — can invalidate bookings that were valid when they were made.
+
+**Decision:** Schedule edits mutate nothing on reservations. Each future booking in a live status
+is checked against the current schedule when read and flagged with a violation (`no_service`,
+`closed`, `outside_hours`). Staff resolve it by hand, either with the `withdraw` action — a status
+distinct from the customer's `canceled` and the venue's pre-acceptance `rejected` — or by moving
+the booking to another service. Capacity overflow is reported on the calendar rather than blamed
+on one booking.
+
+**Why:** Auto-cancelling would drop a guest's booking silently, with no notification. Reverting to
+`pending` loses the "confirmed" state and does not fix the invalidity. Blocking the edit is too
+rigid: a venue could not close for a holiday until every booking was resolved by hand.
+
+**Trade-off:** Violations are computed on every read against an in-memory snapshot of the venue's
+schedule instead of being stored, so they never go stale, at the cost of that computation and of
+staff having to act manually.
 
 **Status:** Accepted
 
@@ -545,15 +594,126 @@ whether they are split. Splitting adds operational complexity without any resili
 
 ## Frontend
 
-> This section will be expanded when frontend development begins.
-
-### React
+### React, TypeScript and Vite
 
 **Context:** A frontend framework is needed for `ristops-web`.
 
-**Decision:** React.
+**Decision:** React with TypeScript, built with Vite.
 
-**Why:** Widely adopted, integrates naturally with GraphQL clients (Apollo, urql),
-and familiar to the team.
+**Why:** Widely adopted, and strong typing carries through to the generated GraphQL types. Vite
+gives a fast development server and a static bundle that nginx serves with an SPA fallback.
+
+**Status:** Accepted
+
+---
+
+### Ant Design for UI components
+
+**Context:** The interface is an operations tool: tables, forms, modals, drawers and date pickers.
+
+**Decision:** Use Ant Design (antd).
+
+**Why:** It ships the data-heavy components out of the box, so effort goes into domain behaviour
+rather than building primitives.
+
+**Trade-off:** Look and bundle size are tied to the library.
+
+**Status:** Accepted
+
+---
+
+### TanStack Query over graphql-request, not a full GraphQL client
+
+**Context:** The BFF is the only GraphQL endpoint the frontend talks to. Full clients such as
+Apollo or urql bring a normalized cache and their own state model.
+
+**Decision:** Server state is handled by TanStack Query, with requests made through
+`graphql-request`. Raw requests live in each domain's `*.api.ts`; components consume per-domain
+`use*` hooks.
+
+**Why:** Query-key caching and invalidation are enough for this app, and the same mechanism serves
+the REST calls to the BFF, such as authentication. A normalized cache would add concepts without a
+need for them.
+
+**Trade-off:** No automatic cache normalization, so mutations invalidate the affected queries
+explicitly.
+
+**Status:** Accepted
+
+---
+
+### Types generated from the BFF schema
+
+**Context:** The frontend and the BFF share a contract that changes whenever a resolver changes.
+
+**Decision:** GraphQL operations are written in `.graphql` files colocated per domain. The BFF
+exports its schema as SDL, and graphql-codegen produces typed documents from both. The generated
+files are never edited by hand.
+
+**Why:** A schema change surfaces as a compile error in the frontend instead of a runtime failure.
+
+**Status:** Accepted
+
+---
+
+### Frontend code is organized by domain
+
+**Context:** A layer-first layout (all hooks together, all API calls together) scatters one change
+across the tree.
+
+**Decision:** Each domain folder holds its own API, hooks, types and helpers. Code moves to a
+shared location only when it is genuinely generic.
+
+**Why:** Colocation keeps a change to one domain in one place and makes a domain easy to find.
+
+**Status:** Accepted
+
+---
+
+### Permissions gate the UI, the backend enforces them
+
+**Context:** Users should not be offered actions they cannot perform, but a client cannot be
+trusted to enforce access.
+
+**Decision:** The UI hides or disables actions based on the user's grants (`useCan`,
+`RequirePermission`). Every endpoint remains protected by the backend, which stays the only
+enforcement point.
+
+**Why:** A better experience without moving trust to the client, consistent with the zero-trust
+decision for the backend.
+
+**Trade-off:** Permission knowledge exists in two places, and a stale UI can offer an action the
+backend then rejects.
+
+**Status:** Accepted
+
+---
+
+### Current venue is client state, persisted in localStorage
+
+**Context:** Most of the app works inside one venue, and a page reload must not forget which.
+
+**Decision:** The selected venue lives in a React context under `domain/venue`, persisted in
+`localStorage` and kept in sync with the `/venues/:venueId` route. Server-side user preferences are
+deferred.
+
+**Why:** A UI preference needs no backend round trip, and the route stays the source of truth when
+a venue is opened by link.
+
+**Trade-off:** The choice is not shared between devices.
+
+**Status:** Accepted
+
+---
+
+### REST bodies are snake_case, GraphQL is camelCase
+
+**Context:** The BFF exposes both: GraphQL (Strawberry, camelCase) and REST for authentication,
+whose Pydantic bodies are snake_case.
+
+**Decision:** The frontend sends snake_case in REST bodies and camelCase in GraphQL operations. It
+adapts to the backend contract; the backend does not add alias generators to suit the frontend.
+
+**Why:** The backend owns the contract, and each protocol keeps its own convention.
 
 **Status:** Accepted

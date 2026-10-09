@@ -12,9 +12,9 @@ duplicating validation logic across routes. `JwtAuthNMiddleware` intercepts each
 the `Authorization: Bearer` header, validates the token, and stores `user_id` and the raw JWT in
 `APP_CONTEXT`. Routes registered as `@public` are skipped entirely.
 
-`SessionAuthNMiddleware` (used by `bff-web`) extends the same base class but reads from a
-server-side Redis session instead of a header. It also handles transparent JWT refresh: if the
-stored token is within 60 seconds of expiry, it is refreshed before the request proceeds.
+Both extend `AuthNMiddleware` from `ristops-lib-core`. `bff-web` has its own
+`SessionAuthNMiddleware` on the same base, which reads a server-side Redis session instead of a
+header and refreshes the JWT transparently; see [bff-web](../services/bff-web.md).
 
 ## Authorization interceptor
 
@@ -39,17 +39,18 @@ param, or body field) at runtime, so the check is always scoped to the specific 
 accessed.
 
 ```python
-@router.get("/{location_id}")
-@policy(Policy(BaseResourceResolver(ResourceType.LOCATION), "location:get"))
+@router.get("/{venue_id}")
+@policy(Policy(BaseResourceResolver(ResourceType.VENUE), "venue:get"))
 @neo4j_transactional
-async def get_location(location_id: str): ...
+async def get_venue(venue_id: str): ...
 ```
 
 ## Authorization client
 
 Two helpers let a service talk to `be-authz` over HTTP, separate from the interceptor's own check.
 
-`CheckAuthorizationPolicy` is a thin client over `be-authz`'s `/acl/check` endpoint — it answers
+`CheckAuthorizationPolicy` is a thin client over `be-authz`'s `POST /users/{user_id}/acl-check`
+endpoint — it answers
 "does this user satisfy these grants?" and is the authorizer the `AuthZInterceptor` delegates to.
 
 `AuthorizationResourceGrantsFetcher` is a FastAPI dependency that **scopes** a query rather than
@@ -75,6 +76,8 @@ before the fetcher executes — the fetcher only ever shapes results, never gran
 ## Stream event base types
 
 This module provides the base class and event type enum shared by all Redis stream producers
-and consumers. `BaseEvent` captures `correlation_id` from `APP_CONTEXT` automatically at
-instantiation time via a Pydantic `default_factory`, so producers do not need to set it manually
-and the trace context flows through the message boundary without any extra code.
+and consumers. `BaseEvent` fills two fields automatically at instantiation time through Pydantic
+`default_factory`s, so producers set neither: `correlation_id` (the active trace ID, falling back
+to the request context and then a generated UUID) and `traceparent` (the W3C trace context of the
+publishing span, absent when telemetry is disabled). The consumer opens its span inside that
+context, which lets a trace continue across the queue.

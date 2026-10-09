@@ -69,6 +69,8 @@ be-authn   ──Redis stream──► be-authz         (user events)
 any svc    ──Redis stream──► be-authz         (resource events)
 be-venue   ──Redis stream──► be-reservation   (venue events — local read-model sync)
 be-venue   ──HTTP──────────► be-reservation   (venue activation: at least one service required)
+other svcs ──HTTP──────────► be-authn         (JWKS fetch, to verify JWTs locally)
+authn, venue, reservation ──HTTP──► be-authz  (ACL check on every authorized request)
 ```
 
 ### Middleware stack (order of execution, outermost first)
