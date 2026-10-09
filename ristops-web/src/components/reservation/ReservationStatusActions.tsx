@@ -56,6 +56,13 @@ const ACTIONS_BY_STATUS: Record<ReservationStatus, ActionKey[]> = {
   [ReservationStatus.Withdrawn]: [],
 };
 
+/**
+ * What can still be done to a booking on a service that no longer runs that day, being deleted
+ * or closed. Nothing is going to be served, so accepting it, declining it or seating the party
+ * makes no sense; it can only be called off by the customer or given up by the venue.
+ */
+const UNAVAILABLE_SERVICE_ACTIONS: ActionKey[] = ['cancel', 'withdraw'];
+
 const ACTION_LABEL: Record<ActionKey, string> = {
   confirm: 'Confirm',
   reject: 'Reject',
@@ -94,9 +101,11 @@ const ACTION_PERMISSION: Record<ActionKey, string> = {
 export default function ReservationStatusActions({
   venueId,
   reservation,
+  serviceUnavailable = false,
 }: {
   venueId: string;
   reservation: Reservation;
+  serviceUnavailable?: boolean;
 }) {
   const [form] = Form.useForm<ActionFormValues>();
   const [pendingAction, setPendingAction] = useState<ActionKey>();
@@ -125,7 +134,9 @@ export default function ReservationStatusActions({
   const withdrawReservation = useWithdrawReservation();
 
   const available = ACTIONS_BY_STATUS[reservation.status].filter(
-    (action) => allowed[action],
+    (action) =>
+      allowed[action] &&
+      (!serviceUnavailable || UNAVAILABLE_SERVICE_ACTIONS.includes(action)),
   );
   if (available.length === 0) return null;
 

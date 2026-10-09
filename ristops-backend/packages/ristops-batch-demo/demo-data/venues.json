@@ -7,8 +7,162 @@
       "description": "The ancient seat of the Kings in the North, a granite fortress warmed by hot springs beneath its walls. Its motto, 'Winter is Coming', greets every guest who braves the long road north.",
       "timezone": "Europe/London",
       "closings": [
-        { "dates": { "month_day_start": "01-15", "month_day_end": "02-05", "year_offsets": [-1, 0, 1] }, "description": "Deep winter — Winterfell rests" },
-        { "dates": { "month_day_start": "08-05", "month_day_end": "08-19", "year_offsets": [-1, 0, 1] }, "description": "Late summer hunting break" }
+        {
+          "dates": {
+            "month_day_start": "01-15",
+            "month_day_end": "02-05",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "description": "Deep winter — Winterfell rests",
+          "services": []
+        },
+        {
+          "dates": {
+            "month_day_start": "08-05",
+            "month_day_end": "08-19",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "description": "Late summer hunting break",
+          "services": []
+        },
+        {
+          "dates": {
+            "month_day_start": "10-10",
+            "month_day_end": "10-11",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "A Feast in the Great Hall"
+          ],
+          "description": "Kingsmoot recess"
+        },
+        {
+          "dates": {
+            "month_day_start": "12-21",
+            "month_day_end": "12-23",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "A Feast in the Great Hall"
+          ],
+          "description": "The Long Night vigil"
+        },
+        {
+          "dates": {
+            "month_day_start": "01-01",
+            "month_day_end": "01-01",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "A Feast in the Great Hall"
+          ],
+          "description": "New Year's Day (closed)"
+        },
+        {
+          "dates": {
+            "month_day_start": "09-21",
+            "month_day_end": "09-23",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "A Feast in the Great Hall"
+          ],
+          "description": "Makes room for Harvest feast"
+        },
+        {
+          "dates": {
+            "month_day_start": "03-15",
+            "month_day_end": "03-16",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "A Feast in the Great Hall"
+          ],
+          "description": "Makes room for Winterfell name-day feast"
+        },
+        {
+          "dates": {
+            "month_day_start": "04-04",
+            "month_day_end": "04-05",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "A Feast in the Great Hall"
+          ],
+          "description": "Makes room for Maiden's Day feast"
+        },
+        {
+          "dates": {
+            "month_day_start": "12-24",
+            "month_day_end": "12-26",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "A Feast in the Great Hall"
+          ],
+          "description": "Makes room for Yule feast in the Great Hall"
+        },
+        {
+          "dates": {
+            "month_day_start": "12-31",
+            "month_day_end": "12-31",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "A Feast in the Great Hall"
+          ],
+          "description": "Makes room for New Year's Eve vigil"
+        },
+        {
+          "dates": {
+            "month_day_start": "11-16",
+            "month_day_end": "11-16",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "Break of Fast at Winterfell"
+          ],
+          "description": "Fire in the Winterfell larder",
+          "after_reservations": true
+        }
       ]
     },
     {
@@ -18,8 +172,146 @@
       "description": "A brooding island citadel of carved dragons and black stone, once home to the last dragonlords of Valyria. 'Fire and Blood' is served here, under the shadow of the Dragonmont.",
       "timezone": "Europe/London",
       "closings": [
-        { "dates": { "month_day_start": "01-20", "month_day_end": "02-03", "year_offsets": [-1, 0, 1] }, "description": "Midwinter on the island" },
-        { "dates": { "month_day_start": "08-01", "month_day_end": "08-28", "year_offsets": [-1, 0, 1] }, "description": "Dragonstone summer recess" }
+        {
+          "dates": {
+            "month_day_start": "01-20",
+            "month_day_end": "02-03",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "description": "Midwinter on the island",
+          "services": []
+        },
+        {
+          "dates": {
+            "month_day_start": "08-01",
+            "month_day_end": "08-28",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "description": "Dragonstone summer recess",
+          "services": []
+        },
+        {
+          "dates": {
+            "month_day_start": "05-05",
+            "month_day_end": "05-06",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "Fire and Blood Brunch"
+          ],
+          "description": "Dragonmont ash-fall"
+        },
+        {
+          "dates": {
+            "month_day_start": "06-01",
+            "month_day_end": "07-31",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Dragonlord's Table"
+          ],
+          "description": "Closed every Monday (early summer rest)"
+        },
+        {
+          "dates": {
+            "month_day_start": "01-01",
+            "month_day_end": "01-02",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Dragonlord's Table"
+          ],
+          "description": "Recovering from the flames"
+        },
+        {
+          "dates": {
+            "month_day_start": "05-20",
+            "month_day_end": "05-21",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Dragonlord's Table"
+          ],
+          "description": "Makes room for Dragon's return gala"
+        },
+        {
+          "dates": {
+            "month_day_start": "08-14",
+            "month_day_end": "08-16",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Dragonlord's Table"
+          ],
+          "description": "Makes room for Fire and Blood festival"
+        },
+        {
+          "dates": {
+            "month_day_start": "12-24",
+            "month_day_end": "12-26",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Dragonlord's Table"
+          ],
+          "description": "Makes room for Longnight fires (Yule)"
+        },
+        {
+          "dates": {
+            "month_day_start": "12-31",
+            "month_day_end": "12-31",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Dragonlord's Table"
+          ],
+          "description": "Makes room for Year's End on Dragonstone"
+        },
+        {
+          "dates": {
+            "month_day_start": "10-21",
+            "month_day_end": "10-21",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [],
+          "description": "Storm over Dragonstone closes the whole venue",
+          "after_reservations": true
+        }
       ]
     },
     {
@@ -29,8 +321,133 @@
       "description": "A colossal stronghold hewn from a mountain above Lannisport, rich with gold and pride. As they say, a Lannister always pays his debts — 'Hear Me Roar!'",
       "timezone": "Europe/Madrid",
       "closings": [
-        { "dates": { "month_day_start": "01-25", "month_day_end": "02-08", "year_offsets": [-1, 0, 1] }, "description": "Casterly Rock winter close" },
-        { "dates": { "month_day_start": "08-10", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] }, "description": "The Rock's summer holiday" }
+        {
+          "dates": {
+            "month_day_start": "01-25",
+            "month_day_end": "02-08",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "description": "Casterly Rock winter close",
+          "services": []
+        },
+        {
+          "dates": {
+            "month_day_start": "08-10",
+            "month_day_end": "08-31",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "description": "The Rock's summer holiday",
+          "services": []
+        },
+        {
+          "dates": {
+            "month_day_start": "05-10",
+            "month_day_end": "05-11",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Rains of Castamere Supper"
+          ],
+          "description": "Gold count audit"
+        },
+        {
+          "dates": {
+            "month_day_start": "09-01",
+            "month_day_end": "09-03",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Rains of Castamere Supper"
+          ],
+          "description": "Debt collection week"
+        },
+        {
+          "dates": {
+            "month_day_start": "01-01",
+            "month_day_end": "01-05",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Rains of Castamere Supper"
+          ],
+          "description": "Midwinter shutdown"
+        },
+        {
+          "dates": {
+            "month_day_start": "05-15",
+            "month_day_end": "05-16",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Rains of Castamere Supper"
+          ],
+          "description": "Makes room for Royal banquet"
+        },
+        {
+          "dates": {
+            "month_day_start": "04-04",
+            "month_day_end": "04-05",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Rains of Castamere Supper"
+          ],
+          "description": "Makes room for Maiden's Day at Lannisport"
+        },
+        {
+          "dates": {
+            "month_day_start": "12-24",
+            "month_day_end": "12-26",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Rains of Castamere Supper"
+          ],
+          "description": "Makes room for Casterly Rock Yule feast"
+        },
+        {
+          "dates": {
+            "month_day_start": "12-31",
+            "month_day_end": "12-31",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "The Rains of Castamere Supper"
+          ],
+          "description": "Makes room for Golden Year's End"
+        }
       ]
     },
     {
@@ -40,7 +457,92 @@
       "description": "The black brotherhood that guards the realms of men from atop a seven-hundred-foot wall of ice. Those who take the black swear to hold no lands and win no glory — 'And now my watch begins.'",
       "timezone": "Europe/Madrid",
       "closings": [
-        { "dates": { "month_day_start": "01-10", "month_day_end": "01-31", "year_offsets": [-1, 0, 1] }, "description": "Deep winter provisioning — the Wall holds" }
+        {
+          "dates": {
+            "month_day_start": "01-10",
+            "month_day_end": "01-31",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "description": "Deep winter provisioning — the Wall holds",
+          "services": []
+        },
+        {
+          "dates": {
+            "month_day_start": "05-01",
+            "month_day_end": "05-02",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "Supper at Castle Black"
+          ],
+          "description": "Wildling raid on the Wall"
+        },
+        {
+          "dates": {
+            "month_day_start": "12-21",
+            "month_day_end": "12-23",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "Supper at Castle Black"
+          ],
+          "description": "The Long Night — the Watch holds"
+        },
+        {
+          "dates": {
+            "month_day_start": "04-04",
+            "month_day_end": "04-05",
+            "year_offsets": [
+              -1,
+              0,
+              1
+            ]
+          },
+          "services": [
+            "Supper at Castle Black"
+          ],
+          "description": "Closed Maiden's Day (Sunday)"
+        },
+        {
+          "dates": {
+            "month_day_start": "11-10",
+            "month_day_end": "11-12",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "Supper at Castle Black"
+          ],
+          "description": "Makes room for Feast of the First Men"
+        },
+        {
+          "dates": {
+            "month_day_start": "12-31",
+            "month_day_end": "12-31",
+            "year_offsets": [
+              0,
+              1
+            ]
+          },
+          "services": [
+            "Supper at Castle Black"
+          ],
+          "description": "Makes room for Year's End watch feast"
+        }
       ]
     }
   ]

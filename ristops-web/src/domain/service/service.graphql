@@ -1,15 +1,18 @@
+fragment ServiceFields on Service {
+    id
+    name
+    description
+    dateFrom
+    dateTo
+    capacity
+    deletedAt
+    createdAt
+    updatedAt
+}
+
 query GetService($id: ID!) {
     service(id: $id) {
-        id
-        name
-        description
-        turnTimeM
-        advanceNoticeM
-        slotIntervalM
-        gracePeriodM
-        deletedAt
-        createdAt
-        updatedAt
+        ...ServiceFields
         venue {
             id
             name
@@ -24,55 +27,19 @@ query GetService($id: ID!) {
 
 query ListServices($venueId: ID!, $name: String, $includeDeleted: Boolean) {
     listServices(venueId: $venueId, name: $name, includeDeleted: $includeDeleted) {
-        id
-        name
-        description
-        turnTimeM
-        advanceNoticeM
-        slotIntervalM
-        gracePeriodM
-        deletedAt
-        createdAt
-        updatedAt
+        ...ServiceFields
     }
 }
 
 mutation CreateService($input: CreateServiceInput!) {
     createService(input: $input) {
-        id
-        name
-        description
-        turnTimeM
-        advanceNoticeM
-        slotIntervalM
-        gracePeriodM
-        deletedAt
-        createdAt
-        updatedAt
-        venue {
-            id
-            name
-            address
-            description
-            status
-            createdAt
-            updatedAt
-        }
+        ...ServiceFields
     }
 }
 
 mutation UpdateService($id: ID!, $input: UpdateServiceInput!) {
     updateService(id: $id, input: $input) {
-        id
-        name
-        description
-        turnTimeM
-        advanceNoticeM
-        slotIntervalM
-        gracePeriodM
-        deletedAt
-        createdAt
-        updatedAt
+        ...ServiceFields
     }
 }
 

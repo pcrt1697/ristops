@@ -5,9 +5,7 @@ from typing import AsyncGenerator, Any
 from fastapi import FastAPI, APIRouter, Depends
 
 from ristops_be_reservation.domain.reservation.routers import reservation_router
-from ristops_be_reservation.domain.schedule.routers import schedule_router
-from ristops_be_reservation.domain.service.routers import service_router
-from ristops_be_reservation.domain.venue.routers import venue_closing_router
+from ristops_be_reservation.domain.service.routers import schedule_router, service_router
 from ristops_be_reservation.domain.venue.service import on_venue_event
 from ristops_be_reservation.services.authz import is_authorized
 from ristops_be_reservation.services.http import authn_client, authz_client
@@ -76,7 +74,6 @@ def create_app() -> FastAPI:
     api_router = APIRouter(prefix="/api")
     api_router.include_router(service_router)
     api_router.include_router(schedule_router)
-    api_router.include_router(venue_closing_router)
     api_router.include_router(reservation_router)
     app.include_router(api_router)
     # sits outside /api and is @public, so probes need neither auth nor a policy

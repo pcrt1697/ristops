@@ -431,21 +431,54 @@ prevents double-booking is impossible across service boundaries.
 ### Reservation config is a separate concern within `be-reservation`
 
 **Context:** The restaurant needs to configure opening times, services (lunch/dinner),
-slot duration, reservable seats, closures, and per-date exceptions. This config is required
-to compute availability, so it must live in the same DB as reservations. However, it serves
-a fundamentally different purpose — it is the rule set, not the operational data.
+reservable seats, and closures. This config is required to compute availability, so it must
+live in the same DB as reservations. However, it serves a fundamentally different purpose —
+it is the rule set, not the operational data.
 
-**Decision:** Config is split into two layers:
-
-- `ServiceConfig` — base rules (opening times, slot duration, weekdays)
-- `DayOverride` — per-date exceptions (closures, modified hours, special events)
-
-Slots are never stored; they are computed from these two layers at query time.
+**Decision:** Config lives in its own modules within `be-reservation`, never in a separate
+service. Availability is computed from it at query time and never stored.
 
 **Why:** Separating config from reservations means operational data never needs to change
-when rules change. The override model keeps exceptions from polluting the base config.
-Extracting config to a separate service would reintroduce the distributed coordination
-problem that the previous decision explicitly avoids.
+when rules change. Extracting config to a separate service would reintroduce the distributed
+coordination problem that the previous decision explicitly avoids.
+
+**Status:** Accepted — the two-layer `ServiceConfig`/`DayOverride` shape this entry originally
+prescribed is superseded by the entry below.
+
+---
+
+### One-off services replace schedule overrides
+
+**Context:** Configuration had grown four layers of exceptions — base openings, opening
+overrides, capacity overrides, and closings — resolved in precedence order at query time. The
+layers needed a cross-service overlap engine to keep a booking's service unambiguous, since a
+reservation carried no service reference and was matched to one by wall-clock time. That engine
+was the single largest piece of logic in the service, and the layers had to be surfaced in the UI
+for a user to predict what any given date would do.
+
+**Decision:** Collapse the model to three concepts:
+
+- `Service` — a validity date range plus a seat capacity
+- `Opening` — the hours it runs on one weekday
+- `Closing` — a date range removing one or more services from the calendar
+
+An exception is expressed as *another service*, bounded to the dates it applies to, paired with a
+closing on the service it replaces. Reservations gain a `service_id`, so a booking names its
+service instead of being matched to one. Turn duration, slot interval, advance notice and grace
+period are dropped: a booking may sit at any minute inside its service's window, and capacity is
+counted per service per business date.
+
+**Why:** A one-off service is the same concept a user already understands, applied to a narrower
+date range — it needs no precedence rules to explain. Storing the service on the booking removes
+the reason the overlap check had to be exhaustive: it survives now only to keep a venue's schedule
+readable, and reduces to comparing weekday windows and looking for a date both services actually
+run. Counting capacity per service, rather than as peak concurrency over rolling turn windows,
+makes the number staff see the one the rule enforces.
+
+**Trade-off:** A recurring exception costs one service per occurrence rather than one row (a
+weekday-scoped seasonal change, for instance, has no single-row equivalent), and a closing cannot
+be shrunk or deleted when doing so would re-expose an overlap it was hiding. Both are accepted in
+exchange for a model with no precedence order to learn.
 
 **Status:** Accepted
 

@@ -1,27 +1,27 @@
 import logging
-from typing import NamedTuple
 from datetime import date, datetime, time, timedelta, UTC
 from http import HTTPStatus
+from typing import NamedTuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import select, ScalarResult, ColumnElement
+from sqlalchemy import select, ScalarResult, ColumnElement, and_, false, or_
 
+from ristops_be_reservation.domain.models import ReservationViolation
 from ristops_be_reservation.domain.reservation.entities import ReservationEntity
 from ristops_be_reservation.domain.reservation.schema import (
     ReservationCreationRequest, ReservationUpdateRequest, ReservationResponse, ReservationSearchQuery,
-    ReservationActionRequest, ReservationActionType, ReservationStatus, ReservationViolation,
-    CheckInReservationAction, OverCapacitySlot,
-    CalendarQuery, CalendarResponse, CalendarDay, CalendarServiceSummary,
-    AvailabilityQuery, AvailabilityResponse, ServiceAvailability, AvailabilitySlot,
-    AvailabilityBlocker,
+    ReservationActionRequest, ReservationActionType, ReservationStatus,
+    CheckInReservationAction, CalendarQuery, CalendarResponse, CalendarDay, CalendarServiceSummary,
+    ClosedServiceSummary, DeletedServiceSummary,
 )
-from ristops_be_reservation.domain.schedule.service import (
-    resolve_bookable_slot_or_throw, load_venue_schedule_snapshot, reservation_violation,
-    resolve_slot, resolve_day_slots, slot_times, SlotInfo, VenueScheduleSnapshot,
+from ristops_be_reservation.domain.service.entities import ServiceEntity
+from ristops_be_reservation.domain.service.service import (
+    ServiceSchedule, SlotInfo, VenueScheduleSnapshot, business_day_bounds, find_service_or_throw,
+    load_schedules,
+    load_venue_schedule_snapshot, reservation_violation, resolve_day_slots, slot_covering,
 )
-from ristops_be_reservation.domain.service.service import find_service_or_throw
 from ristops_be_reservation.domain.venue.entities import VenueEntity
 from ristops_be_reservation.domain.venue.service import (
     find_venue_or_throw, check_venue_accepts_reservations,
@@ -30,7 +30,6 @@ from ristops_be_reservation.services.resource import publish_resource_created_ev
 from ristops_lib_core.schema.authz import ResourceType
 from ristops_lib_core.schema.pagination import Page
 from ristops_lib_core.utils import to_local_naive, to_utc_instant
-from ristops_lib_otel.tracing import traced
 from ristops_lib_sql.engine import get_sql_session
 from ristops_lib_sql.search import PaginatedSearchQueryExecutor
 
@@ -61,22 +60,54 @@ _ACTION_TARGET_STATUS: dict[ReservationActionType, ReservationStatus] = {
 }
 
 
-def _build_reservation_conditions(query: ReservationSearchQuery, tz: ZoneInfo) -> list[ColumnElement[bool]]:
-    """WHERE conditions from the filter: venue (mandatory), optional status set and venue-local
-    date range (converted to UTC instant bounds)."""
+async def _date_condition(
+        query: ReservationSearchQuery, tz: ZoneInfo,
+) -> ColumnElement[bool] | None:
+    """Restrict a search to the business dates in ``[date_from, date_to]``, or ``None`` when no
+    date is asked for.
+
+    A booking's business date comes from its own service, since only an overnight service moves
+    it off the calendar date. So each of the venue's services, deleted ones included, gets its own
+    instant range, and the ranges are OR-ed together.
+    """
+    if query.date_from is None and query.date_to is None:
+        return None
+    conditions: list[ColumnElement[bool]] = [ServiceEntity.venue_id == query.venue_id]
+    if query.service_id is not None:
+        conditions.append(ServiceEntity.id == query.service_id)
+    session = get_sql_session()
+    services = list((await session.scalars(select(ServiceEntity).where(*conditions))).all())
+
+    per_service: list[ColumnElement[bool]] = []
+    for schedule in await load_schedules(services):
+        in_range: list[ColumnElement[bool]] = [ReservationEntity.service_id == schedule.service.id]
+        if query.date_from is not None:
+            start = business_day_bounds(schedule, query.date_from)[0]
+            in_range.append(ReservationEntity.reservation_date >= to_utc_instant(start, tz))
+        if query.date_to is not None:
+            end = business_day_bounds(schedule, query.date_to)[1]
+            in_range.append(ReservationEntity.reservation_date < to_utc_instant(end, tz))
+        per_service.append(and_(*in_range))
+    return or_(*per_service) if per_service else false()
+
+
+def _build_reservation_conditions(
+        query: ReservationSearchQuery, date_condition: ColumnElement[bool] | None,
+) -> list[ColumnElement[bool]]:
+    """WHERE conditions from the filter: venue (mandatory), optional service, status set and
+    business-date range."""
     conditions: list[ColumnElement[bool]] = [ReservationEntity.venue_id == query.venue_id]
+    if query.service_id is not None:
+        conditions.append(ReservationEntity.service_id == query.service_id)
     if query.status:
         conditions.append(ReservationEntity.status.in_([s.value for s in query.status]))
-    start, end = query.date_bounds(tz)
-    if start is not None:
-        conditions.append(ReservationEntity.reservation_date >= start)
-    if end is not None:
-        conditions.append(ReservationEntity.reservation_date < end)
+    if date_condition is not None:
+        conditions.append(date_condition)
     return conditions
 
 
 _reservation_list_executor: PaginatedSearchQueryExecutor[
-    ReservationSearchQuery, ZoneInfo, ReservationEntity, ReservationResponse
+    ReservationSearchQuery, ColumnElement[bool] | None, ReservationEntity, ReservationResponse
 ] = PaginatedSearchQueryExecutor(
     entity_class=ReservationEntity,
     response_class=ReservationResponse,
@@ -94,106 +125,120 @@ def _to_response(reservation: ReservationEntity, tz: ZoneInfo) -> ReservationRes
 
 def _violation_for(
         instant: datetime,
+        service_id: UUID,
         status: str,
         snapshot: VenueScheduleSnapshot,
         tz: ZoneInfo,
         now: datetime,
 ) -> ReservationViolation | None:
-    """The schedule violation of a stored reservation (UTC ``instant``, string ``status``) under
-    the current schedule, or None. Only future bookings in a live status can be violated."""
+    """The schedule violation of a stored reservation under the current schedule, or None. Only
+    future bookings in a live status can be violated."""
     if status not in _VIOLATION_ELIGIBLE_STATUSES or instant <= now:
         return None
-    reason = reservation_violation(snapshot, to_local_naive(instant, tz))
-    return ReservationViolation(reason) if reason is not None else None
+    return reservation_violation(snapshot.for_service(service_id), to_local_naive(instant, tz))
 
 
-@traced("reservation.ensure_slot_available")
-async def _ensure_slot_available(
-        venue: VenueEntity,
-        reservation_local: datetime,
-        party_size: int,
+async def _load_service_schedule(service: ServiceEntity) -> ServiceSchedule:
+    """Preload one service's openings and closings."""
+    schedules = await load_schedules([service])
+    return schedules[0]
+
+
+async def _booked_seats(
+        service_id: UUID,
+        slot: SlotInfo,
+        tz: ZoneInfo,
         exclude_reservation_id: UUID | None = None,
-) -> datetime:
-    """Validate that ``party_size`` can be booked at ``reservation_local`` (naive venue-local) at
-    ``venue``, raising HTTP 409 otherwise, and return the UTC instant to store.
+) -> int:
+    """Seats already taken inside a service's window on one business date.
 
-    The service is inferred from venue + datetime (reservations carry no service reference). Checks,
-    in order: the venue has a service open then (venue/service closings, opening + overrides,
-    including overnight openings — via ``resolve_bookable_slot_or_throw``); advance-notice lead
-    time; the requested time sits on a slot boundary and the whole turn fits before closing; and
-    enough seats remain once existing overlapping reservations are counted against the resolved
-    capacity. Seats are counted by venue + time overlap rather than by service — equivalent while a
-    venue's services don't overlap in time (service-conflict handling is a later task).
+    The window itself is the bucket: a service holds exactly one window per business date, so any
+    live booking whose instant falls in it belongs to that date. Bookings left outside by a later
+    hours change are not counted — they are violations, reported per-reservation, not capacity.
     """
-    tz = ZoneInfo(venue.timezone)
-    instant = to_utc_instant(reservation_local, tz)
-
-    snapshot = await load_venue_schedule_snapshot(venue.id)
-    slot = resolve_bookable_slot_or_throw(snapshot, reservation_local)
-    service = slot.service
-    # Lock the inferred service so concurrent bookings under it serialize on the capacity check.
-    await find_service_or_throw(service.id, for_update=True)
-
-    now = datetime.now(UTC)
-    if instant < now + timedelta(minutes=service.advance_notice_m):
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail=f"Reservations require at least {service.advance_notice_m} minutes advance notice",
-        )
-
-    turn = timedelta(minutes=service.turn_time_m)
-    if reservation_local < slot.opens_at or reservation_local + turn > slot.closes_at:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail="The requested time is outside the service opening hours",
-        )
-    if reservation_local not in slot_times(slot):
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail=f"The requested time is not a valid reservation slot "
-                   f"(every {service.slot_interval_m} minutes from opening)",
-        )
-
     session = get_sql_session()
     conditions: list[ColumnElement[bool]] = [
-        ReservationEntity.venue_id == venue.id,
-        ReservationEntity.status.in_(_OCCUPYING_STATUSES),
-        ReservationEntity.reservation_date > instant - turn,
-        ReservationEntity.reservation_date < instant + turn,
+        ReservationEntity.service_id == service_id,
+        ReservationEntity.status.in_([s.value for s in _OCCUPYING_STATUSES]),
+        ReservationEntity.reservation_date >= to_utc_instant(slot.opens_at, tz),
+        ReservationEntity.reservation_date < to_utc_instant(slot.closes_at, tz),
     ]
     if exclude_reservation_id is not None:
         conditions.append(ReservationEntity.id != exclude_reservation_id)
     result: ScalarResult[ReservationEntity] = await session.scalars(
         select(ReservationEntity).where(*conditions)
     )
-    booked = sum(row.party_size for row in result.all())
+    return sum(row.party_size for row in result.all())
+
+
+async def _ensure_bookable(
+        venue: VenueEntity,
+        service_id: UUID,
+        reservation_local: datetime,
+        party_size: int,
+        exclude_reservation_id: UUID | None = None,
+) -> datetime:
+    """Validate that ``party_size`` can be booked into ``service_id`` at ``reservation_local``
+    (naive venue-local), raising HTTP 409 otherwise, and return the UTC instant to store.
+
+    Checks, in order: the service belongs to the venue; it runs that date and the instant falls
+    inside its opening window (an overnight window is matched against the previous business date
+    too); no closing covers that date; and the seats already booked into the same window leave
+    room for the party. The service row is locked first, so concurrent bookings into it serialize
+    on the seat count.
+    """
+    service = await find_service_or_throw(service_id, for_update=True)
+    if service.venue_id != venue.id:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail="The service does not belong to this venue",
+        )
+
+    schedule = await _load_service_schedule(service)
+    covering = slot_covering(schedule, reservation_local)
+    if covering is None:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail=f"'{service.name}' is not open at the requested time",
+        )
+    slot, closed = covering
+    if closed:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail=f"'{service.name}' is closed on {slot.business_date.isoformat()}",
+        )
+
+    tz = ZoneInfo(venue.timezone)
+    booked = await _booked_seats(service_id, slot, tz, exclude_reservation_id)
     if booked + party_size > slot.capacity:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail="Not enough seats available for the requested time",
+            detail=f"Not enough seats left in '{service.name}' on "
+                   f"{slot.business_date.isoformat()}: {slot.capacity - booked} of "
+                   f"{slot.capacity} remaining",
         )
-    return instant
+    return to_utc_instant(reservation_local, tz)
 
 
 async def create_reservation(request: ReservationCreationRequest) -> ReservationResponse:
-    """Create a new reservation at a venue.
+    """Create a new reservation at a venue, booked into one of its services.
 
-    Requires the venue to be ACTIVE, then infers the service open at the requested time and
-    validates slot availability (opening hours, slot alignment, turn fit and seat capacity) under
-    a lock on that service before inserting. The reservation is anchored to venue + datetime only.
+    Requires the venue to be ACTIVE, then validates the requested time and party against that
+    service's opening window, closings and capacity under a lock on the service.
     ``reservation_date`` is accepted as naive venue-local wall-clock and stored as the
     corresponding UTC instant.
     """
     venue = await find_venue_or_throw(request.venue_id)
     check_venue_accepts_reservations(venue)
 
-    instant = await _ensure_slot_available(
-        venue, request.reservation_date, request.party_size
+    instant = await _ensure_bookable(
+        venue, request.service_id, request.reservation_date, request.party_size,
     )
 
     session = get_sql_session()
     reservation = ReservationEntity(
         venue_id=request.venue_id,
+        service_id=request.service_id,
         status=ReservationStatus.PENDING,
         reservation_date=instant,
         party_size=request.party_size,
@@ -242,7 +287,8 @@ async def get_reservation(reservation_id: UUID) -> ReservationResponse:
     snapshot = await load_venue_schedule_snapshot(venue.id)
     response = _to_response(reservation, tz)
     response.violation = _violation_for(
-        reservation.reservation_date, reservation.status, snapshot, tz, datetime.now(UTC),
+        reservation.reservation_date, reservation.service_id, reservation.status,
+        snapshot, tz, datetime.now(UTC),
     )
     return response
 
@@ -250,11 +296,11 @@ async def get_reservation(reservation_id: UUID) -> ReservationResponse:
 async def update_reservation(reservation_id: UUID, request: ReservationUpdateRequest) -> ReservationResponse:
     """Update a reservation. Only fields present in the request body are modified.
 
-    When an availability-affecting field (``reservation_date`` or ``party_size``) changes, the
-    venue must be ACTIVE and the resulting slot is re-validated the same way a create is — the
-    service is re-inferred from venue + datetime and hours, slot alignment, turn fit and seat
-    capacity are checked (excluding this reservation from the seat count). ``reservation_date`` is
-    accepted as naive venue-local wall-clock and stored as a UTC instant.
+    When an availability-affecting field (``reservation_date``, ``party_size`` or ``service_id``)
+    is given, the venue must be ACTIVE and the booking is re-validated against its service the
+    same way a create is, excluding this reservation from the seat count. Giving a ``service_id``
+    moves the booking onto that service, which is how one left on a closed or deleted service is
+    rehomed.
     """
     reservation = await find_reservation_or_throw(reservation_id, for_update=True)
     venue = await find_venue_or_throw(reservation.venue_id)
@@ -268,18 +314,21 @@ async def update_reservation(reservation_id: UUID, request: ReservationUpdateReq
     if "notes" in fields_to_update:
         reservation.notes = request.notes
 
-    changes_slot = bool({"reservation_date", "party_size"} & fields_to_update)
-    if changes_slot:
+    changes_booking = bool({"reservation_date", "party_size", "service_id"} & fields_to_update)
+    if changes_booking:
         check_venue_accepts_reservations(venue)
         reservation_local = (
             request.reservation_date if request.reservation_date is not None
             else to_local_naive(reservation.reservation_date, tz)
         )
         party_size = request.party_size if request.party_size is not None else reservation.party_size
+        service_id = request.service_id if request.service_id is not None else reservation.service_id
 
-        instant = await _ensure_slot_available(
-            venue, reservation_local, party_size, exclude_reservation_id=reservation.id
+        instant = await _ensure_bookable(
+            venue, service_id, reservation_local, party_size,
+            exclude_reservation_id=reservation.id,
         )
+        reservation.service_id = service_id
         reservation.party_size = party_size
         reservation.reservation_date = instant
 
@@ -291,7 +340,11 @@ async def update_reservation(reservation_id: UUID, request: ReservationUpdateReq
 
 
 async def _list_violated_reservations(
-        query: ReservationSearchQuery, tz: ZoneInfo, snapshot: VenueScheduleSnapshot, now: datetime,
+        query: ReservationSearchQuery,
+        date_condition: ColumnElement[bool] | None,
+        tz: ZoneInfo,
+        snapshot: VenueScheduleSnapshot,
+        now: datetime,
 ) -> Page[ReservationResponse]:
     """The 'needs attention' view: every future live (pending/confirmed) reservation of the venue
     that no longer fits the current schedule. Violations are computed, not stored, so this can't
@@ -303,22 +356,23 @@ async def _list_violated_reservations(
         ReservationEntity.status.in_([s.value for s in _VIOLATION_ELIGIBLE_STATUSES]),
         ReservationEntity.reservation_date > now,
     ]
-    start, end = query.date_bounds(tz)
-    if start is not None:
-        conditions.append(ReservationEntity.reservation_date >= start)
-    if end is not None:
-        conditions.append(ReservationEntity.reservation_date < end)
+    if query.service_id is not None:
+        conditions.append(ReservationEntity.service_id == query.service_id)
+    if date_condition is not None:
+        conditions.append(date_condition)
     rows = list((await session.scalars(
         select(ReservationEntity).where(*conditions).order_by(ReservationEntity.reservation_date)
     )).all())
 
     violated: list[ReservationResponse] = []
     for row in rows:
-        reason = reservation_violation(snapshot, to_local_naive(row.reservation_date, tz))
-        if reason is None:
+        violation = reservation_violation(
+            snapshot.for_service(row.service_id), to_local_naive(row.reservation_date, tz),
+        )
+        if violation is None:
             continue
         response = _to_response(row, tz)
-        response.violation = ReservationViolation(reason)
+        response.violation = violation
         violated.append(response)
 
     offset = query.page * query.page_size
@@ -334,248 +388,199 @@ async def list_reservations(query: ReservationSearchQuery) -> Page[ReservationRe
     tz = ZoneInfo(venue.timezone)
     snapshot = await load_venue_schedule_snapshot(venue.id)
     now = datetime.now(UTC)
+    date_condition = await _date_condition(query, tz)
 
     if query.violations_only:
-        return await _list_violated_reservations(query, tz, snapshot, now)
+        return await _list_violated_reservations(query, date_condition, tz, snapshot, now)
 
-    page = await _reservation_list_executor.execute(query, tz)
+    page = await _reservation_list_executor.execute(query, date_condition)
     for item in page.items:
-        item.violation = _violation_for(item.reservation_date, item.status, snapshot, tz, now)
+        item.violation = _violation_for(
+            item.reservation_date, item.service_id, item.status, snapshot, tz, now,
+        )
         item.reservation_date = to_local_naive(item.reservation_date, tz)
     return page
 
 
-def _peak_concurrent_seats(entries: list[tuple[datetime, int, int]]) -> int:
-    """Max concurrent booked seats across half-open ``[start, start+turn)`` windows. Each entry is
-    ``(start_local, party_size, turn_minutes)``. Touching windows don't overlap: at a shared
-    instant, seat releases are applied before takes."""
-    events: list[tuple[datetime, int]] = []
-    for start, party, turn_m in entries:
-        events.append((start, party))
-        events.append((start + timedelta(minutes=turn_m), -party))
-    events.sort(key=lambda event: (event[0], event[1]))
-    peak = current = 0
-    for _instant, delta in events:
-        current += delta
-        peak = max(peak, current)
-    return peak
+class _DayBookings(NamedTuple):
+    """Live bookings resolved onto one (service, business date)."""
 
-
-class _SlotBookings(NamedTuple):
-    """The live bookings that currently resolve onto one (service, business date) slot.
-
-    The lists are filled after construction as reservations are bucketed, so they are passed in
-    explicitly rather than defaulted — a shared default would be the same list for every slot.
-    """
-
-    slot: SlotInfo
-    entries: list[tuple[datetime, int, int]]
-    reservation_ids: list[UUID]
-
-    @property
-    def peak_booked(self) -> int:
-        """Peak concurrent booked seats over the slot's window."""
-        return _peak_concurrent_seats(self.entries)
+    seats: int
+    count: int
 
 
 async def _load_occupying_reservations(
-        venue_id: UUID, instant_from: datetime | None = None, instant_to: datetime | None = None,
+        venue_id: UUID, instant_from: datetime, instant_to: datetime,
 ) -> list[ReservationEntity]:
-    """Reservations of a venue that hold a seat, optionally bounded to a half-open UTC instant
-    range."""
-    conditions: list[ColumnElement[bool]] = [
-        ReservationEntity.venue_id == venue_id,
-        ReservationEntity.status.in_([s.value for s in _OCCUPYING_STATUSES]),
-    ]
-    if instant_from is not None:
-        conditions.append(ReservationEntity.reservation_date >= instant_from)
-    if instant_to is not None:
-        conditions.append(ReservationEntity.reservation_date < instant_to)
+    """Reservations of a venue that hold a seat within a half-open UTC instant range."""
     session = get_sql_session()
     result: ScalarResult[ReservationEntity] = await session.scalars(
-        select(ReservationEntity).where(*conditions)
+        select(ReservationEntity).where(
+            ReservationEntity.venue_id == venue_id,
+            ReservationEntity.status.in_([s.value for s in _OCCUPYING_STATUSES]),
+            ReservationEntity.reservation_date >= instant_from,
+            ReservationEntity.reservation_date < instant_to,
+        )
     )
     return list(result.all())
 
 
 def _bookings_by_slot(
         rows: list[ReservationEntity], snapshot: VenueScheduleSnapshot, tz: ZoneInfo,
-) -> dict[tuple[UUID, date], _SlotBookings]:
-    """Bucket reservations onto the slot each one currently resolves to.
+) -> dict[tuple[UUID, date], _DayBookings]:
+    """Bucket reservations onto the (service, business date) each one currently falls in.
 
-    Bookings that no longer resolve to any open slot are dropped: that is a hard violation
-    (surfaced per-reservation as ``violation``), not a capacity figure.
+    Bookings that no longer land in their service's window are dropped: that is a violation,
+    surfaced per-reservation, not a capacity figure.
     """
-    by_slot: dict[tuple[UUID, date], _SlotBookings] = {}
+    by_slot: dict[tuple[UUID, date], _DayBookings] = {}
     for row in rows:
-        local = to_local_naive(row.reservation_date, tz)
-        slot = resolve_slot(snapshot, local)
-        if not isinstance(slot, SlotInfo):
+        schedule = snapshot.for_service(row.service_id)
+        if schedule is None:
             continue
-        bookings = by_slot.setdefault(
-            (slot.service.id, slot.business_date), _SlotBookings(slot, [], []),
-        )
-        bookings.entries.append((local, row.party_size, slot.service.turn_time_m))
-        bookings.reservation_ids.append(row.id)
+        covering = slot_covering(schedule, to_local_naive(row.reservation_date, tz))
+        if covering is None:
+            continue
+        key = (row.service_id, covering[0].business_date)
+        current = by_slot.get(key, _DayBookings(0, 0))
+        by_slot[key] = _DayBookings(current.seats + row.party_size, current.count + 1)
     return by_slot
 
 
-async def list_over_capacity_slots(venue_id: UUID) -> list[OverCapacitySlot]:
-    """Slots (service + venue-local date) where live future bookings now exceed the effective
-    capacity. Computed on read against the current schedule — a capacity/hours cut can push a slot
-    over without touching the reservations (see the invalidation policy)."""
-    venue = await find_venue_or_throw(venue_id)
-    tz = ZoneInfo(venue.timezone)
-    snapshot = await load_venue_schedule_snapshot(venue_id)
-    rows = await _load_occupying_reservations(venue_id, instant_from=datetime.now(UTC))
+def _closed_services_by_date(
+        rows: list[ReservationEntity], snapshot: VenueScheduleSnapshot, tz: ZoneInfo, now: datetime,
+) -> dict[date, list[ClosedServiceSummary]]:
+    """The services a closing removes from each business date while they still hold bookings that
+    need staff attention, grouped by date.
 
-    over = [
-        OverCapacitySlot(
-            service_id=bookings.slot.service.id,
-            service_name=bookings.slot.service.name,
-            business_date=bookings.slot.business_date,
-            capacity=bookings.slot.capacity,
-            peak_booked=bookings.peak_booked,
-            reservation_ids=bookings.reservation_ids,
-        )
-        for bookings in _bookings_by_slot(rows, snapshot, tz).values()
-        if bookings.peak_booked > bookings.slot.capacity
-    ]
-    over.sort(key=lambda slot: (slot.business_date, slot.service_name))
-    return over
-
-
-@traced("reservation.calendar")
-async def list_calendar_days(query: CalendarQuery) -> CalendarResponse:
-    """Per-day, per-service occupancy of a venue over a date window — the month-grid summary.
-
-    For each business date in the window, resolves which services open (`resolve_day_slots`) and
-    how full each is, reusing the same seat arithmetic as the over-capacity view. Dates with
-    neither an open service nor a closing are omitted, so a caller can render "nothing scheduled"
-    by absence. Read-only: no lock, no validation.
+    These are the bookings `reservation_violation` reports as closed. The services running that
+    day do not list them, so the calendar would otherwise have no way to show them.
     """
-    venue = await find_venue_or_throw(query.venue_id)
-    tz = ZoneInfo(venue.timezone)
-    snapshot = await load_venue_schedule_snapshot(venue.id)
+    counts: dict[tuple[date, UUID], int] = {}
+    for row in rows:
+        if row.status not in _VIOLATION_ELIGIBLE_STATUSES or row.reservation_date <= now:
+            continue
+        schedule = snapshot.for_service(row.service_id)
+        if schedule is None:
+            continue
+        covering = slot_covering(schedule, to_local_naive(row.reservation_date, tz))
+        if covering is None or not covering[1]:
+            continue
+        key = (covering[0].business_date, row.service_id)
+        counts[key] = counts.get(key, 0) + 1
 
-    # Widen the scan by a day on each side: an overnight opening on the day before the window
-    # can hold bookings that land inside it, and vice versa.
-    instant_from = to_utc_instant(datetime.combine(query.date_from - timedelta(days=1), time.min), tz)
-    instant_to = to_utc_instant(datetime.combine(query.date_to + timedelta(days=2), time.min), tz)
-    rows = await _load_occupying_reservations(query.venue_id, instant_from, instant_to)
-    by_slot = _bookings_by_slot(rows, snapshot, tz)
+    by_date: dict[date, list[ClosedServiceSummary]] = {}
+    for (business_date, service_id), count in counts.items():
+        schedule = snapshot.for_service(service_id)
+        by_date.setdefault(business_date, []).append(ClosedServiceSummary(
+            service_id=service_id,
+            service_name=schedule.service.name,
+            reservation_count=count,
+        ))
+    for closed_services in by_date.values():
+        closed_services.sort(key=lambda summary: summary.service_name)
+    return by_date
 
-    days: list[CalendarDay] = []
-    business_date = query.date_from
-    while business_date <= query.date_to:
-        slots, closed = resolve_day_slots(snapshot, business_date)
-        if slots or closed:
-            days.append(CalendarDay(
-                business_date=business_date,
-                closed=closed,
-                services=[_calendar_summary(slot, by_slot) for slot in slots],
-            ))
-        business_date += timedelta(days=1)
-    return CalendarResponse(days=days)
+
+async def _deleted_services_by_date(
+        rows: list[ReservationEntity], snapshot: VenueScheduleSnapshot, tz: ZoneInfo, now: datetime,
+) -> dict[date, list[DeletedServiceSummary]]:
+    """The deleted services that still hold bookings needing staff attention, grouped by the
+    business date each booking falls on.
+
+    A deleted service is not in the snapshot, so its schedule is loaded here to place each
+    booking on the date of the window containing it. One outside every window is placed on its
+    own calendar date.
+    """
+    live_ids = {schedule.service.id for schedule in snapshot.schedules}
+    eligible = [
+        row for row in rows
+        if row.service_id not in live_ids
+        and row.status in _VIOLATION_ELIGIBLE_STATUSES
+        and row.reservation_date > now
+    ]
+    if not eligible:
+        return {}
+
+    session = get_sql_session()
+    services = list((await session.scalars(
+        select(ServiceEntity).where(ServiceEntity.id.in_({row.service_id for row in eligible}))
+    )).all())
+    schedules = {schedule.service.id: schedule for schedule in await load_schedules(services)}
+
+    counts: dict[tuple[date, UUID], int] = {}
+    for row in eligible:
+        local = to_local_naive(row.reservation_date, tz)
+        covering = slot_covering(schedules[row.service_id], local)
+        key = (covering[0].business_date if covering else local.date(), row.service_id)
+        counts[key] = counts.get(key, 0) + 1
+
+    by_date: dict[date, list[DeletedServiceSummary]] = {}
+    for (business_date, service_id), count in counts.items():
+        by_date.setdefault(business_date, []).append(DeletedServiceSummary(
+            service_id=service_id,
+            service_name=schedules[service_id].service.name,
+            reservation_count=count,
+        ))
+    for deleted_services in by_date.values():
+        deleted_services.sort(key=lambda summary: summary.service_name)
+    return by_date
 
 
 def _calendar_summary(
-        slot: SlotInfo, by_slot: dict[tuple[UUID, date], _SlotBookings],
+        slot: SlotInfo, by_slot: dict[tuple[UUID, date], _DayBookings],
 ) -> CalendarServiceSummary:
-    """Summarize one open service on one date against the bookings resolved onto it."""
-    bookings = by_slot.get((slot.service.id, slot.business_date))
-    peak = bookings.peak_booked if bookings is not None else 0
+    """Summarize one service running on one date against the bookings resolved onto it."""
+    bookings = by_slot.get((slot.service.id, slot.business_date), _DayBookings(0, 0))
     return CalendarServiceSummary(
         service_id=slot.service.id,
         service_name=slot.service.name,
         opens_at=slot.opens_at,
         closes_at=slot.closes_at,
         capacity=slot.capacity,
-        peak_booked=peak,
-        reservation_count=len(bookings.reservation_ids) if bookings is not None else 0,
-        over_capacity=peak > slot.capacity,
+        booked=bookings.seats,
+        remaining=slot.capacity - bookings.seats,
+        reservation_count=bookings.count,
+        over_capacity=bookings.seats > slot.capacity,
     )
 
 
-@traced("reservation.availability")
-async def list_availability(query: AvailabilityQuery) -> AvailabilityResponse:
-    """Read-only preview of the slots a party could be booked into on one date (what a create
-    would 409 on).
+async def list_calendar_days(query: CalendarQuery) -> CalendarResponse:
+    """Per-day, per-service occupancy of a venue over a date window — the month-grid summary and
+    the source of what is still bookable on a day.
 
-    Every service open that date is listed with its window, so a caller can render the day's shape
-    even when nothing is bookable. Within a service, the slot grid comes from `slot_times` — the
-    same helper the write path validates against — and each slot is scored against the seats
-    already taken by overlapping bookings. Slots at or before ``now + advance_notice_m`` are
-    omitted, so a past date yields services with no slots. Authorization and the definitive
-    capacity check still happen on write, under a lock.
+    For each business date in the window, resolves which services run (`resolve_day_slots`) and
+    how full each is. Dates with neither a running service nor a closing are omitted, so a caller
+    can render "nothing scheduled" by absence. Read-only: no lock, no validation.
     """
     venue = await find_venue_or_throw(query.venue_id)
     tz = ZoneInfo(venue.timezone)
     snapshot = await load_venue_schedule_snapshot(venue.id)
-    slots, closed = resolve_day_slots(snapshot, query.business_date)
 
-    now_local = to_local_naive(datetime.now(UTC), tz)
-    # A day's slots can only overlap bookings on the day before or after (an overnight opening
-    # runs past midnight, and a turn started late still occupies the next morning).
-    instant_from = to_utc_instant(datetime.combine(query.business_date - timedelta(days=1), time.min), tz)
-    instant_to = to_utc_instant(datetime.combine(query.business_date + timedelta(days=2), time.min), tz)
-    rows = [
-        row for row in await _load_occupying_reservations(query.venue_id, instant_from, instant_to)
-        if row.id != query.exclude_reservation_id
-    ]
-    booked_entries = [
-        (to_local_naive(row.reservation_date, tz), row.party_size) for row in rows
-    ]
+    # Widen the scan by a day on each side: an overnight opening on the day before the window can
+    # hold bookings that land inside it, and vice versa.
+    instant_from = to_utc_instant(datetime.combine(query.date_from - timedelta(days=1), time.min), tz)
+    instant_to = to_utc_instant(datetime.combine(query.date_to + timedelta(days=2), time.min), tz)
+    rows = await _load_occupying_reservations(query.venue_id, instant_from, instant_to)
+    by_slot = _bookings_by_slot(rows, snapshot, tz)
+    now = datetime.now(UTC)
+    closed_by_date = _closed_services_by_date(rows, snapshot, tz, now)
+    deleted_by_date = await _deleted_services_by_date(rows, snapshot, tz, now)
 
-    return AvailabilityResponse(
-        business_date=query.business_date,
-        closed=closed,
-        services=[
-            _service_availability(slot, booked_entries, now_local, query.party_size)
-            for slot in slots
-        ],
-    )
-
-
-def _service_availability(
-        slot: SlotInfo,
-        booked_entries: list[tuple[datetime, int]],
-        now_local: datetime,
-        party_size: int,
-) -> ServiceAvailability:
-    """Score one service's slot grid against the seats already booked around each slot."""
-    turn = timedelta(minutes=slot.service.turn_time_m)
-    earliest = now_local + timedelta(minutes=slot.service.advance_notice_m)
-
-    slots: list[AvailabilitySlot] = []
-    for slot_at in slot_times(slot):
-        if slot_at <= earliest:
-            continue
-        booked = sum(
-            party for start, party in booked_entries
-            if slot_at - turn < start < slot_at + turn
-        )
-        remaining = slot.capacity - booked
-        bookable = remaining >= party_size
-        slots.append(AvailabilitySlot(
-            slot_at=slot_at,
-            booked=booked,
-            remaining=remaining,
-            bookable=bookable,
-            blocker=None if bookable else AvailabilityBlocker.INSUFFICIENT_SEATS,
-        ))
-
-    return ServiceAvailability(
-        service_id=slot.service.id,
-        service_name=slot.service.name,
-        business_date=slot.business_date,
-        opens_at=slot.opens_at,
-        closes_at=slot.closes_at,
-        capacity=slot.capacity,
-        turn_time_m=slot.service.turn_time_m,
-        slot_interval_m=slot.service.slot_interval_m,
-        slots=slots,
-    )
+    days: list[CalendarDay] = []
+    business_date = query.date_from
+    while business_date <= query.date_to:
+        slots, closed = resolve_day_slots(snapshot, business_date)
+        if slots or closed or business_date in deleted_by_date:
+            days.append(CalendarDay(
+                business_date=business_date,
+                closed=closed,
+                services=[_calendar_summary(slot, by_slot) for slot in slots],
+                closed_services=closed_by_date.get(business_date, []),
+                deleted_services=deleted_by_date.get(business_date, []),
+            ))
+        business_date += timedelta(days=1)
+    return CalendarResponse(days=days)
 
 
 async def update_reservation_status(

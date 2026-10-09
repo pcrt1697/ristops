@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { DatePicker, Flex, Tooltip, Typography, theme } from 'antd';
+import { DatePicker, Flex, Popover, Typography, theme } from 'antd';
 import { ExclamationCircleFilled } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useReservationCalendar } from '../../domain/reservation/reservation.hooks.ts';
 import type { ReservationCalendarQuery } from '../../services/graphql/graphql.ts';
+import ServiceCapacity, { UnavailableServiceNotice } from './ServiceCapacity.tsx';
 
 const { Text } = Typography;
 
@@ -24,6 +25,7 @@ const WEEKDAYS = [
 // reaching either edge loads the same number again in that direction.
 const MONTHS_PER_SIDE = 5;
 const EDGE_PX = 320;
+const FETCH_DELAY_MS = 250;
 
 interface ReservationCalendarProps {
   venueId: string;
@@ -36,8 +38,9 @@ interface ReservationCalendarProps {
  * months run one after another in a single scroll surface, extended as either edge is reached,
  * so navigating a year away is a scroll rather than twelve clicks.
  *
- * Cells stay deliberately bare — a day number, and a warning only where a service is over
- * capacity. Occupancy per service lives in the day pane, where there is room to read it.
+ * Cells stay deliberately bare — a day number, a dot where the day has reservations, and a
+ * warning where a service is over capacity or a closed or deleted one still holds bookings. Hovering a day
+ * with reservations shows each service's occupancy; the day pane has the full detail.
  */
 export default function ReservationCalendar({
   venueId,
@@ -140,9 +143,9 @@ interface MonthBlockProps {
 }
 
 /**
- * One month of the scrolling list. Its occupancy is fetched the first time it is scrolled near
- * the viewport, so mounting a couple of years of months costs one request per month actually
- * looked at.
+ * One month of the scrolling list. Its occupancy is fetched once it has stayed near the viewport
+ * for a moment, and again each time it comes back, so a booking made elsewhere shows up. The
+ * pause keeps a fast scroll from fetching every month it passes.
  */
 function MonthBlock({
   ref,
@@ -153,26 +156,35 @@ function MonthBlock({
 }: MonthBlockProps) {
   const { token } = theme.useToken();
   const blockRef = useRef<HTMLDivElement>(null);
-  const [seen, setSeen] = useState(false);
+  const [nearViewport, setNearViewport] = useState(false);
 
   useEffect(() => {
     const el = blockRef.current;
-    if (!el || seen) return;
+    if (!el) return;
+    let timer: number | undefined;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) setSeen(true);
+        window.clearTimeout(timer);
+        if (entry.isIntersecting) {
+          timer = window.setTimeout(() => setNearViewport(true), FETCH_DELAY_MS);
+        } else {
+          setNearViewport(false);
+        }
       },
       { rootMargin: '200px' },
     );
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [seen]);
+    return () => {
+      window.clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, []);
 
   const { data } = useReservationCalendar(
     venueId,
     month.startOf('month').format('YYYY-MM-DD'),
     month.endOf('month').format('YYYY-MM-DD'),
-    seen,
+    nearViewport,
   );
   const dayByDate = new Map((data ?? []).map((day) => [day.businessDate, day]));
 
@@ -237,9 +249,18 @@ function DayCell({ day, summary, selectedDate, onSelectDate }: DayCellProps) {
   const isSelected = dateIso === selectedDate;
   const isToday = day.isSame(dayjs(), 'day');
   const isSelectable = !!summary;
-  const overCapacity = summary?.services.filter((s) => s.overCapacity) ?? [];
+  const hasOverCapacity = summary?.services.some((s) => s.overCapacity) ?? false;
+  const hasUnavailableBookings =
+    (summary?.closedServices.length ?? 0) + (summary?.deletedServices.length ?? 0) > 0;
+  const reservationCount = summary
+    ? [
+        ...summary.services,
+        ...summary.closedServices,
+        ...summary.deletedServices,
+      ].reduce((total, service) => total + service.reservationCount, 0)
+    : 0;
 
-  return (
+  const cell = (
     <div
       onClick={isSelectable ? () => onSelectDate(dateIso) : undefined}
       style={{
@@ -262,30 +283,55 @@ function DayCell({ day, summary, selectedDate, onSelectDate }: DayCellProps) {
       >
         {day.date()}
       </Text>
-      {overCapacity.length > 0 && (
-        <Tooltip
-          title={
-            <>
-              {overCapacity.map((service) => (
-                <div key={service.serviceId}>
-                  {service.serviceName}: {service.peakBooked} booked / {service.capacity}{' '}
-                  seats ({service.peakBooked - service.capacity} over)
-                </div>
-              ))}
-            </>
-          }
-        >
-          <ExclamationCircleFilled
-            style={{
-              position: 'absolute',
-              top: 2,
-              right: 2,
-              fontSize: 10,
-              color: token.colorError,
-            }}
-          />
-        </Tooltip>
+      {(hasOverCapacity || hasUnavailableBookings) && (
+        <ExclamationCircleFilled
+          style={{
+            position: 'absolute',
+            top: 2,
+            right: 2,
+            fontSize: 10,
+            color: hasOverCapacity ? token.colorError : token.colorWarning,
+          }}
+        />
+      )}
+      {reservationCount > 0 && (
+        <span
+          style={{
+            position: 'absolute',
+            bottom: 4,
+            left: '50%',
+            width: 5,
+            height: 5,
+            marginLeft: -2.5,
+            borderRadius: '50%',
+            background: token.colorPrimary,
+          }}
+        />
       )}
     </div>
+  );
+
+  if (!summary || reservationCount === 0) return cell;
+
+  return (
+    <Popover
+      placement="right"
+      mouseEnterDelay={0.3}
+      content={
+        <Flex vertical gap={12}>
+          {summary.services.map((service) => (
+            <ServiceCapacity key={service.serviceId} service={service} />
+          ))}
+          {summary.closedServices.map((service) => (
+            <UnavailableServiceNotice key={service.serviceId} service={service} reason="closed" />
+          ))}
+          {summary.deletedServices.map((service) => (
+            <UnavailableServiceNotice key={service.serviceId} service={service} reason="deleted" />
+          ))}
+        </Flex>
+      }
+    >
+      {cell}
+    </Popover>
   );
 }

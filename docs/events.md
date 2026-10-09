@@ -22,3 +22,4 @@ groups and stale-message reclaim via `XAUTOCLAIM`.
 |--------|-----------|-----------|---------|
 | `user:lifecycle` | `be-authn` | `be-authz` | User created / deleted — keeps the ACL graph in sync |
 | `resource:lifecycle` | any service | `be-authz` | Resource created / deleted — registers domain resources in the ACL graph |
+| `venue:lifecycle` | `be-venue` | `be-reservation` | Venue created / updated — feeds the local venue read model (timezone, status) |

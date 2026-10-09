@@ -23,39 +23,33 @@ const { Text } = Typography;
 
 type Reservation = SearchReservationsQuery['reservations']['items'][number];
 
-/** A booking paired with the service window it resolved to. */
-export interface ReservationRow {
-  reservation: Reservation;
-  service?: { serviceId: string; serviceName: string };
-}
-
 const ROWS_PER_PAGE = 20;
 
 interface ReservationTableProps {
   venueId: string;
-  rows: ReservationRow[];
-  /** Show the service column; hidden when the pane is already filtered to one service. */
-  showService: boolean;
+  reservations: Reservation[];
+  /** The bookings are on a service that is deleted or closed that day, so only cancel and withdraw remain. */
+  serviceUnavailable: boolean;
   canEdit: boolean;
   onEdit: (reservation: Reservation) => void;
 }
 
-/** The day's bookings, ordered by time across every service. */
+/** One service's bookings for the day, in the order given. */
 export default function ReservationTable({
   venueId,
-  rows,
-  showService,
+  reservations,
+  serviceUnavailable,
   canEdit,
   onEdit,
 }: ReservationTableProps) {
   const { token } = theme.useToken();
 
-  const columns: TableProps<ReservationRow>['columns'] = [
+  const columns: TableProps<Reservation>['columns'] = [
     {
       title: 'Time',
       key: 'time',
       width: 90,
-      render: (_, { reservation }) => (
+      render: (_, reservation) => (
         <>
           <Text strong>{dayjs(reservation.reservationDate).format('HH:mm')}</Text>
           {reservation.violation && (
@@ -68,32 +62,21 @@ export default function ReservationTable({
         </>
       ),
     },
-    ...(showService
-      ? [
-          {
-            title: 'Service',
-            key: 'service',
-            render: (_: unknown, { service }: ReservationRow) => (
-              <Text type="secondary">{service?.serviceName}</Text>
-            ),
-          } satisfies NonNullable<TableProps<ReservationRow>['columns']>[number],
-        ]
-      : []),
     {
       title: 'People',
       key: 'partySize',
       width: 80,
-      render: (_, { reservation }) => reservation.partySize,
+      render: (_, reservation) => reservation.partySize,
     },
     {
       title: 'Customer',
       key: 'contactName',
-      render: (_, { reservation }) => reservation.contactName,
+      render: (_, reservation) => reservation.contactName,
     },
     {
       title: 'Contact',
       key: 'contact',
-      render: (_, { reservation }) => (
+      render: (_, reservation) => (
         <Text type="secondary">
           {[reservation.contactPhoneNumber, reservation.contactEmail]
             .filter(Boolean)
@@ -105,7 +88,7 @@ export default function ReservationTable({
       title: 'Status',
       key: 'status',
       width: 130,
-      render: (_, { reservation }) => (
+      render: (_, reservation) => (
         <>
           <Tag color={STATUS_COLOR[reservation.status]}>
             {statusLabel(reservation.status)}
@@ -122,7 +105,7 @@ export default function ReservationTable({
       key: 'actions',
       width: 88,
       align: 'right',
-      render: (_, { reservation }) => (
+      render: (_, reservation) => (
         <Space size={0}>
           {canEdit && EDITABLE_STATUSES.includes(reservation.status) && (
             <Tooltip title="Edit">
@@ -133,24 +116,28 @@ export default function ReservationTable({
               />
             </Tooltip>
           )}
-          <ReservationStatusActions venueId={venueId} reservation={reservation} />
+          <ReservationStatusActions
+            venueId={venueId}
+            reservation={reservation}
+            serviceUnavailable={serviceUnavailable}
+          />
         </Space>
       ),
     },
   ];
 
   return (
-    <Table<ReservationRow>
-      rowKey={({ reservation }) => reservation.id}
+    <Table<Reservation>
+      rowKey={(reservation) => reservation.id}
       size="small"
       columns={columns}
-      dataSource={rows}
-      pagination={rows.length > ROWS_PER_PAGE ? { pageSize: ROWS_PER_PAGE } : false}
+      dataSource={reservations}
+      pagination={reservations.length > ROWS_PER_PAGE ? { pageSize: ROWS_PER_PAGE } : false}
       expandable={{
         // Notes are the only long field; keeping them out of the row preserves the time
         // column's alignment, which is what staff scan during service.
-        expandedRowRender: ({ reservation }) => <Text>{reservation.notes}</Text>,
-        rowExpandable: ({ reservation }) => !!reservation.notes,
+        expandedRowRender: (reservation) => <Text>{reservation.notes}</Text>,
+        rowExpandable: (reservation) => !!reservation.notes,
       }}
     />
   );

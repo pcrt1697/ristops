@@ -14,7 +14,7 @@ import { useService } from '../../domain/service/service.hooks.ts';
 import { useServiceOpenings } from '../../domain/schedule/schedule.hooks.ts';
 import { ResourceType } from '../../services/graphql/graphql.ts';
 import ServiceWeeklyHours from '../../components/service/ServiceWeeklyHours.tsx';
-import ServiceScheduleOverrides from '../../components/service/ServiceScheduleOverrides.tsx';
+import { formatValidity } from '../../domain/schedule/schedule.utils.ts';
 
 const { Title } = Typography;
 
@@ -65,18 +65,12 @@ export default function VenueServiceSchedulePage() {
         </Button>
       </Flex>
 
-      <Descriptions size="small" column={4} style={{ marginTop: 16 }}>
-        <Descriptions.Item label="Turn time">
-          {service.turnTimeM} min
+      <Descriptions size="small" column={2} style={{ marginTop: 16 }}>
+        <Descriptions.Item label="Runs">
+          {formatValidity(service.dateFrom, service.dateTo)}
         </Descriptions.Item>
-        <Descriptions.Item label="Slot interval">
-          {service.slotIntervalM} min
-        </Descriptions.Item>
-        <Descriptions.Item label="Min notice">
-          {service.advanceNoticeM} min
-        </Descriptions.Item>
-        <Descriptions.Item label="Grace period">
-          {service.gracePeriodM} min
+        <Descriptions.Item label="Capacity">
+          {service.capacity} seats
         </Descriptions.Item>
       </Descriptions>
 
@@ -85,17 +79,7 @@ export default function VenueServiceSchedulePage() {
       </Divider>
       <ServiceWeeklyHours
         serviceId={serviceId}
-        openings={openingsData?.serviceOpenings ?? []}
-        canEdit={canEdit}
-      />
-
-      <Divider titlePlacement="start" style={{ marginTop: 48 }}>
-        Schedule overrides
-      </Divider>
-      <ServiceScheduleOverrides
-        venueId={venueId}
-        serviceId={serviceId}
-        openings={openingsData?.serviceOpenings ?? []}
+        openings={openingsData ?? []}
         canEdit={canEdit}
       />
     </>

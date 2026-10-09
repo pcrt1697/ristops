@@ -7,12 +7,11 @@ from fastapi.params import Path
 
 from ristops_be_reservation.domain.reservation.schema import (
     ReservationCreationRequest, ReservationUpdateRequest, ReservationResponse, ReservationSearchQuery,
-    ReservationActionRequest, ReservationActionType, OverCapacityResponse,
-    CalendarQuery, CalendarResponse, AvailabilityQuery, AvailabilityResponse,
+    ReservationActionRequest, ReservationActionType, CalendarQuery, CalendarResponse,
 )
 from ristops_be_reservation.domain.reservation.service import (
     create_reservation, get_reservation, update_reservation, list_reservations,
-    update_reservation_status, list_over_capacity_slots, list_calendar_days, list_availability,
+    update_reservation_status, list_calendar_days,
 )
 from ristops_lib_be.authz.policy import (
     policy, BaseResourceResolver, Policy, resolve_body_attribute, resolve_query_attribute,
@@ -53,53 +52,18 @@ reservation_router = APIRouter(
 
 
 @reservation_router.get(
-    "/over-capacity",
-    response_model=OverCapacityResponse,
-)
-@policy(Policy(_venue_plain_query_resolver, "reservation:list"))
-@sql_transactional
-async def over_capacity(
-        venue_id: Annotated[UUID, Query(description="Venue ID")],
-) -> OverCapacityResponse:
-    """Slots of the venue whose live future bookings now exceed the effective capacity, computed
-    against the current schedule. Authorized against the venue."""
-    return OverCapacityResponse(slots=await list_over_capacity_slots(venue_id))
-
-
-@reservation_router.get(
     "/calendar",
     response_model=CalendarResponse,
-    responses={
-        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
-    },
 )
 @policy(Policy(_venue_plain_query_resolver, "reservation:list"))
 @sql_transactional
 async def calendar(
         query: Annotated[CalendarQuery, Query()],
 ) -> CalendarResponse:
-    """Per-day, per-service occupancy of a venue over a date window — the month-grid summary.
-    A date with nothing open is simply absent from the result, never an error. Authorized
-    against the venue."""
+    """Per-day, per-service occupancy of a venue over a date window: which services run each day,
+    their hours, and how many seats are taken. Also the source of what is still bookable on a
+    day. Authorized against the venue."""
     return await list_calendar_days(query)
-
-
-@reservation_router.get(
-    "/availabilities",
-    response_model=AvailabilityResponse,
-    responses={
-        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
-    },
-)
-@policy(Policy(_venue_plain_query_resolver, "reservation:list"))
-@sql_transactional
-async def availabilities(
-        query: Annotated[AvailabilityQuery, Query()],
-) -> AvailabilityResponse:
-    """Read-only preview of which slots a party could be booked into on a date (what a create
-    would 409 on). A closed or fully-booked date is an empty result, not an error. Authorized
-    against the venue."""
-    return await list_availability(query)
 
 
 @reservation_router.get(
@@ -114,8 +78,8 @@ async def availabilities(
 async def get(
         reservation_id: Annotated[UUID, Path(description="Reservation ID")],
 ) -> ReservationResponse:
-    """Return a reservation by ID. Authorized against the reservation itself, inheriting
-    grants from its venue via the ReBAC hierarchy."""
+    """Return a reservation by ID. Authorized against the reservation itself, inheriting grants
+    from its venue via the ReBAC hierarchy."""
     return await get_reservation(reservation_id)
 
 
@@ -128,7 +92,7 @@ async def get(
 async def get_reservations(
         query: Annotated[ReservationSearchQuery, Query()],
 ) -> Page[ReservationResponse]:
-    """Return a page of reservations for a venue matching the given filters, sorted per the
+    """Return reservations for a venue matching the given filters, sorted and paginated per the
     query. Authorized against the venue."""
     return await list_reservations(query)
 
@@ -138,10 +102,11 @@ async def get_reservations(
     response_model=ReservationResponse,
     status_code=HTTPStatus.CREATED,
     responses={
-        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue not found"},
+        HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Venue or service not found"},
         HTTPStatus.CONFLICT: {
             "model": ErrorResponse,
-            "description": "Venue not accepting reservations, no service open, or slot unavailable",
+            "description": "Venue is not accepting reservations, the service is not open at the "
+                           "requested time, or not enough seats remain",
         },
     },
 )
@@ -150,8 +115,8 @@ async def get_reservations(
 async def create(
         request: ReservationCreationRequest,
 ) -> ReservationResponse:
-    """Create a new reservation at a venue; the service is inferred from the requested date and
-    time. Authorized against the venue, since the reservation does not exist yet."""
+    """Book a reservation into one of a venue's services. Authorized against the venue, since the
+    reservation does not exist yet."""
     return await create_reservation(request)
 
 
@@ -162,7 +127,8 @@ async def create(
         HTTPStatus.NOT_FOUND: {"model": ErrorResponse, "description": "Reservation not found"},
         HTTPStatus.CONFLICT: {
             "model": ErrorResponse,
-            "description": "Venue not accepting reservations, no service open, or slot unavailable",
+            "description": "Venue is not accepting reservations, the service is not open at the "
+                           "new time, or not enough seats remain",
         },
     },
 )
@@ -172,8 +138,9 @@ async def update(
         reservation_id: Annotated[UUID, Path(description="Reservation ID")],
         request: ReservationUpdateRequest,
 ) -> ReservationResponse:
-    """Update a reservation. Only fields present in the request body are modified. Authorized
-    against the reservation itself."""
+    """Update a reservation. Only fields present in the request body are modified; changing the
+    time or party size re-validates the booking against its service. Authorized against the
+    reservation itself."""
     return await update_reservation(reservation_id, request)
 
 

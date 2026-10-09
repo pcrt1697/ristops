@@ -12,13 +12,21 @@ import type {
 } from '../../services/graphql/graphql.ts';
 import { reservationApi } from './reservation.api.ts';
 
-/** Invalidate every reservation-derived query (detail, lists, over-capacity) after a mutation. */
+/**
+ * Error text for a failed booking write. A 409 says exactly why — the service is not open then,
+ * it is closed that date, or the seats are gone — which the form should show verbatim.
+ */
+function bookingError(error: unknown, fallback: string): string {
+  const status = (error as { status?: number })?.status;
+  const detail = (error as { message?: string })?.message;
+  return status === 409 && detail ? detail : fallback;
+}
+
+/** Invalidate every reservation-derived query (detail, lists, calendar) after a mutation. */
 function invalidateReservations(queryClient: QueryClient) {
   void queryClient.invalidateQueries({ queryKey: ['reservation'] });
   void queryClient.invalidateQueries({ queryKey: ['reservations'] });
-  void queryClient.invalidateQueries({ queryKey: ['reservations.overCapacity'] });
   void queryClient.invalidateQueries({ queryKey: ['reservations.calendar'] });
-  void queryClient.invalidateQueries({ queryKey: ['reservations.availability'] });
 }
 
 export function useReservation(id: string) {
@@ -29,23 +37,18 @@ export function useReservation(id: string) {
   });
 }
 
-export function useSearchReservations(input: ReservationSearchInput) {
+export function useSearchReservations(input: ReservationSearchInput, enabled = true) {
   return useQuery({
     queryKey: ['reservations', input],
     queryFn: () => reservationApi.searchReservations(input),
-    enabled: !!input.filter.venueId,
+    enabled: enabled && !!input.filter.venueId,
   });
 }
 
-export function useReservationOverCapacity(venueId: string) {
-  return useQuery({
-    queryKey: ['reservations.overCapacity', venueId],
-    queryFn: () => reservationApi.reservationOverCapacity(venueId),
-    enabled: !!venueId,
-  });
-}
-
-/** Per-day, per-service occupancy over a window — the month grid. */
+/**
+ * Per-day, per-service occupancy over a window — the month grid, and the source of a day's
+ * services and remaining seats for the booking form.
+ */
 export function useReservationCalendar(
   venueId: string,
   dateFrom: string,
@@ -61,41 +64,13 @@ export function useReservationCalendar(
   });
 }
 
-/**
- * Slots a party could be booked into on a date. Disabled until a date and party size are
- * entered, so the booking form doesn't query while the user is still filling it in.
- */
-export function useReservationAvailability(
-  venueId: string,
-  businessDate: string | undefined,
-  partySize: number | undefined,
-  excludeReservationId?: string | null,
-) {
-  return useQuery({
-    queryKey: [
-      'reservations.availability',
-      venueId,
-      businessDate,
-      partySize,
-      excludeReservationId,
-    ],
-    queryFn: () =>
-      reservationApi.reservationAvailability(
-        venueId,
-        businessDate!,
-        partySize!,
-        excludeReservationId,
-      ),
-    enabled: !!venueId && !!businessDate && !!partySize,
-  });
-}
-
 export function useCreateReservation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateReservationInput) => reservationApi.createReservation(input),
     onSuccess: () => invalidateReservations(queryClient),
-    onError: () => void message.error('Could not create the reservation'),
+    onError: (error) =>
+      void message.error(bookingError(error, 'Could not create the reservation')),
   });
 }
 
@@ -105,7 +80,8 @@ export function useUpdateReservation() {
     mutationFn: ({ id, input }: { id: string; input: UpdateReservationInput }) =>
       reservationApi.updateReservation(id, input),
     onSuccess: () => invalidateReservations(queryClient),
-    onError: () => void message.error('Could not update the reservation'),
+    onError: (error) =>
+      void message.error(bookingError(error, 'Could not update the reservation')),
   });
 }
 

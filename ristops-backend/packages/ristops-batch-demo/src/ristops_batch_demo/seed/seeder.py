@@ -7,7 +7,7 @@ from typing import Awaitable, Callable
 from fastapi import HTTPException
 
 from ristops_batch_demo.seed.models import (
-    DemoAssignments, DemoExceptionDates, DemoReservation, DemoReservations, DemoService,
+    DemoAssignments, DemoDateRange, DemoReservation, DemoReservations, DemoService,
     DemoServices, DemoUsers, DemoVenues,
 )
 from ristops_batch_demo.services.http import (
@@ -18,10 +18,10 @@ from ristops_lib_core.context import APP_CONTEXT, ContextKey
 _logger = logging.getLogger(__name__)
 
 
-def _expand_exception_dates(anchor: DemoExceptionDates) -> list[tuple[date, date]]:
-    """Materialize a calendar exception's fixed annual 'MM-DD' date spec into concrete
-    `(start, end)` ranges, one per entry in `year_offsets` (relative to the current year only —
-    never to today's exact date, so seed data is stable regardless of when it is seeded)."""
+def _expand_dates(anchor: DemoDateRange) -> list[tuple[date, date]]:
+    """Materialize a fixed annual 'MM-DD' date spec into concrete `(start, end)` ranges, one per
+    entry in `year_offsets` (relative to the current year only — never to today's exact date, so
+    seed data is stable regardless of when it is seeded)."""
     current_year = date.today().year
     start_month, start_day = (int(part) for part in anchor.month_day_start.split("-"))
     end_month, end_day = (int(part) for part in anchor.month_day_end.split("-"))
@@ -71,11 +71,14 @@ class DemoSeeder:
         self._venue_ids: dict[str, str] = {}
         # Venue ids that received at least one service, and so may be activated.
         self._venues_with_services: set[str] = set()
+        # Service periods by (venue key, service name), so closings and bookings can name a
+        # service rather than carry an id. A service repeated over several years has one entry
+        # per period, and a booking resolves to the one covering its date.
+        self._service_ids: dict[tuple[str, str], list[tuple[date, date | None, str]]] = {}
         self._service_count = 0
-        self._override_count = 0
+        self._services_to_delete: list[tuple[str, str]] = []
+        self._deleted_count = 0
         self._closing_count = 0
-        self._capacity_override_count = 0
-        self._venue_closing_count = 0
         self._reservation_count = 0
         self._reservation_skipped = 0
 
@@ -85,23 +88,30 @@ class DemoSeeder:
         await self._login_as_admin()
         await self._create_users()
         await self._create_venues()
-        await self._create_services()
-        await self._create_venue_closings()
+        # Order matters. The closings that name a service come before the bounded services,
+        # because a closing is what frees a date for a one-off that would otherwise overlap a
+        # regular service. The venue-wide ones come last, so they cover those one-offs too.
+        await self._create_services(bounded=False)
+        await self._create_closings(venue_wide=False, after_reservations=False)
+        await self._create_services(bounded=True)
+        await self._create_closings(venue_wide=True, after_reservations=False)
         await self._grant_roles()
         await self._activate_venues()
         # Bookings come last: a venue only accepts them once it is ACTIVE.
         await self._create_reservations()
+        # Closings meant to cover those bookings can only be made once the bookings exist, and
+        # before the services marked as deleted go, since a closing needs live services.
+        await self._create_closings(venue_wide=False, after_reservations=True)
+        await self._create_closings(venue_wide=True, after_reservations=True)
+        await self._delete_services()
         _logger.info(
-            "Demo seed complete: %d users, %d venues, %d services, %d overrides, "
-            "%d closings, %d capacity overrides, %d venue closings, "
+            "Demo seed complete: %d users, %d venues, %d services (%d deleted), %d closings, "
             "%d reservations (%d skipped).",
             len(self._user_ids),
             len(self._venue_ids),
             self._service_count,
-            self._override_count,
+            self._deleted_count,
             self._closing_count,
-            self._capacity_override_count,
-            self._venue_closing_count,
             self._reservation_count,
             self._reservation_skipped,
         )
@@ -149,9 +159,16 @@ class DemoSeeder:
             self._venue_ids[venue.key] = venue_id
             _logger.info("Created venue [%s] -> %s", venue.key, venue_id)
 
-    async def _create_services(self) -> None:
-        """Create every demo service under its venue, resolving the venue by symbolic key."""
+    async def _create_services(self, bounded: bool) -> None:
+        """Create the demo services under their venues, resolving the venue by symbolic key.
+
+        Runs twice: once for the services with no date range (they run indefinitely), and once,
+        after the closings exist, for the bounded ones — a one-off service usually overlaps a
+        regular service's hours, and it is the closing on that date that makes room for it.
+        """
         for service in self._services.services:
+            if (service.dates is not None) != bounded:
+                continue
             venue_id = self._venue_ids.get(service.venue)
             if venue_id is None:
                 _logger.warning(
@@ -160,31 +177,54 @@ class DemoSeeder:
                     service.venue,
                 )
                 continue
-            response = await reservation_client.client.post(
-                "/services",
-                json={
-                    "venue_id": venue_id,
-                    "name": service.name,
-                    "description": service.description,
-                    "turn_time_m": service.turn_time_m,
-                    "advance_notice_m": service.advance_notice_m,
-                    "slot_interval_m": service.slot_interval_m,
-                    "grace_period_m": service.grace_period_m,
-                },
-            )
-            service_id = response.json()["id"]
-            self._venues_with_services.add(venue_id)
-            self._service_count += 1
-            _logger.info(
-                "Created service [%s] on venue [%s] -> %s",
-                service.name,
-                service.venue,
-                service_id,
-            )
-            await self._upsert_openings(service_id, service)
-            await self._create_overrides(service_id, service)
-            await self._create_closings(service_id, service)
-            await self._create_capacity_overrides(service_id, service)
+            for date_from, date_to in self._service_periods(service):
+                await self._create_service_on(venue_id, service, date_from, date_to)
+
+    @staticmethod
+    def _service_periods(service: DemoService) -> list[tuple[date, date | None]]:
+        """The validity periods to create a service for: one per expanded date range, or a single
+        open-ended period starting a year back when the service carries no dates."""
+        if service.dates is None:
+            return [(date(date.today().year - 1, 1, 1), None)]
+        return [
+            (date_from, date_to) for date_from, date_to in _expand_dates(service.dates)
+        ]
+
+    async def _create_service_on(
+            self,
+            venue_id: str,
+            service: DemoService,
+            date_from: date,
+            date_to: date | None,
+    ) -> None:
+        """Create one validity period of a demo service, then set its weekly openings."""
+        response = await reservation_client.client.post(
+            "/services",
+            json={
+                "venue_id": venue_id,
+                "name": service.name,
+                "description": service.description,
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat() if date_to is not None else None,
+                "capacity": service.capacity,
+            },
+        )
+        service_id = response.json()["id"]
+        self._venues_with_services.add(venue_id)
+        self._service_count += 1
+        if service.deleted:
+            self._services_to_delete.append((service_id, service.name))
+        self._service_ids.setdefault((service.venue, service.name), []).append(
+            (date_from, date_to, service_id)
+        )
+        _logger.info(
+            "Created service [%s] on venue [%s] from %s -> %s",
+            service.name,
+            service.venue,
+            date_from,
+            service_id,
+        )
+        await self._upsert_openings(service_id, service)
 
     async def _write_with_authz_retry(
             self,
@@ -232,111 +272,88 @@ class DemoSeeder:
             "Set %d weekly openings on service [%s].", len(service.openings), service.name
         )
 
-    async def _create_overrides(self, service_id: str, service: DemoService) -> None:
-        """Create the calendar opening overrides for a service, expanding each date spec."""
-        for override in service.overrides:
-            for date_start, date_end in _expand_exception_dates(override.dates):
-                payload = {
-                    "date_start": date_start.isoformat(),
-                    "date_end": date_end.isoformat(),
-                    "weekdays": [override.weekday] if override.weekday else None,
-                    "capacity": override.capacity,
-                    "start_time": override.start_time,
-                    "end_time": override.end_time,
-                    "description": override.description,
-                }
-                await self._write_with_authz_retry(
-                    lambda p=payload: reservation_client.client.post(
-                        f"/services/{service_id}/opening-overrides", json=p
-                    ),
-                    f"override for [{service.name}]",
-                )
-                self._override_count += 1
-                _logger.info(
-                    "Created override on [%s]: %s to %s.",
-                    service.name, date_start, date_end,
-                )
+    async def _create_closings(self, venue_wide: bool, after_reservations: bool) -> None:
+        """Create the demo closings of one kind, expanding each date spec and resolving the
+        service names it targets.
 
-    async def _create_closings(self, service_id: str, service: DemoService) -> None:
-        """Create the calendar closings for a service, expanding each date spec."""
-        for closing in service.closings:
-            for date_start, date_end in _expand_exception_dates(closing.dates):
-                payload = {
-                    "date_start": date_start.isoformat(),
-                    "date_end": date_end.isoformat(),
-                    "weekdays": [closing.weekday] if closing.weekday else None,
-                    "description": closing.description,
-                }
-                await self._write_with_authz_retry(
-                    lambda p=payload: reservation_client.client.post(
-                        f"/services/{service_id}/closings", json=p
-                    ),
-                    f"closing for [{service.name}]",
-                )
-                self._closing_count += 1
-                _logger.info(
-                    "Created closing on [%s]: %s to %s.",
-                    service.name, date_start, date_end,
-                )
-
-    async def _create_capacity_overrides(self, service_id: str, service: DemoService) -> None:
-        """Create the calendar capacity overrides for a service, expanding each date spec."""
-        for capacity_override in service.capacity_overrides:
-            for date_start, date_end in _expand_exception_dates(capacity_override.dates):
-                payload = {
-                    "date_start": date_start.isoformat(),
-                    "date_end": date_end.isoformat(),
-                    "weekdays": [capacity_override.weekday] if capacity_override.weekday else None,
-                    "capacity_delta": capacity_override.capacity_delta,
-                    "description": capacity_override.description,
-                }
-                await self._write_with_authz_retry(
-                    lambda p=payload: reservation_client.client.post(
-                        f"/services/{service_id}/capacity-overrides", json=p
-                    ),
-                    f"capacity override for [{service.name}]",
-                )
-                self._capacity_override_count += 1
-                _logger.info(
-                    "Created capacity override on [%s]: %s to %s.",
-                    service.name, date_start, date_end,
-                )
-
-    async def _create_venue_closings(self) -> None:
-        """Create the venue-wide closings for every demo venue, expanding each date spec."""
+        ``venue_wide`` selects the closings that name no service — they close every service of
+        the venue, so they are seeded last, once the bounded services exist too.
+        ``after_reservations`` selects the closings flagged to be made once the bookings exist.
+        """
         for venue in self._venues.venues:
             venue_id = self._venue_ids.get(venue.key)
             if venue_id is None:
                 continue
             for closing in venue.closings:
-                for date_start, date_end in _expand_exception_dates(closing.dates):
-                    payload = {
-                        "date_start": date_start.isoformat(),
-                        "date_end": date_end.isoformat(),
-                        "weekdays": [closing.weekday] if closing.weekday else None,
-                        "description": closing.description,
-                    }
-                    await self._write_with_authz_retry(
-                        lambda p=payload, vid=venue_id: reservation_client.client.post(
-                            f"/venues/{vid}/closings", json=p
-                        ),
-                        f"venue closing for [{venue.name}]",
+                if (not closing.services) != venue_wide:
+                    continue
+                if closing.after_reservations != after_reservations:
+                    continue
+                service_ids = self._closing_service_ids(venue.key, closing.services)
+                if not service_ids:
+                    _logger.warning(
+                        "Skipping closing on venue [%s]: no matching services.", venue.key
                     )
-                    self._venue_closing_count += 1
-                    _logger.info(
-                        "Created venue closing on [%s]: %s to %s.",
-                        venue.name, date_start, date_end,
+                    continue
+                for date_from, date_to in _expand_dates(closing.dates):
+                    await self._create_closing_on(
+                        venue_id, venue.key, closing.description, service_ids, date_from, date_to,
                     )
+
+    def _closing_service_ids(self, venue_key: str, names: list[str]) -> list[str]:
+        """The service ids a closing targets: those named, or every service of the venue when no
+        name is given (a venue-wide shutdown)."""
+        if not names:
+            return [
+                service_id
+                for (key, _name), periods in self._service_ids.items()
+                if key == venue_key
+                for (_date_from, _date_to, service_id) in periods
+            ]
+        ids: list[str] = []
+        for name in names:
+            periods = self._service_ids.get((venue_key, name))
+            if periods is None:
+                _logger.warning(
+                    "Closing on venue [%s] names unknown service [%s].", venue_key, name
+                )
+                continue
+            ids.extend(service_id for (_date_from, _date_to, service_id) in periods)
+        return ids
+
+    async def _create_closing_on(
+            self,
+            venue_id: str,
+            venue_key: str,
+            description: str | None,
+            service_ids: list[str],
+            date_from: date,
+            date_to: date,
+    ) -> None:
+        """Create one occurrence of a demo closing."""
+        payload = {
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "service_ids": service_ids,
+            "description": description,
+        }
+        await self._write_with_authz_retry(
+            lambda: reservation_client.client.post(f"/venues/{venue_id}/closings", json=payload),
+            f"closing for [{venue_key}]",
+        )
+        self._closing_count += 1
+        _logger.info(
+            "Created closing on [%s]: %s to %s over %d service(s).",
+            venue_key, date_from, date_to, len(service_ids),
+        )
 
     async def _create_reservations(self) -> None:
-        """Create every demo booking, resolving each one onto a real slot of its service.
+        """Create every demo booking against the service it names.
 
-        The slot grid is never recomputed here: the availability endpoint is asked what is open
-        on the date, and the bookable slot nearest the preferred time wins. An occurrence with
-        nothing bookable — a past date, a closed day, an unknown venue or service, a full
-        service — is skipped and counted rather than failing the run. Because a booking cannot
-        be made in the past, occurrences materialized on an elapsed date are always skipped;
-        the seeded set is future-only by construction.
+        The requested time is posted as-is: with no slot grid, any minute inside the service's
+        window is bookable, so there is nothing to search for. An occurrence the backend refuses
+        — a past date, a closed day, an unknown venue or service, a full service — is skipped and
+        counted rather than failing the run.
         """
         for reservation in self._reservations.reservations:
             venue_id = self._venue_ids.get(reservation.venue)
@@ -346,8 +363,18 @@ class DemoSeeder:
                 )
                 self._reservation_skipped += 1
                 continue
-            for start, _end in _expand_exception_dates(reservation.dates):
+            for start, _end in _expand_dates(reservation.dates):
                 await self._create_reservation_on(venue_id, reservation, start)
+
+    def _service_for(self, reservation: DemoReservation, on_date: date) -> str | None:
+        """The id of the booking's service covering ``on_date``, or None when none does."""
+        periods = self._service_ids.get((reservation.venue, reservation.service))
+        if not periods:
+            return None
+        for date_from, date_to, service_id in periods:
+            if date_from <= on_date and (date_to is None or on_date <= date_to):
+                return service_id
+        return None
 
     async def _create_reservation_on(
             self, venue_id: str, reservation: DemoReservation, on_date: date,
@@ -357,63 +384,69 @@ class DemoSeeder:
             self._reservation_skipped += 1
             return
 
-        slot_at = await self._find_slot(venue_id, reservation, on_date)
-        if slot_at is None:
+        service_id = self._service_for(reservation, on_date)
+        if service_id is None:
             _logger.info(
-                "Skipping reservation for [%s] on %s: no bookable slot.",
+                "Skipping reservation for [%s] on %s: service [%s] does not run then.",
                 reservation.contact_name,
                 on_date,
+                reservation.service,
             )
             self._reservation_skipped += 1
             return
 
-        response = await reservation_client.client.post(
-            "/reservations",
-            json={
-                "venue_id": venue_id,
-                "contact_name": reservation.contact_name,
-                "contact_phone_number": reservation.contact_phone_number,
-                "contact_email": reservation.contact_email,
-                "party_size": reservation.party_size,
-                "reservation_date": slot_at,
-                "notes": reservation.notes,
-            },
-        )
+        reservation_date = datetime.combine(
+            on_date, time.fromisoformat(reservation.time)
+        ).isoformat()
+        try:
+            response = await reservation_client.client.post(
+                "/reservations",
+                json={
+                    "venue_id": venue_id,
+                    "service_id": service_id,
+                    "contact_name": reservation.contact_name,
+                    "contact_phone_number": reservation.contact_phone_number,
+                    "contact_email": reservation.contact_email,
+                    "party_size": reservation.party_size,
+                    "reservation_date": reservation_date,
+                    "notes": reservation.notes,
+                },
+            )
+        except HTTPException as exc:
+            if exc.status_code != HTTPStatus.CONFLICT:
+                raise
+            # Closed that date, outside the window, or out of seats — all legitimate reasons a
+            # demo booking cannot land, and none worth failing the whole run over.
+            _logger.info(
+                "Skipping reservation for [%s] on %s: %s",
+                reservation.contact_name,
+                on_date,
+                exc.detail,
+            )
+            self._reservation_skipped += 1
+            return
+
         reservation_id = response.json()["id"]
         self._reservation_count += 1
         _logger.info(
             "Created reservation for [%s] at %s -> %s",
             reservation.contact_name,
-            slot_at,
+            reservation_date,
             reservation_id,
         )
         await self._apply_reservation_status(reservation_id, reservation.status)
 
-    async def _find_slot(
-            self, venue_id: str, reservation: DemoReservation, on_date: date,
-    ) -> str | None:
-        """The bookable slot of the demo booking's service nearest its preferred time, or None."""
-        response = await reservation_client.client.get(
-            "/reservations/availabilities",
-            params={
-                "venue_id": venue_id,
-                "business_date": on_date.isoformat(),
-                "party_size": reservation.party_size,
-            },
-        )
-        services = response.json()["services"]
-        service = next(
-            (s for s in services if s["service_name"] == reservation.service), None
-        )
-        if service is None:
-            return None
-        bookable = [slot["slot_at"] for slot in service["slots"] if slot["bookable"]]
-        if not bookable:
-            return None
-        preferred = datetime.combine(
-            on_date, time.fromisoformat(reservation.time)
-        )
-        return min(bookable, key=lambda slot: abs(datetime.fromisoformat(slot) - preferred))
+
+    async def _delete_services(self) -> None:
+        """Delete the services the demo data marks as deleted. This runs after the bookings are
+        made, since a deleted service takes no new bookings."""
+        for service_id, name in self._services_to_delete:
+            await self._write_with_authz_retry(
+                lambda sid=service_id: reservation_client.client.delete(f"/services/{sid}"),
+                f"deletion of [{name}]",
+            )
+            self._deleted_count += 1
+            _logger.info("Deleted service [%s] -> %s", name, service_id)
 
     async def _apply_reservation_status(self, reservation_id: str, status: str | None) -> None:
         """Move a freshly created booking out of ``pending``, when the demo data asks for it.

@@ -24,6 +24,12 @@ class ReservationEntity(Base):
         index=True,
         doc="Identifier of the venue this reservation belongs to",
     )
+    service_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(f"{SCHEMA_NAME}.services.id", ondelete="RESTRICT"),
+        index=True,
+        doc="Identifier of the service this reservation was booked into",
+    )
     status: Mapped[str] = mapped_column(
         String(30),
         doc="Status of the reservation",

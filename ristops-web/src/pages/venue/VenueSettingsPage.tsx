@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useVenue } from '../../domain/venue/venue.hooks.ts';
 import VenueDetailsSection from '../../components/venue/VenueDetailsSection.tsx';
 import VenueStatusCard from '../../components/venue/VenueStatusCard.tsx';
-import VenueClosingsSection from '../../components/venue/VenueClosingsSection.tsx';
+import ClosingsSection from '../../components/venue/ClosingsSection.tsx';
 
 export default function VenueSettingsPage() {
   const { venueId = '' } = useParams<{ venueId: string }>();
@@ -17,7 +17,7 @@ export default function VenueSettingsPage() {
     <>
       <VenueDetailsSection venue={venue} />
       <VenueStatusCard venue={venue} />
-      <VenueClosingsSection venueId={venueId} />
+      <ClosingsSection venueId={venueId} />
     </>
   );
 }

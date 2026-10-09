@@ -1,7 +1,7 @@
-from datetime import datetime, date
+from datetime import datetime, time, date
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, func, String, Integer, Date, ForeignKey, UniqueConstraint
+from sqlalchemy import DateTime, func, String, Integer, Time, Date, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -9,7 +9,8 @@ from ristops_be_reservation.database import Base, SCHEMA_NAME, make_table_args
 
 
 class ServiceEntity(Base):
-    """SQLAlchemy entity for a service."""
+    """SQLAlchemy entity for a service: what a venue offers over a validity period, with the
+    seats it can take. Its hours live in `OpeningEntity`, one row per weekday."""
 
     __tablename__ = "services"
 
@@ -29,21 +30,20 @@ class ServiceEntity(Base):
         index=True,
         doc="Name of the service",
     )
-    turn_time_m: Mapped[int] = mapped_column(
-        Integer,
-        doc="Reservation duration, in minutes",
+    date_from: Mapped[date] = mapped_column(
+        Date(),
+        index=True,
+        doc="First date the service runs on (inclusive)",
     )
-    advance_notice_m: Mapped[int] = mapped_column(
-        Integer,
-        doc="Minimum notice required before a reservation slot, in minutes",
+    date_to: Mapped[date | None] = mapped_column(
+        Date(),
+        default=None,
+        index=True,
+        doc="Last date the service runs on (inclusive); null runs it indefinitely",
     )
-    slot_interval_m: Mapped[int] = mapped_column(
+    capacity: Mapped[int] = mapped_column(
         Integer,
-        doc="Interval between reservation slots, in minutes",
-    )
-    grace_period_m: Mapped[int] = mapped_column(
-        Integer,
-        doc="Minutes past a reservation's start time before it may be marked as a no-show",
+        doc="Maximum number of seats bookable on any date the service runs",
     )
     description: Mapped[str | None] = mapped_column(
         String(1000),
@@ -65,12 +65,14 @@ class ServiceEntity(Base):
     )
 
 
-class ServiceOccurrenceEntity(Base):
-    """SQLAlchemy entity for a service occurrence."""
+class OpeningEntity(Base):
+    """SQLAlchemy entity for a service opening: the hours a service runs on one weekday. An
+    opening whose ``end_time`` is not after its ``start_time`` runs overnight and closes on the
+    following calendar day."""
 
-    __tablename__ = "service_occurrences"
+    __tablename__ = "openings"
     __table_args__ = make_table_args(
-        UniqueConstraint("service_id", "date", name="uq_service_occurrence_service_date"),
+        UniqueConstraint("service_id", "weekday", name="uq_opening_service_weekday"),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -82,23 +84,23 @@ class ServiceOccurrenceEntity(Base):
         PG_UUID(as_uuid=True),
         ForeignKey(f"{SCHEMA_NAME}.services.id", ondelete="CASCADE"),
         index=True,
-        doc="Identifier of the service this occurrence belongs to",
+        doc="Identifier of the service this opening belongs to",
     )
-    date: Mapped[date] = mapped_column(
-        Date(),
-        doc="Venue-local calendar date this occurrence belongs to",
+    weekday: Mapped[str] = mapped_column(
+        String(9),
+        doc="Day of the week this opening applies to; validated as an enum at the API layer, stored as plain text",
     )
-    status: Mapped[str] = mapped_column(
-        String(20),
-        doc="Occurrence status; validated as an enum at the API layer, stored as plain text",
+    start_time: Mapped[time] = mapped_column(
+        Time,
+        doc="Time the service opens",
     )
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        doc="When the occurrence was opened",
+    end_time: Mapped[time] = mapped_column(
+        Time,
+        doc="Time the service closes",
     )
-    ended_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        doc="When the occurrence was closed",
+    description: Mapped[str | None] = mapped_column(
+        String(1000),
+        doc="Description of this opening",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -108,4 +110,69 @@ class ServiceOccurrenceEntity(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+
+class ClosingEntity(Base):
+    """SQLAlchemy entity for a closing: a date range over which the linked services do not run.
+
+    A closing is venue-scoped and targets one or more services through `ClosingServiceEntity`;
+    a venue-wide shutdown is a closing linked to every service.
+    """
+
+    __tablename__ = "closings"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    venue_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(f"{SCHEMA_NAME}.venues.id", ondelete="CASCADE"),
+        index=True,
+        doc="Identifier of the venue this closing belongs to",
+    )
+    date_from: Mapped[date] = mapped_column(
+        Date(),
+        index=True,
+        doc="First date of the closing period (inclusive)",
+    )
+    date_to: Mapped[date] = mapped_column(
+        Date(),
+        index=True,
+        doc="Last date of the closing period (inclusive)",
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(1000),
+        doc="Description of this closing",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class ClosingServiceEntity(Base):
+    """SQLAlchemy entity linking a closing to one of the services it closes."""
+
+    __tablename__ = "closing_services"
+
+    closing_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(f"{SCHEMA_NAME}.closings.id", ondelete="CASCADE"),
+        primary_key=True,
+        doc="Identifier of the closing",
+    )
+    service_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(f"{SCHEMA_NAME}.services.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+        doc="Identifier of the service the closing applies to",
     )

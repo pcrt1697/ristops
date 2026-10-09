@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Alert, Button, Empty, Flex, Segmented, Select, Space, Spin, Switch, theme, Tooltip, Typography, } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { ExclamationCircleFilled, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSearchParamFilters } from '../../commons/hooks.ts';
 import { useSearchReservations } from '../../domain/reservation/reservation.hooks.ts';
-import { serviceForReservation, statusLabel, } from '../../domain/reservation/reservation.utils.ts';
+import { statusLabel } from '../../domain/reservation/reservation.utils.ts';
 import {
   type ReservationCalendarQuery,
   ReservationStatus,
@@ -12,19 +12,16 @@ import {
 } from '../../services/graphql/graphql.ts';
 import ReservationFormModal from './ReservationFormModal.tsx';
 import ReservationTable from './ReservationTable.tsx';
+import ServiceCapacity, { UnavailableServiceNotice } from './ServiceCapacity.tsx';
 
 const { Text, Title } = Typography;
 
 type CalendarDay = ReservationCalendarQuery['reservationCalendar'][number];
-type ServiceSummary = CalendarDay['services'][number];
 type Reservation = SearchReservationsQuery['reservations']['items'][number];
 
-// The backend caps a page at 100 (`PaginationParams.page_size`). The whole day is loaded in one
-// request because the service filter runs client-side: a reservation has no service reference,
-// so the backend cannot filter by it.
+// The backend caps a page at 100 (`PaginationParams.page_size`). A day rarely holds more, and
+// the warning below says so when it does.
 const PAGE_SIZE = 100;
-
-const ALL_SERVICES = 'all';
 
 interface ReservationDaySectionProps {
   venueId: string;
@@ -35,61 +32,11 @@ interface ReservationDaySectionProps {
   canBook: boolean;
 }
 
-/** One service's occupancy, from the calendar summary rather than the loaded rows. */
-function ServiceCapacity({ service }: { service: ServiceSummary }) {
-  const { token } = theme.useToken();
-  const fill =
-    service.capacity > 0
-      ? Math.min(1, service.peakBooked / service.capacity)
-      : 0;
-  const color = service.overCapacity ? token.colorError : token.colorPrimary;
-
-  return (
-    <div style={{ minWidth: 200 }}>
-      <Flex justify="space-between" gap={12}>
-        <Text style={{ fontSize: 13 }}>
-          {service.serviceName}{' '}
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {dayjs(service.opensAt).format('HH:mm')}–
-            {dayjs(service.closesAt).format('HH:mm')}
-          </Text>
-        </Text>
-        <Text
-          style={{
-            fontSize: 13,
-            color: service.overCapacity ? color : undefined,
-          }}
-        >
-          {service.peakBooked}/{service.capacity} seats
-        </Text>
-      </Flex>
-      <div
-        style={{
-          height: 4,
-          marginTop: 4,
-          borderRadius: 2,
-          background: token.colorFillSecondary,
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: `${fill * 100}%`,
-            borderRadius: 2,
-            background: color,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
 /**
- * The selected day's bookings: one time-ordered table across every service, with the service
- * shown per row and selectable through the segmented control above it.
- *
- * The search spans two days because an overnight service closes after midnight; rows that fall
- * in none of the day's service windows are dropped by `serviceForReservation`.
+ * The selected day's bookings, one service at a time: the segmented control picks the service,
+ * and the table and capacity band below follow it. A service that no longer runs that day, being
+ * closed or deleted, but which still holds bookings, stays selectable and is marked, so those
+ * bookings can be reached.
  */
 export default function ReservationDaySection({
   venueId,
@@ -101,59 +48,59 @@ export default function ReservationDaySection({
   const filters = useSearchParamFilters();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Reservation>();
-  const [selectedService, setSelectedService] = useState<string>(ALL_SERVICES);
+  const [selectedService, setSelectedService] = useState<string>();
 
-  // Services differ from day to day, so a selection made on one day may name a service that
-  // does not run on the next. Reset it when the day changes, following the same
-  // derived-state-on-render idiom as ServiceScheduleOverrides' month paging.
-  const [serviceDate, setServiceDate] = useState(date);
-  if (serviceDate !== date) {
-    setServiceDate(date);
-    setSelectedService(ALL_SERVICES);
-  }
+  const runningServices = [...(day?.services ?? [])].sort((a, b) =>
+    a.opensAt.localeCompare(b.opensAt),
+  );
+  const closedServices = day?.closedServices ?? [];
+  const deletedServices = day?.deletedServices ?? [];
+  const serviceIds = [
+    ...runningServices.map((service) => service.serviceId),
+    ...closedServices.map((service) => service.serviceId),
+    ...deletedServices.map((service) => service.serviceId),
+  ];
+  // A selection made on another day may name a service that is not offered on this one, in which
+  // case the first service stands in for it. The choice is kept as the user moves between days.
+  const activeServiceId =
+    selectedService && serviceIds.includes(selectedService)
+      ? selectedService
+      : serviceIds[0];
+  const activeRunning = runningServices.find(
+    (service) => service.serviceId === activeServiceId,
+  );
+  const activeClosed = closedServices.find(
+    (service) => service.serviceId === activeServiceId,
+  );
+  const activeDeleted = deletedServices.find(
+    (service) => service.serviceId === activeServiceId,
+  );
 
   const statusFilter = filters.get('status');
   const violationsOnly = filters.get('violations') === '1';
 
-  const { data, isLoading } = useSearchReservations({
-    filter: {
-      venueId,
-      dateFrom: date,
-      dateTo: dayjs(date).add(1, 'day').format('YYYY-MM-DD'),
-      status: statusFilter ? [statusFilter as ReservationStatus] : undefined,
-      violationsOnly,
+  const { data, isLoading } = useSearchReservations(
+    {
+      filter: {
+        venueId,
+        serviceId: activeServiceId,
+        dateFrom: date,
+        dateTo: date,
+        status: statusFilter ? [statusFilter as ReservationStatus] : undefined,
+        violationsOnly,
+      },
+      pagination: { page: 0, pageSize: PAGE_SIZE },
+      sort: [],
     },
-    pagination: { page: 0, pageSize: PAGE_SIZE },
-    sort: [],
-  });
+    activeServiceId !== undefined,
+  );
 
   const isPast = dayjs(date).isBefore(dayjs(), 'day');
-  const services = day?.services ?? [];
   const items = data?.items ?? [];
   const truncated = (data?.total ?? 0) > items.length;
-
-  // Resolve each booking's service once, dropping any that no longer fits a window.
-  const rows = items
-    .map((reservation) => ({
-      reservation,
-      service: serviceForReservation(reservation.reservationDate, services),
-    }))
-    .filter(
-      (row) =>
-        row.service !== undefined &&
-        (selectedService === ALL_SERVICES ||
-          row.service.serviceId === selectedService),
-    )
-    .sort((a, b) =>
-      a.reservation.reservationDate.localeCompare(
-        b.reservation.reservationDate,
-      ),
-    );
-
-  const shownServices =
-    selectedService === ALL_SERVICES
-      ? services
-      : services.filter((service) => service.serviceId === selectedService);
+  const reservations = [...items].sort((a, b) =>
+    a.reservationDate.localeCompare(b.reservationDate),
+  );
 
   function openCreate() {
     setEditing(undefined);
@@ -195,28 +142,47 @@ export default function ReservationDaySection({
         <Alert
           type="info"
           showIcon
-          message="The venue is closed on this date."
+          message="Every service is closed on this date."
         />
       )}
 
-      {services.length === 0 && !day?.closed ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="No service is scheduled on this date."
-          style={{ marginTop: 24 }}
-        />
+      {serviceIds.length === 0 ? (
+        !day?.closed && (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="No service is scheduled on this date."
+            style={{ marginTop: 24 }}
+          />
+        )
       ) : (
         <>
           <Flex justify="space-between" align="center" wrap gap={12}>
-            {services.length > 1 && (
+            {serviceIds.length > 1 && (
               <Segmented
-                value={selectedService}
-                onChange={setSelectedService}
+                value={activeServiceId}
+                onChange={(value) => setSelectedService(String(value))}
                 options={[
-                  { value: ALL_SERVICES, label: 'All' },
-                  ...services.map((service) => ({
+                  ...runningServices.map((service) => ({
                     value: service.serviceId,
                     label: service.serviceName,
+                  })),
+                  ...closedServices.map((service) => ({
+                    value: service.serviceId,
+                    label: (
+                      <Space size={4}>
+                        <ExclamationCircleFilled style={{ color: token.colorWarning }} />
+                        {service.serviceName}
+                      </Space>
+                    ),
+                  })),
+                  ...deletedServices.map((service) => ({
+                    value: service.serviceId,
+                    label: (
+                      <Space size={4}>
+                        <ExclamationCircleFilled style={{ color: token.colorError }} />
+                        <Text delete>{service.serviceName}</Text>
+                      </Space>
+                    ),
                   })),
                 ]}
               />
@@ -233,7 +199,7 @@ export default function ReservationDaySection({
                   label: statusLabel(status),
                 }))}
               />
-              <Tooltip title="Show only bookings that no longer fit the current schedule — the venue is now closed that day, no service is open at that time any more, or the booking no longer fits within the opening hours. Editing the schedule never cancels a booking, so these are flagged for staff to resolve.">
+              <Tooltip title="Show only bookings that no longer fit the current schedule — their service is now closed that date, no longer runs it, or no longer opens at that time. Editing the schedule never cancels a booking, so these are flagged for staff to resolve.">
                 <Space size={4}>
                   <Switch
                     size="small"
@@ -259,11 +225,13 @@ export default function ReservationDaySection({
               borderRadius: token.borderRadiusLG,
             }}
           >
-            <Flex wrap gap={32}>
-              {shownServices.map((service) => (
-                <ServiceCapacity key={service.serviceId} service={service} />
-              ))}
-            </Flex>
+            {activeRunning && <ServiceCapacity service={activeRunning} />}
+            {activeClosed && (
+              <UnavailableServiceNotice service={activeClosed} reason="closed" />
+            )}
+            {activeDeleted && (
+              <UnavailableServiceNotice service={activeDeleted} reason="deleted" />
+            )}
           </div>
 
           {truncated && (
@@ -275,7 +243,7 @@ export default function ReservationDaySection({
           )}
 
           <Spin spinning={isLoading}>
-            {rows.length === 0 ? (
+            {reservations.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description="No bookings match the current filters."
@@ -283,10 +251,8 @@ export default function ReservationDaySection({
             ) : (
               <ReservationTable
                 venueId={venueId}
-                rows={rows}
-                showService={
-                  selectedService === ALL_SERVICES && services.length > 1
-                }
+                reservations={reservations}
+                serviceUnavailable={activeClosed !== undefined || activeDeleted !== undefined}
                 canEdit={canBook}
                 onEdit={openEdit}
               />

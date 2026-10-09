@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -6,6 +6,8 @@ from ristops_bff_web.http import reservation_client
 from ristops_lib_core.http import ResponseTransformer
 
 service_transformer = ResponseTransformer(
+    date_from=date.fromisoformat,
+    date_to=date.fromisoformat,
     created_at=datetime.fromisoformat,
     updated_at=datetime.fromisoformat,
     deleted_at=datetime.fromisoformat,

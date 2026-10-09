@@ -25,39 +25,26 @@ type AuthorizationResource {
   resourceType: ResourceType!
 }
 
-"""Why an otherwise-open slot cannot take the requested party."""
-enum AvailabilityBlocker {
-  INSUFFICIENT_SEATS
-}
-
-"""One start time on a service's slot grid."""
-type AvailabilitySlot {
-  """Venue-local start time (naive); usable as a reservation date as-is."""
-  slotAt: DateTime!
-
-  """Seats taken by bookings overlapping this slot."""
-  booked: Int!
-
-  """Seats still free at this slot."""
-  remaining: Int!
-
-  """Whether the requested party fits."""
-  bookable: Boolean!
-
-  """Why the party does not fit; null when bookable."""
-  blocker: AvailabilityBlocker
-}
-
 """One business date of the calendar window."""
 type CalendarDay {
   """Venue-local business date."""
   businessDate: Date!
 
-  """Whether a closing removes every service that would otherwise open."""
+  """Whether a closing removes every service that would otherwise run."""
   closed: Boolean!
 
-  """Services open that date."""
+  """Services running that date."""
   services: [CalendarServiceSummary!]!
+
+  """
+  Services a closing removes that date which still hold bookings. They are not in `services`, since they no longer run.
+  """
+  closedServices: [ClosedServiceSummary!]!
+
+  """
+  Deleted services that still hold bookings that date. They are not in `services`, since they no longer run.
+  """
+  deletedServices: [DeletedServiceSummary!]!
 }
 
 """How full one service is on one business date."""
@@ -76,44 +63,56 @@ type CalendarServiceSummary {
   """
   closesAt: DateTime!
 
-  """Effective seat capacity for the date."""
+  """Seats the service can take on the date."""
   capacity: Int!
 
-  """Peak concurrent booked seats."""
-  peakBooked: Int!
+  """Seats taken by live bookings on the date."""
+  booked: Int!
 
-  """Number of live bookings."""
+  """Seats still free on the date; negative when over capacity."""
+  remaining: Int!
+
+  """Number of live bookings on the date."""
   reservationCount: Int!
 
-  """Whether peak booked seats exceed capacity."""
+  """Whether booked seats exceed capacity."""
   overCapacity: Boolean!
 }
 
 """
-A seat-count delta applied on top of the resolved capacity for a date range.
+A service a closing removes from one date while it still holds bookings.
 """
-type CapacityOverride {
-  """Capacity override identifier."""
-  id: String!
-
-  """Identifier of the service this override belongs to."""
+type ClosedServiceSummary {
+  """Service the closing removes."""
   serviceId: String!
 
-  """First date of the override period (inclusive)."""
-  dateStart: Date!
-
-  """Last date of the override period (inclusive)."""
-  dateEnd: Date!
+  """Name of that service."""
+  serviceName: String!
 
   """
-  Weekday the override applies to within the range; null means every day.
+  Pending or confirmed bookings still held on the service that day, which staff need to resolve.
   """
-  weekday: Weekday
+  reservationCount: Int!
+}
 
-  """Signed change to the resolved seat count."""
-  capacityDelta: Int!
+"""A date range over which the linked services do not run."""
+type Closing {
+  """Closing identifier."""
+  id: String!
 
-  """Description of this capacity override."""
+  """Venue this closing belongs to."""
+  venueId: String!
+
+  """First date of the closing period (inclusive)."""
+  dateFrom: Date!
+
+  """Last date of the closing period (inclusive)."""
+  dateTo: Date!
+
+  """Services this closing applies to."""
+  serviceIds: [String!]!
+
+  """Description of this closing."""
   description: String
 
   """Creation date."""
@@ -123,30 +122,39 @@ type CapacityOverride {
   updatedAt: DateTime!
 }
 
-"""
-New capacity override information. Bulk: one row is created per weekday in `weekdays`; omitted/empty, or all seven, means every day.
-"""
-input CapacityOverrideCreateInput {
-  """First date of the override period (inclusive)."""
-  dateStart: Date!
+"""Information to create a closing."""
+input ClosingCreateInput {
+  """First date of the closing period (inclusive)."""
+  dateFrom: Date!
 
-  """Last date of the override period (inclusive)."""
-  dateEnd: Date!
+  """Last date of the closing period (inclusive)."""
+  dateTo: Date!
 
-  """Weekdays to scope to; provide multiple to create one row per weekday."""
-  weekdays: [Weekday!] = null
+  """
+  Services this closing applies to. Pass every service of the venue for a venue-wide shutdown.
+  """
+  serviceIds: [ID!]!
 
-  """Signed change to the resolved seat count."""
-  capacityDelta: Int!
-
-  """Description of this capacity override."""
+  """Description of this closing."""
   description: String = null
 }
 
+"""Closing search filter."""
+input ClosingFilterInput {
+  """Include closings ending on or after this date."""
+  dateFrom: Date = null
+
+  """Include closings starting on or before this date."""
+  dateTo: Date = null
+
+  """Return only closings applying to this service."""
+  serviceId: ID = null
+}
+
 """A single page of results with pagination metadata."""
-type CapacityOverridePage {
+type ClosingPage {
   """Items in the current page."""
-  items: [CapacityOverride!]!
+  items: [Closing!]!
 
   """Total number of items across all pages."""
   total: Int!
@@ -161,88 +169,59 @@ type CapacityOverridePage {
   totalPages: Int!
 }
 
-"""Capacity-override search query."""
-input CapacityOverrideSearchInput {
+"""Closing search query."""
+input ClosingSearchInput {
   """Pagination parameters."""
   pagination: PaginationInput = null
 
   """Sort instructions."""
-  sort: [CapacityOverrideSortFieldSortInput!]! = []
+  sort: [ClosingSortFieldSortInput!]! = []
 
   """Filter parameters."""
-  filter: ScheduleDateFilter = null
+  filter: ClosingFilterInput = null
 }
 
-"""Fields a capacity-override search may be sorted by."""
-enum CapacityOverrideSortField {
-  DATE_START
-  DATE_END
+"""Fields a closing search may be sorted by."""
+enum ClosingSortField {
+  DATE_FROM
+  DATE_TO
   CREATED_AT
   ID
 }
 
 """A single sort instruction."""
-input CapacityOverrideSortFieldSortInput {
+input ClosingSortFieldSortInput {
   """Field to sort by."""
-  field: CapacityOverrideSortField!
+  field: ClosingSortField!
 
   """Sort direction."""
   direction: SortDirection! = ASC
 }
 
-"""
-Capacity override fields to update. Unset fields are not modified. The weekday scope is immutable — delete and recreate to re-scope it.
-"""
-input CapacityOverrideUpdateInput {
-  """New first date (inclusive)."""
-  dateStart: Date = null
+"""Closing fields to update (only provided fields change)."""
+input ClosingUpdateInput {
+  """New first date of the closing period (inclusive)."""
+  dateFrom: Date = null
 
-  """New last date (inclusive)."""
-  dateEnd: Date = null
+  """New last date of the closing period (inclusive)."""
+  dateTo: Date = null
 
-  """New signed seat-count change."""
-  capacityDelta: Int = null
+  """New complete set of services this closing applies to."""
+  serviceIds: [ID!] = null
 
-  """New description of this override."""
-  description: String = null
-}
-
-"""
-Candidate period+weekdays to check for conflicts before writing. Bulk `weekdays` mirror a create; omit/empty or all seven means every day. Pass `start_time`/`end_time` to also detect cross-service opening overlaps.
-"""
-input ConflictCheckInput {
-  """First date of the candidate period (inclusive)."""
-  dateStart: Date!
-
-  """Last date of the candidate period (inclusive)."""
-  dateEnd: Date!
-
-  """Weekdays to check; provide multiple for a bulk candidate."""
-  weekdays: [Weekday!] = null
-
-  """Exclude this row from the check (use when previewing an edit of it)."""
-  excludeId: ID = null
-
-  """Candidate opening time (for cross-service overlap detection)."""
-  startTime: Time = null
-
-  """Candidate closing time (for cross-service overlap detection)."""
-  endTime: Time = null
-}
-
-"""Which kind of exception a conflicting row belongs to."""
-enum ConflictSource {
-  VENUE_CLOSING
-  SERVICE_CLOSING
-  OPENING_OVERRIDE
-  CAPACITY_OVERRIDE
-  SERVICE_OPENING
+  """New description (null clears it)."""
+  description: String
 }
 
 """Information to create a reservation."""
 input CreateReservationInput {
   """Venue to book at."""
   venueId: ID!
+
+  """
+  Service to book into. The time must fall within its window on the date.
+  """
+  serviceId: ID!
 
   """Customer name."""
   contactName: String!
@@ -273,22 +252,19 @@ input CreateServiceInput {
   """Name of the service."""
   name: String!
 
+  """First date the service runs on (inclusive)."""
+  dateFrom: Date!
+
+  """Maximum number of seats bookable on any date the service runs."""
+  capacity: Int!
+
   """Description of the service."""
   description: String = null
 
-  """Reservation duration, in minutes."""
-  turnTimeM: Int!
-
-  """Minimum notice required before a reservation slot, in minutes."""
-  advanceNoticeM: Int!
-
-  """Interval between reservation slots, in minutes."""
-  slotIntervalM: Int!
-
   """
-  Minutes past a reservation's start time before it may be marked as a no-show.
+  Last date the service runs on (inclusive). Omit to run it indefinitely; set it equal to dateFrom for a one-shot service.
   """
-  gracePeriodM: Int!
+  dateTo: Date = null
 }
 
 """Venue information."""
@@ -309,16 +285,18 @@ scalar Date
 """Date with time (isoformat)"""
 scalar DateTime
 
-"""Preview of what could be booked at a venue on one date."""
-type DayAvailability {
-  """The venue-local date the preview is for."""
-  businessDate: Date!
+"""A deleted service that still holds bookings on one date."""
+type DeletedServiceSummary {
+  """The deleted service."""
+  serviceId: String!
 
-  """Whether a closing removes every service."""
-  closed: Boolean!
+  """Name of that service."""
+  serviceName: String!
 
-  """Services open that date."""
-  services: [ServiceAvailability!]!
+  """
+  Pending or confirmed bookings still held on the service that day, which staff need to resolve.
+  """
+  reservationCount: Int!
 }
 
 """Request to grant a role to a user on a resource."""
@@ -526,56 +504,26 @@ type Mutation {
     id: ID!
   ): Boolean!
 
-  """Replace the full set of weekly openings for a service."""
+  """Replace a service's weekly opening hours."""
   upsertServiceOpenings(
-    """Entity identifier."""
-    id: ID!
+    """Service ID."""
+    serviceId: ID!
 
-    """The complete set of weekly openings to apply."""
-    openings: [OpeningUpsertInput!]!
+    """The service's complete weekly hours."""
+    input: [OpeningUpsertInput!]!
   ): [Opening!]!
 
-  """Create a new opening override for a service."""
-  createOpeningOverride(
-    """Entity identifier."""
-    id: ID!
-
-    """Opening override information."""
-    input: OpeningOverrideCreateInput!
-  ): [OpeningOverride!]!
-
-  """Update an opening override."""
-  updateOpeningOverride(
-    """Entity identifier."""
-    id: ID!
-
-    """Opening override ID."""
-    overrideId: ID!
-
-    """Opening override fields to update."""
-    input: OpeningOverrideUpdateInput!
-  ): OpeningOverride!
-
-  """Delete an opening override."""
-  deleteOpeningOverride(
-    """Entity identifier."""
-    id: ID!
-
-    """Opening override ID."""
-    overrideId: ID!
-  ): Boolean!
-
-  """Create a new closing for a service."""
-  createServiceClosing(
+  """Close one or more of a venue's services over a date range."""
+  createClosing(
     """Entity identifier."""
     id: ID!
 
     """Closing information."""
-    input: ServiceClosingCreateInput!
-  ): [ServiceClosing!]!
+    input: ClosingCreateInput!
+  ): Closing!
 
   """Update a closing."""
-  updateServiceClosing(
+  updateClosing(
     """Entity identifier."""
     id: ID!
 
@@ -583,75 +531,15 @@ type Mutation {
     closingId: ID!
 
     """Closing fields to update."""
-    input: ServiceClosingUpdateInput!
-  ): ServiceClosing!
+    input: ClosingUpdateInput!
+  ): Closing!
 
   """Delete a closing."""
-  deleteServiceClosing(
+  deleteClosing(
     """Entity identifier."""
     id: ID!
 
     """Closing ID."""
-    closingId: ID!
-  ): Boolean!
-
-  """Create a new capacity override for a service."""
-  createCapacityOverride(
-    """Entity identifier."""
-    id: ID!
-
-    """Capacity override information."""
-    input: CapacityOverrideCreateInput!
-  ): [CapacityOverride!]!
-
-  """Update a capacity override."""
-  updateCapacityOverride(
-    """Entity identifier."""
-    id: ID!
-
-    """Capacity override ID."""
-    capacityOverrideId: ID!
-
-    """Capacity override fields to update."""
-    input: CapacityOverrideUpdateInput!
-  ): CapacityOverride!
-
-  """Delete a capacity override."""
-  deleteCapacityOverride(
-    """Entity identifier."""
-    id: ID!
-
-    """Capacity override ID."""
-    capacityOverrideId: ID!
-  ): Boolean!
-
-  """Create a new venue-wide closing."""
-  createVenueClosing(
-    """Entity identifier."""
-    id: ID!
-
-    """Venue closing information."""
-    input: VenueClosingCreateInput!
-  ): [VenueClosing!]!
-
-  """Update a venue-wide closing."""
-  updateVenueClosing(
-    """Entity identifier."""
-    id: ID!
-
-    """Venue closing ID."""
-    closingId: ID!
-
-    """Venue closing fields to update."""
-    input: VenueClosingUpdateInput!
-  ): VenueClosing!
-
-  """Delete a venue-wide closing."""
-  deleteVenueClosing(
-    """Entity identifier."""
-    id: ID!
-
-    """Venue closing ID."""
     closingId: ID!
   ): Boolean!
 
@@ -716,24 +604,23 @@ type Mutation {
   ): Reservation!
 }
 
-"""A service's weekly opening for a given weekday."""
+"""A service's opening hours on one weekday."""
 type Opening {
   """Opening identifier."""
   id: String!
 
-  """Identifier of the service this opening belongs to."""
+  """Service this opening belongs to."""
   serviceId: String!
 
   """Day of the week this opening applies to."""
   weekday: Weekday!
 
-  """Maximum number of reservable seats."""
-  capacity: Int!
-
   """Time the service opens."""
   startTime: Time!
 
-  """Time the service closes."""
+  """
+  Time the service closes. An end at or before the start runs overnight, closing on the following day.
+  """
   endTime: Time!
 
   """Description of this opening."""
@@ -746,162 +633,11 @@ type Opening {
   updatedAt: DateTime!
 }
 
-"""
-A candidate weekly opening (weekday + hours) to check for cross-service overlaps. Base openings are indefinite — no date range.
-"""
-input OpeningConflictCheckInput {
-  """Weekday of the candidate opening."""
-  weekday: Weekday!
-
-  """Candidate opening time."""
-  startTime: Time!
-
-  """Candidate closing time."""
-  endTime: Time!
-}
-
-"""A one-off opening override replacing base hours for a date range."""
-type OpeningOverride {
-  """Override identifier."""
-  id: String!
-
-  """Identifier of the service this override belongs to."""
-  serviceId: String!
-
-  """First date of the override period (inclusive)."""
-  dateStart: Date!
-
-  """Last date of the override period (inclusive)."""
-  dateEnd: Date!
-
-  """
-  Weekday the override applies to within the range; null means every day.
-  """
-  weekday: Weekday
-
-  """Overridden maximum number of reservable seats."""
-  capacity: Int!
-
-  """Overridden opening time."""
-  startTime: Time!
-
-  """Overridden closing time."""
-  endTime: Time!
-
-  """Description of this override."""
-  description: String
-
-  """Creation date."""
-  createdAt: DateTime!
-
-  """Last update date."""
-  updatedAt: DateTime!
-}
-
-"""
-New opening override information. Bulk: one row is created per weekday in `weekdays`; omitted/empty, or all seven, means every day.
-"""
-input OpeningOverrideCreateInput {
-  """First date of the override period (inclusive)."""
-  dateStart: Date!
-
-  """Last date of the override period (inclusive)."""
-  dateEnd: Date!
-
-  """Weekdays to scope to; provide multiple to create one row per weekday."""
-  weekdays: [Weekday!] = null
-
-  """Overridden maximum number of reservable seats."""
-  capacity: Int!
-
-  """Overridden opening time."""
-  startTime: Time!
-
-  """Overridden closing time."""
-  endTime: Time!
-
-  """Description of this override."""
-  description: String = null
-}
-
-"""A single page of results with pagination metadata."""
-type OpeningOverridePage {
-  """Items in the current page."""
-  items: [OpeningOverride!]!
-
-  """Total number of items across all pages."""
-  total: Int!
-
-  """0-indexed page number."""
-  page: Int!
-
-  """Number of items per page."""
-  pageSize: Int!
-
-  """Total number of pages."""
-  totalPages: Int!
-}
-
-"""Opening-override search query."""
-input OpeningOverrideSearchInput {
-  """Pagination parameters."""
-  pagination: PaginationInput = null
-
-  """Sort instructions."""
-  sort: [OpeningOverrideSortFieldSortInput!]! = []
-
-  """Filter parameters."""
-  filter: ScheduleDateFilter = null
-}
-
-"""Fields an opening-override search may be sorted by."""
-enum OpeningOverrideSortField {
-  DATE_START
-  DATE_END
-  CREATED_AT
-  ID
-}
-
-"""A single sort instruction."""
-input OpeningOverrideSortFieldSortInput {
-  """Field to sort by."""
-  field: OpeningOverrideSortField!
-
-  """Sort direction."""
-  direction: SortDirection! = ASC
-}
-
-"""
-Opening override fields to update. Unset fields are not modified. The weekday scope is immutable — delete and recreate to re-scope it.
-"""
-input OpeningOverrideUpdateInput {
-  """New first date (inclusive)."""
-  dateStart: Date = null
-
-  """New last date (inclusive)."""
-  dateEnd: Date = null
-
-  """New overridden capacity."""
-  capacity: Int = null
-
-  """New overridden opening time."""
-  startTime: Time = null
-
-  """New overridden closing time."""
-  endTime: Time = null
-
-  """New description of this override."""
-  description: String = null
-}
-
-"""A single weekly opening within a bulk upsert."""
+"""One weekday's opening hours within an openings upsert."""
 input OpeningUpsertInput {
   """Day of the week this opening applies to."""
   weekday: Weekday!
 
-  """Maximum number of reservable seats."""
-  capacity: Int!
-
   """Time the service opens."""
   startTime: Time!
 
@@ -910,27 +646,6 @@ input OpeningUpsertInput {
 
   """Description of this opening."""
   description: String = null
-}
-
-"""A service+date whose booked seats exceed the effective capacity."""
-type OverCapacitySlot {
-  """Service the overbooked slot belongs to."""
-  serviceId: String!
-
-  """Name of that service."""
-  serviceName: String!
-
-  """Venue-local service date of the slot."""
-  businessDate: Date!
-
-  """Effective seat capacity for that date."""
-  capacity: Int!
-
-  """Peak concurrent booked seats."""
-  peakBooked: Int!
-
-  """Live reservations in this slot."""
-  reservationIds: [String!]!
 }
 
 """Pagination parameters."""
@@ -1029,105 +744,23 @@ type Query {
     includeDeleted: Boolean = null
   ): [Service!]!
 
-  """List the weekly openings for a service."""
+  """A service's weekly opening hours."""
   serviceOpenings(
-    """Entity identifier."""
-    id: ID!
+    """Service ID."""
+    serviceId: ID!
 
-    """Include openings even if the service has been deleted."""
+    """Return the openings even if the service is deleted."""
     includeDeleted: Boolean = null
   ): [Opening!]!
 
-  """Search the venue-wide closings for a venue."""
+  """Search a venue's closings."""
   venueClosings(
     """Entity identifier."""
     id: ID!
 
-    """Venue-closing search query."""
-    input: VenueClosingSearchInput = null
-  ): VenueClosingPage!
-
-  """Search the opening overrides for a service."""
-  serviceOpeningOverrides(
-    """Entity identifier."""
-    id: ID!
-
-    """Opening-override search query."""
-    input: OpeningOverrideSearchInput = null
-  ): OpeningOverridePage!
-
-  """Search the closings for a service."""
-  serviceClosings(
-    """Entity identifier."""
-    id: ID!
-
     """Closing search query."""
-    input: ServiceClosingSearchInput = null
-  ): ServiceClosingPage!
-
-  """Search the capacity overrides for a service."""
-  serviceCapacityOverrides(
-    """Entity identifier."""
-    id: ID!
-
-    """Capacity-override search query."""
-    input: CapacityOverrideSearchInput = null
-  ): CapacityOverridePage!
-
-  """
-  Preview which other services of the venue a candidate weekly opening would overlap.
-  """
-  serviceOpeningConflicts(
-    """Entity identifier."""
-    id: ID!
-
-    """Candidate weekly opening to check."""
-    input: OpeningConflictCheckInput!
-  ): [ScheduleConflict!]!
-
-  """
-  Preview conflicts (same-service overrides + cross-service overlaps) for a candidate override.
-  """
-  serviceOpeningOverrideConflicts(
-    """Entity identifier."""
-    id: ID!
-
-    """Candidate period+weekdays to check."""
-    input: ConflictCheckInput!
-  ): [ScheduleConflict!]!
-
-  """
-  Preview which existing service or venue closings a candidate period would conflict with.
-  """
-  serviceClosingConflicts(
-    """Entity identifier."""
-    id: ID!
-
-    """Candidate period+weekdays to check."""
-    input: ConflictCheckInput!
-  ): [ScheduleConflict!]!
-
-  """
-  Preview which existing capacity overrides a candidate period would conflict with.
-  """
-  serviceCapacityOverrideConflicts(
-    """Entity identifier."""
-    id: ID!
-
-    """Candidate period+weekdays to check."""
-    input: ConflictCheckInput!
-  ): [ScheduleConflict!]!
-
-  """
-  Preview which existing venue closings a candidate period would conflict with.
-  """
-  venueClosingConflicts(
-    """Entity identifier."""
-    id: ID!
-
-    """Candidate period+weekdays to check."""
-    input: ConflictCheckInput!
-  ): [ScheduleConflict!]!
+    input: ClosingSearchInput = null
+  ): ClosingPage!
 
   """Fetch a reservation by ID."""
   reservation(
@@ -1141,12 +774,6 @@ type Query {
     input: ReservationSearchInput!
   ): ReservationPage!
 
-  """Slots of a venue whose bookings now exceed the effective capacity."""
-  reservationOverCapacity(
-    """Venue ID."""
-    venueId: ID!
-  ): [OverCapacitySlot!]!
-
   """Per-day, per-service occupancy of a venue over a date window."""
   reservationCalendar(
     """Venue ID."""
@@ -1158,21 +785,6 @@ type Query {
     """Last business date (inclusive)."""
     dateTo: Date!
   ): [CalendarDay!]!
-
-  """Slots a party could be booked into at a venue on one date."""
-  reservationAvailability(
-    """Venue ID."""
-    venueId: ID!
-
-    """Business date to check."""
-    businessDate: Date!
-
-    """Number of people to seat."""
-    partySize: Int!
-
-    """Reservation to leave out of the seat count (when editing)."""
-    excludeReservationId: ID = null
-  ): DayAvailability!
 }
 
 """A reservation."""
@@ -1182,6 +794,9 @@ type Reservation {
 
   """Venue this reservation belongs to."""
   venueId: String!
+
+  """Service this reservation is booked into."""
+  serviceId: String!
 
   """Current status."""
   status: ReservationStatus!
@@ -1226,13 +841,16 @@ input ReservationFilterInput {
   """Venue to list reservations for. Mandatory."""
   venueId: ID!
 
+  """Filter to reservations booked into this service."""
+  serviceId: ID = null
+
   """Filter to reservations in any of these statuses."""
   status: [ReservationStatus!] = null
 
-  """Include reservations on or after this venue-local date."""
+  """Include reservations on or after this business date."""
   dateFrom: Date = null
 
-  """Include reservations on or before this venue-local date."""
+  """Include reservations on or before this business date."""
   dateTo: Date = null
 
   """Return only reservations that violate the current schedule."""
@@ -1296,7 +914,7 @@ enum ReservationStatus {
   WITHDRAWN
 }
 
-"""Why a reservation no longer fits the current schedule."""
+"""Why a reservation no longer fits its service's current schedule."""
 enum ReservationViolation {
   NO_SERVICE
   CLOSED
@@ -1432,53 +1050,6 @@ type RolesList {
   roles: [Role!]!
 }
 
-"""An existing row that conflicts with a candidate period+weekday."""
-type ScheduleConflict {
-  """
-  Weekday from the candidate this conflict applies to; null means every day.
-  """
-  weekday: Weekday
-
-  """Which kind of exception the conflicting row is."""
-  source: ConflictSource!
-
-  """Identifier of the existing conflicting row."""
-  conflictingId: String!
-
-  """First date of the conflicting row; null for a permanent opening."""
-  conflictingDateStart: Date
-
-  """Last date of the conflicting row; null for a permanent opening."""
-  conflictingDateEnd: Date
-
-  """Weekday scope of the conflicting row; null means every day."""
-  conflictingWeekday: Weekday
-
-  """For a SERVICE_OPENING conflict, the other service that is open."""
-  conflictingServiceId: String
-
-  """For a SERVICE_OPENING conflict, the name of the other service."""
-  conflictingServiceName: String
-
-  """For a SERVICE_OPENING conflict, the other service's opening time."""
-  conflictingStartTime: Time
-
-  """For a SERVICE_OPENING conflict, the other service's closing time."""
-  conflictingEndTime: Time
-}
-
-"""Date-range filter for schedule exceptions."""
-input ScheduleDateFilter {
-  """Include items whose period ends on or after this date."""
-  dateFrom: Date = null
-
-  """Include items whose period starts on or before this date."""
-  dateTo: Date = null
-
-  """Return results even if the parent service has been deleted."""
-  includeDeleted: Boolean = null
-}
-
 """Resource grants search query."""
 input SearchResourceGrantsInput {
   """Resource type."""
@@ -1508,19 +1079,14 @@ type Service {
   """Description of the service."""
   description: String
 
-  """Reservation duration, in minutes."""
-  turnTimeM: Int!
+  """First date the service runs on (inclusive)."""
+  dateFrom: Date!
 
-  """Minimum notice required before a reservation slot, in minutes."""
-  advanceNoticeM: Int!
+  """Last date the service runs on (inclusive); null runs it indefinitely."""
+  dateTo: Date
 
-  """Interval between reservation slots, in minutes."""
-  slotIntervalM: Int!
-
-  """
-  Minutes past a reservation's start time before it may be marked as a no-show.
-  """
-  gracePeriodM: Int!
+  """Maximum number of seats bookable on any date the service runs."""
+  capacity: Int!
 
   """Deletion date, if the service has been deleted."""
   deletedAt: DateTime
@@ -1535,141 +1101,6 @@ type Service {
   venue: Venue!
 }
 
-"""A service open on the requested date, with its slot grid."""
-type ServiceAvailability {
-  """Service the slots belong to."""
-  serviceId: String!
-
-  """Name of that service."""
-  serviceName: String!
-
-  """Venue-local business date of the opening."""
-  businessDate: Date!
-
-  """Venue-local opening datetime (naive)."""
-  opensAt: DateTime!
-
-  """Venue-local closing datetime (naive)."""
-  closesAt: DateTime!
-
-  """Effective seat capacity for the date."""
-  capacity: Int!
-
-  """Reservation duration, in minutes."""
-  turnTimeM: Int!
-
-  """Interval between slot start times."""
-  slotIntervalM: Int!
-
-  """Start times still open to booking; empty for a past date."""
-  slots: [AvailabilitySlot!]!
-}
-
-"""A one-off closing for a date range."""
-type ServiceClosing {
-  """Closing identifier."""
-  id: String!
-
-  """Identifier of the service this closing belongs to."""
-  serviceId: String!
-
-  """First date of the closing period (inclusive)."""
-  dateStart: Date!
-
-  """Last date of the closing period (inclusive)."""
-  dateEnd: Date!
-
-  """Weekday the closing applies to within the range; null means every day."""
-  weekday: Weekday
-
-  """Description of this closing."""
-  description: String
-
-  """Creation date."""
-  createdAt: DateTime!
-
-  """Last update date."""
-  updatedAt: DateTime!
-}
-
-"""
-New closing information. Bulk: one row is created per weekday in `weekdays`; omitted/empty, or all seven, means every day.
-"""
-input ServiceClosingCreateInput {
-  """First date of the closing period (inclusive)."""
-  dateStart: Date!
-
-  """Last date of the closing period (inclusive)."""
-  dateEnd: Date!
-
-  """Weekdays to scope to; provide multiple to create one row per weekday."""
-  weekdays: [Weekday!] = null
-
-  """Description of this closing."""
-  description: String = null
-}
-
-"""A single page of results with pagination metadata."""
-type ServiceClosingPage {
-  """Items in the current page."""
-  items: [ServiceClosing!]!
-
-  """Total number of items across all pages."""
-  total: Int!
-
-  """0-indexed page number."""
-  page: Int!
-
-  """Number of items per page."""
-  pageSize: Int!
-
-  """Total number of pages."""
-  totalPages: Int!
-}
-
-"""Closing search query."""
-input ServiceClosingSearchInput {
-  """Pagination parameters."""
-  pagination: PaginationInput = null
-
-  """Sort instructions."""
-  sort: [ServiceClosingSortFieldSortInput!]! = []
-
-  """Filter parameters."""
-  filter: ScheduleDateFilter = null
-}
-
-"""Fields a closing search may be sorted by."""
-enum ServiceClosingSortField {
-  DATE_START
-  DATE_END
-  CREATED_AT
-  ID
-}
-
-"""A single sort instruction."""
-input ServiceClosingSortFieldSortInput {
-  """Field to sort by."""
-  field: ServiceClosingSortField!
-
-  """Sort direction."""
-  direction: SortDirection! = ASC
-}
-
-"""
-Closing fields to update. Unset fields are not modified. The weekday scope is immutable — delete and recreate to re-scope it.
-"""
-input ServiceClosingUpdateInput {
-  """New first date (inclusive)."""
-  dateStart: Date = null
-
-  """New last date (inclusive)."""
-  dateEnd: Date = null
-
-  """New description of this closing."""
-  description: String = null
-}
-
 """Direction of a sort clause."""
 enum SortDirection {
   ASC
@@ -1681,6 +1112,11 @@ scalar Time
 
 """Reservation fields to update (only provided fields change)."""
 input UpdateReservationInput {
+  """
+  Move the booking to this service, checked like a new booking. Gives a booking left on a closed or deleted service a new one.
+  """
+  serviceId: ID = null
+
   """New customer name."""
   contactName: String = null
 
@@ -1704,22 +1140,17 @@ input UpdateServiceInput {
   """New name of the service."""
   name: String = null
 
-  """New description of the service."""
-  description: String = null
+  """New first date the service runs on (inclusive)."""
+  dateFrom: Date = null
 
-  """New reservation duration, in minutes."""
-  turnTimeM: Int = null
+  """New maximum number of seats bookable on any date the service runs."""
+  capacity: Int = null
 
-  """New minimum notice required before a reservation slot, in minutes."""
-  advanceNoticeM: Int = null
+  """New description of the service (null clears it)."""
+  description: String
 
-  """New interval between reservation slots, in minutes."""
-  slotIntervalM: Int = null
-
-  """
-  New minutes past a reservation's start time before it may be marked as a no-show.
-  """
-  gracePeriodM: Int = null
+  """New last date the service runs on (null runs it indefinitely)."""
+  dateTo: Date
 }
 
 """User information to update."""
@@ -1809,113 +1240,6 @@ type Venue {
 
   """Last update date."""
   updatedAt: DateTime!
-}
-
-"""
-A venue-wide closing: closes every service of a venue for a date range.
-"""
-type VenueClosing {
-  """Venue closing identifier."""
-  id: String!
-
-  """Identifier of the venue this closing belongs to."""
-  venueId: String!
-
-  """First date of the closing period (inclusive)."""
-  dateStart: Date!
-
-  """Last date of the closing period (inclusive)."""
-  dateEnd: Date!
-
-  """Weekday the closing applies to within the range; null means every day."""
-  weekday: Weekday
-
-  """Description of this venue closing."""
-  description: String
-
-  """Creation date."""
-  createdAt: DateTime!
-
-  """Last update date."""
-  updatedAt: DateTime!
-}
-
-"""
-New venue closing information. Bulk: one row is created per weekday in `weekdays`; omitted/empty, or all seven, means every day.
-"""
-input VenueClosingCreateInput {
-  """First date of the closing period (inclusive)."""
-  dateStart: Date!
-
-  """Last date of the closing period (inclusive)."""
-  dateEnd: Date!
-
-  """Weekdays to scope to; provide multiple to create one row per weekday."""
-  weekdays: [Weekday!] = null
-
-  """Description of this venue closing."""
-  description: String = null
-}
-
-"""A single page of results with pagination metadata."""
-type VenueClosingPage {
-  """Items in the current page."""
-  items: [VenueClosing!]!
-
-  """Total number of items across all pages."""
-  total: Int!
-
-  """0-indexed page number."""
-  page: Int!
-
-  """Number of items per page."""
-  pageSize: Int!
-
-  """Total number of pages."""
-  totalPages: Int!
-}
-
-"""Venue-closing search query."""
-input VenueClosingSearchInput {
-  """Pagination parameters."""
-  pagination: PaginationInput = null
-
-  """Sort instructions."""
-  sort: [VenueClosingSortFieldSortInput!]! = []
-
-  """Filter parameters."""
-  filter: ScheduleDateFilter = null
-}
-
-"""Fields a venue-closing search may be sorted by."""
-enum VenueClosingSortField {
-  DATE_START
-  DATE_END
-  CREATED_AT
-  ID
-}
-
-"""A single sort instruction."""
-input VenueClosingSortFieldSortInput {
-  """Field to sort by."""
-  field: VenueClosingSortField!
-
-  """Sort direction."""
-  direction: SortDirection! = ASC
-}
-
-"""
-Venue closing fields to update. Unset fields are not modified. The weekday scope is immutable — delete and recreate to re-scope it.
-"""
-input VenueClosingUpdateInput {
-  """New first date (inclusive)."""
-  dateStart: Date = null
-
-  """New last date (inclusive)."""
-  dateEnd: Date = null
-
-  """New description of this closing."""
-  description: String = null
 }
 
 """Venue search filter."""

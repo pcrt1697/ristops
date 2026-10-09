@@ -147,7 +147,7 @@ Both fields are `None`/absent with no active span (telemetry disabled).
 Step-by-step conventions for scaffolding a new endpoint in a Postgres-backed domain service
 (`be-venue`, `be-reservation`, `be-authn`). `be-authz` (Neo4j) differs — noted inline where it
 does. Worked examples to cross-check against: `ristops-be-venue/.../domain/venue/` and
-`ristops-be-reservation/.../domain/schedule/`.
+`ristops-be-reservation/.../domain/service/`.
 
 ### 1. Locate or create the subdomain module
 

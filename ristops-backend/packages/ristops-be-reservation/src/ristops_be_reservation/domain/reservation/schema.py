@@ -1,13 +1,13 @@
-from datetime import date, datetime, time, timedelta, tzinfo
+from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Annotated, ClassVar, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from ristops_be_reservation.domain.models import ReservationViolation
 from ristops_lib_core.pydantic.types import ObjectUUID, CreatedAt, UpdatedAt
 from ristops_lib_core.schema.pagination import SearchQuery
-from ristops_lib_core.utils import to_utc_instant
 
 
 class ReservationStatus(StrEnum):
@@ -18,15 +18,6 @@ class ReservationStatus(StrEnum):
     CHECKED_IN = "checked_in"  # customer arrived
     NO_SHOW = "no_show"  # customer did not arrive
     WITHDRAWN = "withdrawn"  # venue withdrew an accepted booking it can no longer honor
-
-
-class ReservationViolation(StrEnum):
-    """Why a live (pending/confirmed) reservation no longer fits the current schedule. Computed on
-    read — reservations are never mutated by a schedule change (see the invalidation policy)."""
-
-    NO_SERVICE = "no_service"  # no service is open at that time anymore
-    CLOSED = "closed"  # a venue or service closing now covers the date
-    OUTSIDE_HOURS = "outside_hours"  # the turn no longer fits within the (shrunk) opening hours
 
 
 def _validate_reservation_datetime(value: datetime | None) -> datetime | None:
@@ -49,6 +40,10 @@ class ReservationCreationRequest(BaseModel):
 
     venue_id: UUID = Field(
         description="Identifier of the venue this reservation belongs to.",
+    )
+    service_id: UUID = Field(
+        description="Identifier of the service to book into. The requested time must fall within "
+                    "that service's opening window on the date.",
     )
     contact_name: str = Field(
         description="Name of the customer.",
@@ -86,6 +81,12 @@ class ReservationCreationRequest(BaseModel):
 class ReservationUpdateRequest(BaseModel):
     """Request body for updating an existing reservation. Unset fields are not modified."""
 
+    service_id: UUID | None = Field(
+        default=None,
+        description="Move the booking to this service. The booking is checked against it like a "
+                    "new one, so this is how a booking left on a closed or deleted service is "
+                    "given a new one.",
+    )
     contact_name: str | None = Field(
         default=None,
         description="New name of the customer.",
@@ -105,7 +106,8 @@ class ReservationUpdateRequest(BaseModel):
         default=None,
         description=(
             "New reservation date and time as venue-local wall-clock, naive (no timezone "
-            "offset). Minute granularity only."
+            "offset). Minute granularity only. Must still fall within the booked service's "
+            "opening window."
         ),
     )
     notes: str | None = Field(
@@ -122,6 +124,7 @@ class ReservationResponse(BaseModel):
 
     id: ObjectUUID
     venue_id: UUID = Field(description="Identifier of the venue this reservation belongs to.")
+    service_id: UUID = Field(description="Identifier of the service this reservation is booked into.")
     status: ReservationStatus = Field(description="Status of the reservation.")
     reservation_date: datetime = Field(
         description="Reservation date and time as venue-local wall-clock, naive (no offset).",
@@ -139,26 +142,6 @@ class ReservationResponse(BaseModel):
     )
     created_at: CreatedAt
     updated_at: UpdatedAt
-
-
-class OverCapacitySlot(BaseModel):
-    """A service+date whose booked seats now exceed the effective capacity (over-capacity is a
-    slot-level overflow, not attributable to a single reservation)."""
-
-    service_id: UUID = Field(description="Service the overbooked slot belongs to.")
-    service_name: str = Field(description="Name of that service.")
-    business_date: date = Field(description="Venue-local service date of the overbooked slot.")
-    capacity: int = Field(description="Effective seat capacity for that date.")
-    peak_booked: int = Field(description="Peak concurrent booked seats (the overflow amount).")
-    reservation_ids: list[UUID] = Field(
-        description="Live reservations contributing to this slot, for staff to review.",
-    )
-
-
-class OverCapacityResponse(BaseModel):
-    """The venue's currently overbooked slots (empty when none)."""
-
-    slots: list[OverCapacitySlot] = Field(default_factory=list)
 
 
 # Maximum span of a calendar query, in days. A month view needs 31; the cap keeps a single
@@ -199,12 +182,33 @@ class CalendarServiceSummary(BaseModel):
                     "opening, in which case it closes on the following calendar day.",
     )
     closes_at: datetime = Field(description="Venue-local closing datetime, naive.")
-    capacity: int = Field(
-        description="Effective seat capacity (opening capacity plus capacity-override deltas).",
+    capacity: int = Field(description="Seats the service can take on the date.")
+    booked: int = Field(description="Seats taken by live bookings on the date.")
+    remaining: int = Field(description="Seats still free on the date; negative when over capacity.")
+    reservation_count: int = Field(description="Number of live bookings on the date.")
+    over_capacity: bool = Field(description="Whether the booked seats exceed the capacity.")
+
+
+class ClosedServiceSummary(BaseModel):
+    """A service a closing removes from one business date while it still holds bookings."""
+
+    service_id: UUID = Field(description="Service the closing removes.")
+    service_name: str = Field(description="Name of that service.")
+    reservation_count: int = Field(
+        description="Pending or confirmed bookings still held on the service that day, which "
+                    "staff need to resolve.",
     )
-    peak_booked: int = Field(description="Peak concurrent booked seats across the service window.")
-    reservation_count: int = Field(description="Number of live bookings in the window.")
-    over_capacity: bool = Field(description="Whether the peak booked seats exceed the capacity.")
+
+
+class DeletedServiceSummary(BaseModel):
+    """A deleted service that still holds bookings on one business date."""
+
+    service_id: UUID = Field(description="The deleted service.")
+    service_name: str = Field(description="Name of that service.")
+    reservation_count: int = Field(
+        description="Pending or confirmed bookings still held on the service that day, which "
+                    "staff need to resolve.",
+    )
 
 
 class CalendarDay(BaseModel):
@@ -212,91 +216,28 @@ class CalendarDay(BaseModel):
 
     business_date: date = Field(description="Venue-local business date.")
     closed: bool = Field(
-        description="Whether a venue or service closing removes every service that would "
-                    "otherwise open on this date. False when nothing was scheduled at all.",
+        description="Whether a closing removes every service that would otherwise run on this "
+                    "date. False when nothing was scheduled at all.",
     )
     services: list[CalendarServiceSummary] = Field(default_factory=list)
+    closed_services: list[ClosedServiceSummary] = Field(
+        default_factory=list,
+        description="Services a closing removes that day which still hold bookings. They are not "
+                    "in `services`, since they no longer run.",
+    )
+    deleted_services: list[DeletedServiceSummary] = Field(
+        default_factory=list,
+        description="Deleted services that still hold bookings on that day. They are not in "
+                    "`services`, since they no longer run.",
+    )
 
 
 class CalendarResponse(BaseModel):
-    """Per-day occupancy of a venue over the requested window. Days with no service open and no
-    closing are omitted."""
+    """Per-day occupancy of a venue over the requested window — the day's shape and what is left
+    to book. Days with no service running and no closing are omitted, so a caller can render
+    "nothing scheduled" by absence."""
 
     days: list[CalendarDay] = Field(default_factory=list)
-
-
-class AvailabilityQuery(BaseModel):
-    """Query parameters of the availability preview: which venue, date and party to check."""
-
-    venue_id: UUID = Field(
-        description="Identifier of the venue to check.",
-    )
-    business_date: date = Field(
-        description="Venue-local business date to check. An overnight opening is reported on the "
-                    "date it opens on.",
-    )
-    party_size: int = Field(
-        description="Number of people to seat; a slot is bookable when this many seats remain.",
-        gt=0,
-    )
-    exclude_reservation_id: UUID | None = Field(
-        default=None,
-        description="Reservation to leave out of the seat count, so an edit does not count its "
-                    "own seats against itself.",
-    )
-
-
-class AvailabilityBlocker(StrEnum):
-    """Why an otherwise-open slot cannot take the requested party."""
-
-    INSUFFICIENT_SEATS = "insufficient_seats"  # fewer seats remain than the party needs
-
-
-class AvailabilitySlot(BaseModel):
-    """One start time on a service's slot grid, with its current seat occupancy."""
-
-    slot_at: datetime = Field(
-        description="Venue-local start time, naive — usable as a reservation's date as-is.",
-    )
-    booked: int = Field(description="Seats already taken by bookings overlapping this slot.")
-    remaining: int = Field(description="Seats still free at this slot.")
-    bookable: bool = Field(description="Whether the requested party fits.")
-    blocker: AvailabilityBlocker | None = Field(
-        default=None,
-        description="Why the party does not fit; null when the slot is bookable.",
-    )
-
-
-class ServiceAvailability(BaseModel):
-    """A service open on the requested date, with its slot grid."""
-
-    service_id: UUID = Field(description="Service the slots belong to.")
-    service_name: str = Field(description="Name of that service.")
-    business_date: date = Field(description="Venue-local business date of the opening.")
-    opens_at: datetime = Field(description="Venue-local opening datetime, naive.")
-    closes_at: datetime = Field(description="Venue-local closing datetime, naive.")
-    capacity: int = Field(description="Effective seat capacity for the date.")
-    turn_time_m: int = Field(description="Reservation duration, in minutes.")
-    slot_interval_m: int = Field(description="Interval between slot start times, in minutes.")
-    slots: list[AvailabilitySlot] = Field(
-        default_factory=list,
-        description="Bookable-in-principle start times. Slots that have passed, or that fall "
-                    "inside the advance-notice window, are omitted entirely — so this is empty "
-                    "for a past date even though the service opened.",
-    )
-
-
-class AvailabilityResponse(BaseModel):
-    """Read-only preview of what could be booked at a venue on one date (what a create would
-    409 on). Services are always listed when they open that date, even when no slot remains, so
-    a caller can still show the day's shape."""
-
-    business_date: date = Field(description="The venue-local date the preview is for.")
-    closed: bool = Field(
-        description="Whether a venue or service closing removes every service that would "
-                    "otherwise open on this date.",
-    )
-    services: list[ServiceAvailability] = Field(default_factory=list)
 
 
 class ReservationSortField(StrEnum):
@@ -313,17 +254,21 @@ class ReservationListFilter(BaseModel):
     venue_id: UUID = Field(
         description="Filter by venue ID. Mandatory.",
     )
+    service_id: UUID | None = Field(
+        default=None,
+        description="Filter to reservations booked into this service.",
+    )
     status: list[ReservationStatus] | None = Field(
         default=None,
         description="Filter to reservations in any of these statuses.",
     )
     date_from: date | None = Field(
         default=None,
-        description="Include reservations on or after this venue-local calendar date.",
+        description="Include reservations on or after this business date.",
     )
     date_to: date | None = Field(
         default=None,
-        description="Include reservations on or before this venue-local calendar date.",
+        description="Include reservations on or before this business date.",
     )
     violations_only: bool = Field(
         default=False,
@@ -336,23 +281,6 @@ class ReservationSearchQuery(SearchQuery, ReservationListFilter):
     """Full reservation search query: pagination, sort, and filter combined."""
 
     sort_field_enum: ClassVar[type[StrEnum]] = ReservationSortField
-
-    def date_bounds(self, tz: tzinfo) -> tuple[datetime | None, datetime | None]:
-        """
-        Convert the venue-local `[date_from, date_to]` filter into a half-open UTC instant range
-        `[start, end)`. `date_to` is inclusive, so `end` is the start of the following day.
-
-        :param tz: Timezone the filter dates are expressed in.
-        """
-        start = (
-            to_utc_instant(datetime.combine(self.date_from, time.min), tz)
-            if self.date_from is not None else None
-        )
-        end = (
-            to_utc_instant(datetime.combine(self.date_to + timedelta(days=1), time.min), tz)
-            if self.date_to is not None else None
-        )
-        return start, end
 
 
 class ReservationActionType(StrEnum):

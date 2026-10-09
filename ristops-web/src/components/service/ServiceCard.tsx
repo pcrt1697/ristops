@@ -8,6 +8,7 @@ import {
   ScheduleOutlined,
 } from '@ant-design/icons';
 import { useCan } from '../../domain/auth/auth.hooks.ts';
+import { formatValidity } from '../../domain/schedule/schedule.utils.ts';
 import { useDeleteService } from '../../domain/service/service.hooks.ts';
 import type { ListServicesQuery } from '../../services/graphql/graphql.ts';
 import { ResourceType } from '../../services/graphql/graphql.ts';
@@ -87,17 +88,11 @@ export default function ServiceCard({ venueId, service }: ServiceCardProps) {
           description={service.description ?? undefined}
         />
         <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
-          <Descriptions.Item label="Turn time">
-            {service.turnTimeM} min
+          <Descriptions.Item label="Runs">
+            {formatValidity(service.dateFrom, service.dateTo)}
           </Descriptions.Item>
-          <Descriptions.Item label="Slot interval">
-            {service.slotIntervalM} min
-          </Descriptions.Item>
-          <Descriptions.Item label="Min notice">
-            {service.advanceNoticeM} min
-          </Descriptions.Item>
-          <Descriptions.Item label="Grace period">
-            {service.gracePeriodM} min
+          <Descriptions.Item label="Capacity">
+            {service.capacity} seats
           </Descriptions.Item>
         </Descriptions>
       </Card>

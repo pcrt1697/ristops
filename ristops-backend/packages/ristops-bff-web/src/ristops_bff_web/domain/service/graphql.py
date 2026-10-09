@@ -1,5 +1,5 @@
 from builtins import list
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any
 
 import strawberry
@@ -9,6 +9,35 @@ from ristops_bff_web.domain.service.service import (
 )
 from ristops_bff_web.domain.venue.graphql import Venue, resolve_venue
 from ristops_bff_web.graphql.types import EntityId
+
+
+def _create_payload(inp: "CreateServiceInput") -> dict[str, Any]:
+    return {
+        "venue_id": inp.venue_id,
+        "name": inp.name,
+        "description": inp.description,
+        "date_from": inp.date_from.isoformat(),
+        "date_to": inp.date_to.isoformat() if inp.date_to is not None else None,
+        "capacity": inp.capacity,
+    }
+
+
+def _update_payload(inp: "UpdateServiceInput") -> dict[str, Any]:
+    """Send only provided fields, so unset ones aren't touched. ``date_to`` defaults to UNSET, so
+    an explicit null is forwarded and re-opens the service indefinitely, while an omitted one
+    leaves the current end date alone."""
+    payload: dict[str, Any] = {}
+    if inp.name is not None:
+        payload["name"] = inp.name
+    if inp.description is not strawberry.UNSET:
+        payload["description"] = inp.description
+    if inp.date_from is not None:
+        payload["date_from"] = inp.date_from.isoformat()
+    if inp.date_to is not strawberry.UNSET:
+        payload["date_to"] = inp.date_to.isoformat() if inp.date_to is not None else None
+    if inp.capacity is not None:
+        payload["capacity"] = inp.capacity
+    return payload
 
 
 async def resolve_get_service(
@@ -24,7 +53,7 @@ async def resolve_create_service(
             strawberry.argument(description="Service information.", name="input")
         ]
 ) -> "Service":
-    service = await create_service(strawberry.asdict(_input))
+    service = await create_service(_create_payload(_input))
     return Service.from_dict(service)
 
 
@@ -35,7 +64,7 @@ async def resolve_update_service(
             strawberry.argument(description="Service information to update.", name="input")
         ]
 ) -> "Service":
-    service = await update_service(service_id, strawberry.asdict(_input))
+    service = await update_service(service_id, _update_payload(_input))
     return Service.from_dict(service)
 
 
@@ -79,17 +108,14 @@ class Service:
     description: str | None = strawberry.field(
         description="Description of the service.",
     )
-    turn_time_m: int = strawberry.field(
-        description="Reservation duration, in minutes.",
+    date_from: date = strawberry.field(
+        description="First date the service runs on (inclusive).",
     )
-    advance_notice_m: int = strawberry.field(
-        description="Minimum notice required before a reservation slot, in minutes.",
+    date_to: date | None = strawberry.field(
+        description="Last date the service runs on (inclusive); null runs it indefinitely.",
     )
-    slot_interval_m: int = strawberry.field(
-        description="Interval between reservation slots, in minutes.",
-    )
-    grace_period_m: int = strawberry.field(
-        description="Minutes past a reservation's start time before it may be marked as a no-show.",
+    capacity: int = strawberry.field(
+        description="Maximum number of seats bookable on any date the service runs.",
     )
     deleted_at: datetime | None = strawberry.field(
         description="Deletion date, if the service has been deleted.",
@@ -112,10 +138,9 @@ class Service:
             venue_id=obj["venue_id"],
             name=obj["name"],
             description=obj.get("description"),
-            turn_time_m=obj["turn_time_m"],
-            advance_notice_m=obj["advance_notice_m"],
-            slot_interval_m=obj["slot_interval_m"],
-            grace_period_m=obj["grace_period_m"],
+            date_from=obj["date_from"],
+            date_to=obj.get("date_to"),
+            capacity=obj["capacity"],
             deleted_at=obj.get("deleted_at"),
             created_at=obj["created_at"],
             updated_at=obj["updated_at"],
@@ -132,21 +157,20 @@ class CreateServiceInput:
     name: str = strawberry.field(
         description="Name of the service.",
     )
+    date_from: date = strawberry.field(
+        description="First date the service runs on (inclusive).",
+    )
+    capacity: int = strawberry.field(
+        description="Maximum number of seats bookable on any date the service runs.",
+    )
     description: str | None = strawberry.field(
         default=None,
         description="Description of the service.",
     )
-    turn_time_m: int = strawberry.field(
-        description="Reservation duration, in minutes.",
-    )
-    advance_notice_m: int = strawberry.field(
-        description="Minimum notice required before a reservation slot, in minutes.",
-    )
-    slot_interval_m: int = strawberry.field(
-        description="Interval between reservation slots, in minutes.",
-    )
-    grace_period_m: int = strawberry.field(
-        description="Minutes past a reservation's start time before it may be marked as a no-show.",
+    date_to: date | None = strawberry.field(
+        default=None,
+        description="Last date the service runs on (inclusive). Omit to run it indefinitely; "
+                    "set it equal to dateFrom for a one-shot service.",
     )
 
 
@@ -158,25 +182,24 @@ class UpdateServiceInput:
         default=None,
         description="New name of the service.",
     )
+    date_from: date | None = strawberry.field(
+        default=None,
+        description="New first date the service runs on (inclusive).",
+    )
+    capacity: int | None = strawberry.field(
+        default=None,
+        description="New maximum number of seats bookable on any date the service runs.",
+    )
+    # UNSET default so an omitted field is left unchanged while an explicit null clears it — the
+    # two fields the backend allows clearing. (name/dateFrom/capacity can't be cleared, so a
+    # plain None default is fine there.)
     description: str | None = strawberry.field(
-        default=None,
-        description="New description of the service.",
+        default=strawberry.UNSET,
+        description="New description of the service (null clears it).",
     )
-    turn_time_m: int | None = strawberry.field(
-        default=None,
-        description="New reservation duration, in minutes.",
-    )
-    advance_notice_m: int | None = strawberry.field(
-        default=None,
-        description="New minimum notice required before a reservation slot, in minutes.",
-    )
-    slot_interval_m: int | None = strawberry.field(
-        default=None,
-        description="New interval between reservation slots, in minutes.",
-    )
-    grace_period_m: int | None = strawberry.field(
-        default=None,
-        description="New minutes past a reservation's start time before it may be marked as a no-show.",
+    date_to: date | None = strawberry.field(
+        default=strawberry.UNSET,
+        description="New last date the service runs on (null runs it indefinitely).",
     )
 
 

@@ -1,9 +1,10 @@
+from datetime import date
 from enum import StrEnum
-
-from sqlalchemy import ColumnElement, or_, true
 
 
 class Weekday(StrEnum):
+    """Days of the week, in Python's Monday=0..Sunday=6 order (matching `date.weekday()`)."""
+
     MONDAY = "monday"
     TUESDAY = "tuesday"
     WEDNESDAY = "wednesday"
@@ -13,28 +14,23 @@ class Weekday(StrEnum):
     SUNDAY = "sunday"
 
 
-def normalize_weekdays(weekdays: list[Weekday] | None) -> list[Weekday | None]:
-    """Normalize a bulk-create ``weekdays`` list into the set of per-row weekday values to
-    persist: one row per distinct weekday (in canonical order), or a single ``[None]``
-    (every day) when the list is empty/omitted or covers all seven weekdays."""
-    if not weekdays:
-        return [None]
-    unique = set(weekdays)
-    if unique == set(Weekday):
-        return [None]
-    return [weekday for weekday in Weekday if weekday in unique]
+class ReservationViolation(StrEnum):
+    """Why a live (pending/confirmed) reservation no longer fits its service's current schedule.
+    Computed on read — reservations are never mutated by a schedule change."""
+
+    NO_SERVICE = "no_service"  # the service was deleted, or no longer runs that date
+    CLOSED = "closed"  # a closing now covers the date
+    OUTSIDE_HOURS = "outside_hours"  # the service still runs that day, but not at that time
 
 
-def weekday_scope_overlap_condition(
-        weekday_column: ColumnElement[str | None],
-        weekday: Weekday | None,
-) -> ColumnElement[bool]:
-    """Whether an existing row's weekday scope overlaps a candidate ``weekday``.
+WEEKDAYS: tuple[Weekday, ...] = tuple(Weekday)
 
-    ``None`` means "every day in the range": a ``None`` candidate overlaps any existing row, and
-    an existing ``None``-scoped row overlaps any candidate. Two explicit weekdays overlap only
-    when equal.
-    """
-    if weekday is None:
-        return true()
-    return or_(weekday_column.is_(None), weekday_column == weekday)
+
+def weekday_of(on_date: date) -> Weekday:
+    """The weekday a calendar date falls on."""
+    return WEEKDAYS[on_date.weekday()]
+
+
+def next_weekday(weekday: Weekday) -> Weekday:
+    """The weekday following the given one, wrapping Sunday back to Monday."""
+    return WEEKDAYS[(WEEKDAYS.index(weekday) + 1) % 7]

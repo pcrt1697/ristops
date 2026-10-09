@@ -46,11 +46,6 @@ does not reach two things in this workspace:
 * **Redis Streams** — a trace normally ends at a queue boundary; `ristops-lib-redis` and
   `ristops-lib-be` close it (see their own docs pages).
 
-`ristops_lib_otel.tracing.traced()` is the escape hatch for domain-specific spans elsewhere — a
-decorator wrapping an async function in its own span, named after it unless overridden. Used
-sparingly, on the handful of operations worth naming individually (e.g. the schedule conflict
-check and slot-availability check in `be-reservation`), not on every function.
-
 ## Dependencies
 
 `ristops-lib-core`, `opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-grpc`,

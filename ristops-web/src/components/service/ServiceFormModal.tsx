@@ -1,4 +1,5 @@
-import { Form, Input, InputNumber, Modal } from 'antd';
+import { DatePicker, Form, Input, InputNumber, Modal } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import {
   useCreateService,
   useUpdateService,
@@ -10,10 +11,9 @@ type ServiceListItem = ListServicesQuery['listServices'][number];
 interface ServiceFormValues {
   name: string;
   description?: string;
-  turnTimeM: number;
-  slotIntervalM: number;
-  advanceNoticeM: number;
-  gracePeriodM: number;
+  dateFrom: Dayjs;
+  dateTo?: Dayjs | null;
+  capacity: number;
 }
 
 interface ServiceFormModalProps {
@@ -23,6 +23,13 @@ interface ServiceFormModalProps {
   onClose: () => void;
 }
 
+/**
+ * Create or edit a service: what it is, when it runs, and how many seats it takes. Its hours are
+ * set separately on the schedule page — a service with no openings simply never runs.
+ *
+ * The end date is optional: left empty the service runs indefinitely, and setting it equal to the
+ * start date makes a one-shot service for a single date.
+ */
 export default function ServiceFormModal({
   venueId,
   service,
@@ -44,10 +51,17 @@ export default function ServiceFormModal({
     form
       .validateFields()
       .then(async (values) => {
+        const input = {
+          name: values.name,
+          description: values.description ?? null,
+          dateFrom: values.dateFrom.format('YYYY-MM-DD'),
+          dateTo: values.dateTo ? values.dateTo.format('YYYY-MM-DD') : null,
+          capacity: values.capacity,
+        };
         if (service) {
-          await updateService.mutateAsync({ id: service.id, input: values });
+          await updateService.mutateAsync({ id: service.id, input });
         } else {
-          await createService.mutateAsync({ ...values, venueId });
+          await createService.mutateAsync({ ...input, venueId });
         }
         form.resetFields();
         onClose();
@@ -67,19 +81,14 @@ export default function ServiceFormModal({
       okText={isEditing ? 'Save' : 'Create'}
       destroyOnHidden
       centered
-      styles={{
-        container: { height: '80dvh', display: 'flex', flexDirection: 'column' },
-        body: { flex: 1, overflowY: 'auto' },
-      }}
       afterOpenChange={(o) => {
         if (o) {
           form.setFieldsValue({
             name: service?.name,
             description: service?.description ?? undefined,
-            turnTimeM: service?.turnTimeM,
-            slotIntervalM: service?.slotIntervalM,
-            advanceNoticeM: service?.advanceNoticeM,
-            gracePeriodM: service?.gracePeriodM,
+            dateFrom: service ? dayjs(service.dateFrom) : dayjs(),
+            dateTo: service?.dateTo ? dayjs(service.dateTo) : null,
+            capacity: service?.capacity,
           });
         }
       }}
@@ -105,67 +114,48 @@ export default function ServiceFormModal({
           <Input.TextArea rows={3} placeholder="e.g. Weekday lunch service" />
         </Form.Item>
         <Form.Item
-          name="turnTimeM"
-          label="Turn time (minutes)"
-          extra="How long a table is held for a single reservation."
+          name="dateFrom"
+          label="Runs from"
+          extra="First date this service is offered."
+          rules={[{ required: true, message: 'A start date is required.' }]}
+        >
+          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+        </Form.Item>
+        <Form.Item
+          name="dateTo"
+          label="Runs until"
+          extra="Leave empty to run indefinitely, or match the start date for a one-off."
+          dependencies={['dateFrom']}
           rules={[
-            { required: true, message: 'Turn time is required.' },
+            ({ getFieldValue }) => ({
+              validator(_, value: Dayjs | null | undefined) {
+                const from = getFieldValue('dateFrom') as Dayjs | undefined;
+                if (!value || !from || !value.isBefore(from, 'day')) {
+                  return Promise.resolve();
+                }
+                return Promise.reject(
+                  new Error('The end date must not be before the start date.'),
+                );
+              },
+            }),
+          ]}
+        >
+          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" allowClear />
+        </Form.Item>
+        <Form.Item
+          name="capacity"
+          label="Capacity (seats)"
+          extra="How many seats this service can take on any date it runs."
+          rules={[
+            { required: true, message: 'Capacity is required.' },
             {
               type: 'integer',
               min: 1,
-              message: 'Turn time must be a whole number of minutes (at least 1).',
+              message: 'Capacity must be a whole number of seats (at least 1).',
             },
           ]}
         >
-          <InputNumber min={1} step={1} placeholder="e.g. 60" style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item
-          name="slotIntervalM"
-          label="Slot interval (minutes)"
-          extra="Spacing between consecutive bookable time slots."
-          rules={[
-            { required: true, message: 'Slot interval is required.' },
-            {
-              type: 'integer',
-              min: 1,
-              message:
-                'Slot interval must be a whole number of minutes (at least 1).',
-            },
-          ]}
-        >
-          <InputNumber min={1} step={1} placeholder="e.g. 15" style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item
-          name="advanceNoticeM"
-          label="Minimum notice (minutes)"
-          extra="How far ahead a guest must book before a slot's start time."
-          rules={[
-            { required: true, message: 'Minimum notice is required.' },
-            {
-              type: 'integer',
-              min: 1,
-              message:
-                'Minimum notice must be a whole number of minutes (at least 1).',
-            },
-          ]}
-        >
-          <InputNumber min={1} step={1} placeholder="e.g. 120" style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item
-          name="gracePeriodM"
-          label="Grace period (minutes)"
-          extra="Delay past the start time before a reservation can be marked a no-show."
-          rules={[
-            { required: true, message: 'Grace period is required.' },
-            {
-              type: 'integer',
-              min: 0,
-              message:
-                'Grace period must be a whole number of minutes (0 or more).',
-            },
-          ]}
-        >
-          <InputNumber min={0} step={1} placeholder="e.g. 15" style={{ width: '100%' }} />
+          <InputNumber min={1} step={1} placeholder="e.g. 40" style={{ width: '100%' }} />
         </Form.Item>
       </Form>
     </Modal>

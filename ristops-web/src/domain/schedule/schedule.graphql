@@ -1,45 +1,39 @@
-query ListServiceOpenings($serviceId: ID!, $includeDeleted: Boolean) {
-    serviceOpenings(id: $serviceId, includeDeleted: $includeDeleted) {
-        id
-        serviceId
-        weekday
-        capacity
-        startTime
-        endTime
-        description
-        createdAt
-        updatedAt
+fragment OpeningFields on Opening {
+    id
+    serviceId
+    weekday
+    startTime
+    endTime
+    description
+}
+
+fragment ClosingFields on Closing {
+    id
+    venueId
+    dateFrom
+    dateTo
+    serviceIds
+    description
+    createdAt
+    updatedAt
+}
+
+query ListServiceOpenings($serviceId: ID!) {
+    serviceOpenings(serviceId: $serviceId) {
+        ...OpeningFields
     }
 }
 
-mutation UpsertServiceOpenings($serviceId: ID!, $openings: [OpeningUpsertInput!]!) {
-    upsertServiceOpenings(id: $serviceId, openings: $openings) {
-        id
-        serviceId
-        weekday
-        capacity
-        startTime
-        endTime
-        description
-        createdAt
-        updatedAt
+mutation UpsertServiceOpenings($serviceId: ID!, $input: [OpeningUpsertInput!]!) {
+    upsertServiceOpenings(serviceId: $serviceId, input: $input) {
+        ...OpeningFields
     }
 }
 
-query SearchOpeningOverrides($serviceId: ID!, $input: OpeningOverrideSearchInput) {
-    serviceOpeningOverrides(id: $serviceId, input: $input) {
+query SearchClosings($id: ID!, $input: ClosingSearchInput) {
+    venueClosings(id: $id, input: $input) {
         items {
-            id
-            serviceId
-            dateStart
-            dateEnd
-            weekday
-            capacity
-            startTime
-            endTime
-            description
-            createdAt
-            updatedAt
+            ...ClosingFields
         }
         total
         page
@@ -48,199 +42,18 @@ query SearchOpeningOverrides($serviceId: ID!, $input: OpeningOverrideSearchInput
     }
 }
 
-mutation CreateOpeningOverride($serviceId: ID!, $input: OpeningOverrideCreateInput!) {
-    createOpeningOverride(id: $serviceId, input: $input) {
-        id
+mutation CreateClosing($id: ID!, $input: ClosingCreateInput!) {
+    createClosing(id: $id, input: $input) {
+        ...ClosingFields
     }
 }
 
-mutation UpdateOpeningOverride($serviceId: ID!, $overrideId: ID!, $input: OpeningOverrideUpdateInput!) {
-    updateOpeningOverride(id: $serviceId, overrideId: $overrideId, input: $input) {
-        id
+mutation UpdateClosing($id: ID!, $closingId: ID!, $input: ClosingUpdateInput!) {
+    updateClosing(id: $id, closingId: $closingId, input: $input) {
+        ...ClosingFields
     }
 }
 
-mutation DeleteOpeningOverride($serviceId: ID!, $overrideId: ID!) {
-    deleteOpeningOverride(id: $serviceId, overrideId: $overrideId)
-}
-
-query SearchServiceClosings($serviceId: ID!, $input: ServiceClosingSearchInput) {
-    serviceClosings(id: $serviceId, input: $input) {
-        items {
-            id
-            serviceId
-            dateStart
-            dateEnd
-            weekday
-            description
-            createdAt
-            updatedAt
-        }
-        total
-        page
-        pageSize
-        totalPages
-    }
-}
-
-mutation CreateServiceClosing($serviceId: ID!, $input: ServiceClosingCreateInput!) {
-    createServiceClosing(id: $serviceId, input: $input) {
-        id
-    }
-}
-
-mutation UpdateServiceClosing($serviceId: ID!, $closingId: ID!, $input: ServiceClosingUpdateInput!) {
-    updateServiceClosing(id: $serviceId, closingId: $closingId, input: $input) {
-        id
-    }
-}
-
-mutation DeleteServiceClosing($serviceId: ID!, $closingId: ID!) {
-    deleteServiceClosing(id: $serviceId, closingId: $closingId)
-}
-
-query SearchCapacityOverrides($serviceId: ID!, $input: CapacityOverrideSearchInput) {
-    serviceCapacityOverrides(id: $serviceId, input: $input) {
-        items {
-            id
-            serviceId
-            dateStart
-            dateEnd
-            weekday
-            capacityDelta
-            description
-            createdAt
-            updatedAt
-        }
-        total
-        page
-        pageSize
-        totalPages
-    }
-}
-
-mutation CreateCapacityOverride($serviceId: ID!, $input: CapacityOverrideCreateInput!) {
-    createCapacityOverride(id: $serviceId, input: $input) {
-        id
-    }
-}
-
-mutation UpdateCapacityOverride($serviceId: ID!, $capacityOverrideId: ID!, $input: CapacityOverrideUpdateInput!) {
-    updateCapacityOverride(id: $serviceId, capacityOverrideId: $capacityOverrideId, input: $input) {
-        id
-    }
-}
-
-mutation DeleteCapacityOverride($serviceId: ID!, $capacityOverrideId: ID!) {
-    deleteCapacityOverride(id: $serviceId, capacityOverrideId: $capacityOverrideId)
-}
-
-query SearchVenueClosings($venueId: ID!, $input: VenueClosingSearchInput) {
-    venueClosings(id: $venueId, input: $input) {
-        items {
-            id
-            venueId
-            dateStart
-            dateEnd
-            weekday
-            description
-            createdAt
-            updatedAt
-        }
-        total
-        page
-        pageSize
-        totalPages
-    }
-}
-
-mutation CreateVenueClosing($venueId: ID!, $input: VenueClosingCreateInput!) {
-    createVenueClosing(id: $venueId, input: $input) {
-        id
-    }
-}
-
-mutation UpdateVenueClosing($venueId: ID!, $closingId: ID!, $input: VenueClosingUpdateInput!) {
-    updateVenueClosing(id: $venueId, closingId: $closingId, input: $input) {
-        id
-    }
-}
-
-mutation DeleteVenueClosing($venueId: ID!, $closingId: ID!) {
-    deleteVenueClosing(id: $venueId, closingId: $closingId)
-}
-
-query OpeningOverrideConflicts($serviceId: ID!, $input: ConflictCheckInput!) {
-    serviceOpeningOverrideConflicts(id: $serviceId, input: $input) {
-        weekday
-        source
-        conflictingId
-        conflictingDateStart
-        conflictingDateEnd
-        conflictingWeekday
-        conflictingServiceId
-        conflictingServiceName
-        conflictingStartTime
-        conflictingEndTime
-    }
-}
-
-query ServiceClosingConflicts($serviceId: ID!, $input: ConflictCheckInput!) {
-    serviceClosingConflicts(id: $serviceId, input: $input) {
-        weekday
-        source
-        conflictingId
-        conflictingDateStart
-        conflictingDateEnd
-        conflictingWeekday
-        conflictingServiceId
-        conflictingServiceName
-        conflictingStartTime
-        conflictingEndTime
-    }
-}
-
-query CapacityOverrideConflicts($serviceId: ID!, $input: ConflictCheckInput!) {
-    serviceCapacityOverrideConflicts(id: $serviceId, input: $input) {
-        weekday
-        source
-        conflictingId
-        conflictingDateStart
-        conflictingDateEnd
-        conflictingWeekday
-        conflictingServiceId
-        conflictingServiceName
-        conflictingStartTime
-        conflictingEndTime
-    }
-}
-
-query VenueClosingConflicts($venueId: ID!, $input: ConflictCheckInput!) {
-    venueClosingConflicts(id: $venueId, input: $input) {
-        weekday
-        source
-        conflictingId
-        conflictingDateStart
-        conflictingDateEnd
-        conflictingWeekday
-        conflictingServiceId
-        conflictingServiceName
-        conflictingStartTime
-        conflictingEndTime
-    }
-}
-
-query ServiceOpeningConflicts($serviceId: ID!, $input: OpeningConflictCheckInput!) {
-    serviceOpeningConflicts(id: $serviceId, input: $input) {
-        weekday
-        source
-        conflictingId
-        conflictingDateStart
-        conflictingDateEnd
-        conflictingWeekday
-        conflictingServiceId
-        conflictingServiceName
-        conflictingStartTime
-        conflictingEndTime
-    }
+mutation DeleteClosing($id: ID!, $closingId: ID!) {
+    deleteClosing(id: $id, closingId: $closingId)
 }

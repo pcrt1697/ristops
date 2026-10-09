@@ -1,7 +1,7 @@
 # ristops-be-reservation
 
-Reservation service. Owns venue reservation configuration (services, seatings, opening rules
-and overrides), tables, and reservations, and computes slot availability.
+Reservation service. Owns venue reservation configuration (services, their weekly openings and
+closings) and the bookings made against them, and computes per-day availability.
 
 [Full documentation](https://pcrt1697.github.io/ristops/#/services/be-reservation)
 

@@ -47,65 +47,63 @@ activated without at least one service. A venue with no entry in `services.json`
 ```
 
 `venues.json` (venue) — `key` is a symbolic reference used by services and assignments. Optional
-`closings` are **venue-wide** (close every service for a date range, same `dates` / optional
-`weekday` shape as service closings), seeded via be-reservation's `/venues/{id}/closings`:
+`closings` take a date range away from the services they name; an empty (or omitted) `services`
+list closes **every** service of the venue. Dates are a fixed annual
+`dates.month_day_start/end` (`"MM-DD"`) range, materialized once per entry in
+`dates.year_offsets` (relative to the current *year* only — `[-1, 0, 1]` for
+previous/current/next year). The day/month are always fixed, so seed data never depends on which
+day it happens to be seeded on.
 
 ```json
 { "venues": [ { "key": "stark", "name": "House Stark", "address": "...", "description": "...",
-  "closings": [ { "dates": { "month_day_start": "01-15", "month_day_end": "02-05",
-    "year_offsets": [-1, 0, 1] }, "description": "Deep winter — Winterfell rests" } ] } ] }
+  "closings": [
+    { "dates": { "month_day_start": "01-15", "month_day_end": "02-05", "year_offsets": [-1, 0, 1] },
+      "services": [], "description": "Deep winter — Winterfell rests" },
+    { "dates": { "month_day_start": "09-21", "month_day_end": "09-23", "year_offsets": [0, 1] },
+      "services": ["A Feast in the Great Hall"], "description": "Makes room for Harvest feast" } ] } ] }
 ```
 
-`services.json` (reservation) — adds a service to a venue, referenced by `key`; all duration fields
-are in minutes. Optional `openings` set the service's weekly hours (open days); weekdays must be
-unique and lowercase, times are `HH:MM`:
+A closing can carry `"after_reservations": true`. A date cannot be booked once it is closed, so
+this creates the closing after the demo bookings, leaving the ones it covers on a closed service
+for staff to resolve. It is created before services marked `deleted` go, since a closing needs
+live services.
+
+`services.json` (reservation) — adds a service to a venue, referenced by `key`. `capacity` is the
+seats bookable on any date it runs; `openings` are its weekly hours, with unique lowercase
+weekdays and `HH:MM` times. An `end_time` at or before the `start_time` runs the opening
+**overnight**, closing the following day.
 
 ```json
 { "services": [ { "venue": "stark", "name": "The Northern Table", "description": "...",
-  "turn_time_m": 60, "advance_notice_m": 120, "slot_interval_m": 15, "grace_period_m": 15,
-  "openings": [ { "weekday": "monday", "capacity": 40, "start_time": "12:00", "end_time": "15:00" } ] } ] }
+  "capacity": 45,
+  "openings": [ { "weekday": "monday", "start_time": "12:00", "end_time": "15:00" } ] } ] }
 ```
 
-Optional `overrides` (special hours/capacity for a date range) and `closings` (service closed) add
-calendar exceptions. Their dates are a fixed annual `dates.month_day_start/end` (`"MM-DD"`) range,
-materialized once per entry in `dates.year_offsets` (relative to the current *year* only —
-`[-1, 0, 1]` for previous/current/next year). The day/month are always fixed, so seed data never
-depends on which day it happens to be seeded on.
-
-Both accept an optional lowercase `weekday` that scopes the exception to a single weekday within
-the range (null/omitted = every day) — e.g. "closed every Monday all summer":
+Omitting `dates` runs the service indefinitely (from a year back). Giving it the same fixed annual
+shape as a closing bounds the service to those dates — which is how a **one-off service** is
+seeded. A special evening is a one-off service plus a closing that takes the regular service off
+the same dates, since two services of a venue may not be open at once:
 
 ```json
-"overrides": [
-  { "dates": { "month_day_start": "09-21", "month_day_end": "09-23", "year_offsets": [-1, 0, 1] },
-    "capacity": 80, "start_time": "18:00", "end_time": "23:30", "description": "Harvest feast" },
-  { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] },
-    "weekday": "friday", "capacity": 65, "start_time": "18:00", "end_time": "23:59",
-    "description": "Extended service every Friday (summer)" }
-],
-"closings": [
-  { "dates": { "month_day_start": "10-10", "month_day_end": "10-11", "year_offsets": [-1, 0, 1] },
-    "description": "Kingsmoot recess" },
-  { "dates": { "month_day_start": "06-01", "month_day_end": "07-31", "year_offsets": [-1, 0, 1] },
-    "weekday": "monday", "description": "Closed every Monday (early summer rest)" }
-]
+{ "venue": "stark", "name": "Harvest feast",
+  "description": "Harvest feast — replaces A Feast in the Great Hall on these dates.",
+  "capacity": 80,
+  "dates": { "month_day_start": "09-21", "month_day_end": "09-23", "year_offsets": [0, 1] },
+  "openings": [ { "weekday": "monday", "start_time": "18:00", "end_time": "23:30" } ] }
 ```
 
-Optional `capacity_overrides` add a signed seat delta on top of the resolved capacity for a date
-range (same `dates` / optional `weekday` shape) — e.g. a summer garden that adds seats:
+A service can also carry `"deleted": true`. The seeder deletes it only after the demo bookings
+are made, since a deleted service takes no new bookings, which leaves those bookings on a deleted
+service for staff to resolve.
 
-```json
-"capacity_overrides": [
-  { "dates": { "month_day_start": "06-01", "month_day_end": "08-31", "year_offsets": [-1, 0, 1] },
-    "capacity_delta": 30, "description": "Godswood garden (summer)" }
-]
-```
+A one-off service normally lists all seven weekdays, so it runs whichever weekday its dates
+happen to fall on that year. The seeder creates the indefinite services first, then the closings,
+then the bounded ones — a closing has to exist before the service it makes room for.
 
-`reservations.json` (reservation) — books a party at a venue's service. Dates use the same fixed
-annual `dates` shape as the schedule exceptions, but a booking is a **single day**, so
-`month_day_start` and `month_day_end` are equal. `time` is a *preference*: the seeder asks
-`/reservations/availabilities` what is open that day and books the bookable slot nearest it, so the
-slot grid is never reimplemented here. Optional `status` applies a follow-up action
+`reservations.json` (reservation) — books a party into a venue's service, named by `service`.
+Dates use the same fixed annual shape, but a booking is a **single day**, so `month_day_start`
+and `month_day_end` are equal. `time` is booked as given: there is no slot grid, so any minute
+inside the service's window is valid.  Optional `status` applies a follow-up action
 (`confirmed` / `rejected` / `canceled`); omit it to leave the booking pending.
 
 ```json
@@ -116,13 +114,17 @@ slot grid is never reimplemented here. Optional `status` applies a follow-up act
   "status": "confirmed" } ] }
 ```
 
-Bookings are **future-only**: `POST /reservations` enforces the service's advance notice, so an
-occurrence that materializes on an elapsed date cannot be created. Those — along with occurrences
-falling on a closed day, or on a weekday the service does not open (a fixed `MM-DD` lands on a
-different weekday each year) — are skipped and counted in the completion log rather than failing
-the run. `year_offsets` is therefore `[0, 1]` rather than the schedule exceptions' `[-1, 0, 1]`:
-a previous-year booking would always be skipped. Check-in and no-show are deliberately not
-offered as a `status`, since a future booking cannot already have arrived.
+A booking after midnight on an overnight service is dated the following calendar day, since
+that is when it happens: `00:30` on the 15th belongs to the evening service of the 14th, and is
+listed and counted under the 14th.
+
+Bookings are **future-only**: a booking cannot be created in the past, so an occurrence that
+materializes on an elapsed date is skipped. Those — along with occurrences the backend refuses
+(a closed date, a time outside the window, a full service, or a weekday the service does not
+open, since a fixed `MM-DD` lands on a different weekday each year) — are skipped and counted in
+the completion log rather than failing the run. `year_offsets` is therefore `[0, 1]` rather than
+the closings' `[-1, 0, 1]`: a previous-year booking would always be skipped. Check-in and no-show
+are deliberately not offered as a `status`, since a future booking cannot already have arrived.
 
 `assignments.json` (authz) — grants a role to users on a venue, referenced by key/username:
 

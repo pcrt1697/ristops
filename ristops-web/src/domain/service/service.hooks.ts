@@ -6,6 +6,17 @@ import type {
 } from '../../services/graphql/graphql.ts';
 import { serviceApi } from './service.api.ts';
 
+/**
+ * Error text for a failed service write. A 409 means the hours or validity period would put the
+ * service on top of another one — the backend names which, so its message is more useful than
+ * anything generic.
+ */
+function serviceWriteError(error: unknown, fallback: string): string {
+  const status = (error as { status?: number })?.status;
+  const detail = (error as { message?: string })?.message;
+  return status === 409 && detail ? detail : fallback;
+}
+
 export function useService(id: string | null | undefined) {
   return useQuery({
     queryKey: ['service.get', id],
@@ -36,8 +47,8 @@ export function useCreateService(venueId: string) {
         queryKey: ['service.list', venueId],
       });
     },
-    onError: () => {
-      void message.error('Could not create the service');
+    onError: (error) => {
+      void message.error(serviceWriteError(error, 'Could not create the service'));
     },
   });
 }
@@ -53,8 +64,8 @@ export function useUpdateService(venueId: string) {
         queryKey: ['service.list', venueId],
       });
     },
-    onError: () => {
-      void message.error('Could not update the service');
+    onError: (error) => {
+      void message.error(serviceWriteError(error, 'Could not update the service'));
     },
   });
 }

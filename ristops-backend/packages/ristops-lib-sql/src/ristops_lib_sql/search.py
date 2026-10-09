@@ -74,8 +74,8 @@ class SearchQueryExecutor(Generic[TQuery, TScope, TEntity, TResponse]):
             conditions: list[ColumnElement[bool]] | None = None,
     ) -> Select:
         """Build the base SELECT statement (WHERE + ORDER BY), without offset/limit."""
-        conditions = conditions if conditions is not None else self.build_conditions(query, scope)
-        stmt = select(self.entity_class).where(*conditions)
+        _conditions = conditions if conditions is not None else self.build_conditions(query, scope)
+        stmt = select(self.entity_class).where(*_conditions)
         sort_clauses = query.get_sort_clauses()
         if sort_clauses:
             stmt = stmt.order_by(*self._parse_sort(sort_clauses))

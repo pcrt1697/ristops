@@ -10,9 +10,7 @@ import {
   GetReservationDocument,
   NoShowReservationDocument,
   RejectReservationDocument,
-  ReservationAvailabilityDocument,
   ReservationCalendarDocument,
-  ReservationOverCapacityDocument,
   SearchReservationsDocument,
   UpdateReservationDocument,
   WithdrawReservationDocument,
@@ -23,26 +21,10 @@ export const reservationApi = {
     gqlRequest(GetReservationDocument, { id }).then((r) => r.reservation),
   searchReservations: (input: ReservationSearchInput) =>
     gqlRequest(SearchReservationsDocument, { input }).then((r) => r.reservations),
-  reservationOverCapacity: (venueId: string) =>
-    gqlRequest(ReservationOverCapacityDocument, { venueId }).then(
-      (r) => r.reservationOverCapacity,
-    ),
   reservationCalendar: (venueId: string, dateFrom: string, dateTo: string) =>
     gqlRequest(ReservationCalendarDocument, { venueId, dateFrom, dateTo }).then(
       (r) => r.reservationCalendar,
     ),
-  reservationAvailability: (
-    venueId: string,
-    businessDate: string,
-    partySize: number,
-    excludeReservationId?: string | null,
-  ) =>
-    gqlRequest(ReservationAvailabilityDocument, {
-      venueId,
-      businessDate,
-      partySize,
-      excludeReservationId,
-    }).then((r) => r.reservationAvailability),
 
   createReservation: (input: CreateReservationInput) =>
     gqlRequest(CreateReservationDocument, { input }).then((r) => r.createReservation),
