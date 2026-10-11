@@ -36,10 +36,12 @@ ristops/
       ristops-lib-redis/   # Redis client + stream consumer
       ristops-lib-neo4j/   # Neo4j async driver, transactions, migration engine
       ristops-lib-otel/    # OpenTelemetry instrumentation: traces, metrics, logs over OTLP
+      ristops-lib-agent/   # Stateless LLM agent runtime: tool loop, HTTP tools, typed events
       ristops-be-authn/    # Auth backend (users, JWT issuance, PostgreSQL)
       ristops-be-authz/    # AuthZ backend (ACL/roles/resources in Neo4j, Redis stream consumer)
       ristops-be-venue/    # Venue registry (PostgreSQL)
       ristops-be-reservation/  # Services, openings, closings, reservations (PostgreSQL)
+      ristops-be-chat/     # AI assistant chat: conversations, runs the agent (PostgreSQL)
       ristops-bff-web/     # BFF for web (Strawberry GraphQL, Redis sessions)
       ristops-batch-demo/  # Batch processing demo
   ristops-web/             # Frontend (React + TypeScript, Vite)

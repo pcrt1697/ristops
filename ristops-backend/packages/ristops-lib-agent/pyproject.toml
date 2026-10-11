@@ -1,0 +1,8 @@
+[project]
+name = "ristops-lib-agent"
+version = "0.1.0"
+dependencies = [
+    "pydantic>=2.14.0",
+    "pyyaml>=6.0.3",
+    "litellm>=1.104.2",
+]

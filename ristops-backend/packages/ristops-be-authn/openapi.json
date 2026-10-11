@@ -1,0 +1,1074 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RistOps AuthN APIs",
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Refresh",
+        "operationId": "refresh_api_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/.well-known/jwks.json": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Jwks",
+        "description": "Returns the public key set used to verify JWT access tokens. The response is cached in memory for the lifetime of the process. Key rotation requires a service restart.",
+        "operationId": "jwks_api__well_known_jwks_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JWKResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get Me",
+        "description": "Returns the authenticated user.",
+        "operationId": "get_me_api_users_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Delete Me",
+        "operationId": "delete_me_api_users_me_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users/{user_id}": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get",
+        "operationId": "get_api_users__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "User ID",
+              "title": "User Id"
+            },
+            "description": "User ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update",
+        "operationId": "update_api_users__user_id__patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "User ID",
+              "title": "User Id"
+            },
+            "description": "User ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Delete",
+        "operationId": "delete_api_users__user_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "User ID",
+              "title": "User Id"
+            },
+            "description": "User ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Create",
+        "operationId": "create_api_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Username or email already taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/members": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Get Members",
+        "description": "Search members: the public view of users. Any authenticated user may call this.",
+        "operationId": "get_members_api_members_get",
+        "parameters": [
+          {
+            "name": "filter.username",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by username using a like operator.",
+              "title": "Filter.Username"
+            },
+            "description": "Filter by username using a like operator."
+          },
+          {
+            "name": "filter.display_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by display name using a like operator.",
+              "title": "Filter.Display Name"
+            },
+            "description": "Filter by display name using a like operator."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "0-indexed page number",
+              "default": 0,
+              "title": "Page"
+            },
+            "description": "0-indexed page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Sortable fields: id, username, display_name, created_at. Prefix a field with '-' for descending.",
+              "title": "Sort"
+            },
+            "description": "Sortable fields: id, username, display_name, created_at. Prefix a field with '-' for descending."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_MemberResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/members/{user_id}": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Get Member",
+        "description": "Fetch a member: the public view of a user. Any authenticated user may call this.",
+        "operationId": "get_member_api_members__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "User ID",
+              "title": "User Id"
+            },
+            "description": "User ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns as soon as the app is able to serve requests. Deliberately checks no downstream dependency: container orchestration uses it to decide whether the process is up, not whether the whole stack is.",
+        "operationId": "get_health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Error title"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "description": "Standard error response payload. "
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus",
+            "description": "Liveness status of the service."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "description": "Liveness probe payload. "
+      },
+      "HealthStatus": {
+        "type": "string",
+        "enum": [
+          "ok"
+        ],
+        "title": "HealthStatus"
+      },
+      "JWK": {
+        "properties": {
+          "kty": {
+            "type": "string",
+            "enum": [
+              "EC",
+              "RSA",
+              "oct"
+            ],
+            "title": "Kty",
+            "description": "Key type. Identifies the cryptographic algorithm family. EC for elliptic curve, RSA, or oct for symmetric keys."
+          },
+          "use": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "sig",
+                  "enc"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use",
+            "description": "Intended use of the key. 'sig' for signature verification, 'enc' for encryption."
+          },
+          "alg": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alg",
+            "description": "Algorithm intended for use with this key, e.g. 'ES256', 'RS256'."
+          },
+          "kid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kid",
+            "description": "Key ID. Used to match a specific key in a JWKS when multiple keys are present."
+          },
+          "crv": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "P-256",
+                  "P-384",
+                  "P-521"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crv",
+            "description": "EC curve name. Required for EC keys. P-256 corresponds to ES256, P-384 to ES384, P-521 to ES512."
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X",
+            "description": "Base64url-encoded x coordinate of the EC public key point."
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y",
+            "description": "Base64url-encoded y coordinate of the EC public key point."
+          }
+        },
+        "type": "object",
+        "required": [
+          "kty"
+        ],
+        "title": "JWK"
+      },
+      "JWKResponse": {
+        "properties": {
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/JWK"
+            },
+            "type": "array",
+            "title": "Keys",
+            "description": "Array of JWK public keys. Clients should use the 'kid' field to select the appropriate key for verification."
+          }
+        },
+        "type": "object",
+        "required": [
+          "keys"
+        ],
+        "title": "JWKResponse"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "Email address of the user to log in."
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password",
+            "description": "Password of the user to log in.",
+            "writeOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "LoginResponse": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "description": "Username of the user."
+          },
+          "access_token": {
+            "type": "string",
+            "title": "Access Token",
+            "description": "Access token to use for user authentication."
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token",
+            "description": "Token to use for refreshing access token."
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "access_token",
+          "refresh_token"
+        ],
+        "title": "LoginResponse"
+      },
+      "MemberResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Resource identifier."
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Username of the member."
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name",
+            "description": "Display name of the member."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Date and time when the object was created."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "created_at"
+        ],
+        "title": "MemberResponse",
+        "description": "Public view of a user, readable by any authenticated user."
+      },
+      "Page_MemberResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MemberResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "Page[MemberResponse]"
+      },
+      "RefreshTokenRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token",
+            "description": "Token to use for refreshing access token."
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshTokenRequest"
+      },
+      "UserCreationRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Username of the user to register."
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name",
+            "description": "Display name of the user to register."
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "Email address of the user to register."
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "format": "password",
+            "title": "Password",
+            "description": "Password of the user to register.",
+            "writeOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "email",
+          "password"
+        ],
+        "title": "UserCreationRequest",
+        "description": "Request body for creating a new user."
+      },
+      "UserResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Resource identifier."
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Username of the user."
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name",
+            "description": "Display name of the user."
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "Email address of the user."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Date and time when the object was created."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Date and time when the object was updated."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "email",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "UserResponse"
+      },
+      "UserUpdateRequest": {
+        "properties": {
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username",
+            "description": "New username of the user."
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name",
+            "description": "New display name of the user."
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "New email address of the user."
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 8,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password",
+            "description": "New password of the user."
+          }
+        },
+        "type": "object",
+        "title": "UserUpdateRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

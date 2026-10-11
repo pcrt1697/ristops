@@ -17,11 +17,15 @@ ristops = "ristops_lib_core.cli.entrypoint:main"
 
 [project.entry-points."ristops.cli.commands"]
 start = "ristops_lib_core.cli.start:start"
+openapi = "ristops_lib_core.cli.openapi:openapi"
 sql-database = "ristops_lib_sql.cli:sql_database"
 seed-authn = "ristops_be_authn.cli.seed:seed"
 
 [project.entry-points."ristops.cli.commands.start"]
 be-authn = "ristops_be_authn.app:create_app"
+
+[project.entry-points."ristops.cli.commands.openapi.export"]
+be-authn = "ristops_be_authn.app:build_api"
 
 [project.entry-points."ristops.cli.commands.sql_database.generate_ddl"]
 be-authn = "ristops_be_authn.domain:MODELS"

@@ -6,8 +6,8 @@ from fastapi import FastAPI, HTTPException, Request
 from starlette import status
 
 from ristops_lib_be.authz.policy import Policy, POLICY
-from ristops_lib_core.app.routes import RouteAttributeRegistry
-from ristops_lib_core.auth.authn import PublicRoutesRegistry
+from ristops_lib_core.app.routes import RouteAttributeRegistry, get_routes_with_attr, iter_api_routes
+from ristops_lib_core.auth.authn import IS_PUBLIC, PublicRoutesRegistry
 from ristops_lib_core.context import APP_CONTEXT, ContextKey
 from ristops_lib_core.schema.authz import CheckAuthorizationRequest, AuthorizationGrant
 
@@ -50,6 +50,14 @@ class AuthZInterceptor:
         # we might want to monkeypatch FastAPI.include_routers in order to make this operation automatic
         self._protected_routes = RouteAttributeRegistry[tuple[Policy, ...]](api, POLICY)
         self._public_registry = PublicRoutesRegistry(api)
+        if (
+                next(iter_api_routes(api), None) is not None
+                and not self._protected_routes.has_routes
+                and not get_routes_with_attr(api, IS_PUBLIC)
+        ):
+            # routes exist but none is protected or public: every request would be rejected at runtime, so
+            # either no route was decorated or the routes could not be inspected
+            raise RuntimeError("AuthZInterceptor found no route with a @policy or @public decorator")
 
     async def __call__(self, request: Request) -> None:
         try:

@@ -24,7 +24,7 @@ def create_app() -> FastAPI:
     configure_telemetry("be-venue")   # first line: installs the tracer/meter/logger providers
     instrument_clients()              # once per process: httpx, redis, SQLAlchemy
 
-    app = FastAPI(...)
+    app = build_api(...)              # the API definition, see ristops-lib-core
     ...
     instrument_app(app)               # last line, after every add_middleware call
     return app

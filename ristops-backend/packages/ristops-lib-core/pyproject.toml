@@ -2,14 +2,14 @@
 name = "ristops-lib-core"
 version = "0.1.0"
 dependencies = [
-    "fastapi>=0.135.3",
-    "pydantic>=2.12.5",
+    "fastapi>=0.143.0",
+    "pydantic>=2.14.0",
     "pydantic-settings>=2.13.1",
-    "starlette>=1.0.0",
-    "pyjwt>=2.12.1",
+    "starlette>=1.7.0",
+    "pyjwt>=2.15.1",
     "email-validator>=2.3.0",
     "httpx>=0.28.1",
     "click>=8.3.2",
-    "uvicorn>=0.44.0",
-    "opentelemetry-api>=1.44.0",
+    "uvicorn>=0.54.0",
+    "opentelemetry-api>=1.45.1",
 ]

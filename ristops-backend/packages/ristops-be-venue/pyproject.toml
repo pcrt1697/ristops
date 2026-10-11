@@ -15,10 +15,14 @@ ristops = "ristops_lib_core.cli.entrypoint:main"
 
 [project.entry-points."ristops.cli.commands"]
 start = "ristops_lib_core.cli.start:start"
+openapi = "ristops_lib_core.cli.openapi:openapi"
 sql-database = "ristops_lib_sql.cli:sql_database"
 
 [project.entry-points."ristops.cli.commands.start"]
 be-venue = "ristops_be_venue.app:create_app"
+
+[project.entry-points."ristops.cli.commands.openapi.export"]
+be-venue = "ristops_be_venue.app:build_api"
 
 [project.entry-points."ristops.cli.commands.sql_database.generate_ddl"]
 be-venue = "ristops_be_venue.domain:MODELS"

@@ -14,7 +14,11 @@ ristops = "ristops_lib_core.cli.entrypoint:main"
 
 [project.entry-points."ristops.cli.commands"]
 start = "ristops_lib_core.cli.start:start"
+openapi = "ristops_lib_core.cli.openapi:openapi"
 graphql-bff = "ristops_bff_web.cli.graphql_bff:graphql_bff"
 
 [project.entry-points."ristops.cli.commands.start"]
 bff-web = "ristops_bff_web.app:create_app"
+
+[project.entry-points."ristops.cli.commands.openapi.export"]
+bff-web = "ristops_bff_web.app:build_api"

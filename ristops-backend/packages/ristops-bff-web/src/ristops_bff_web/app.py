@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.types import Lifespan
 from starsessions import SessionMiddleware
 from starsessions.stores.redis import RedisStore
 from strawberry import Schema
@@ -31,7 +32,43 @@ from ristops_lib_otel.instrumentation import instrument_app, instrument_clients
 from ristops_lib_otel.telemetry import configure_telemetry
 
 
+def build_api(lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
+    """Build the API definition: metadata, routes (GraphQL included) and OpenAPI configuration.
+
+    Reads no settings and performs no I/O, so the OpenAPI schema can be exported without an environment.
+    """
+    schema = Schema(
+        query=QUERY,
+        mutation=MUTATION,
+        extensions=[
+            GraphQLOperationSpanExtension,
+            ResolverLoggingExtension,
+            ErrorHandlingExtension,
+            ContextExtension,
+        ],
+    )
+    graphql_router = GraphQLRouter(schema)
+
+    app = FastAPI(
+        title="RistOps BFF APIs",
+        version="1.0",
+        summary="APIs to interact with RistOps BFF",
+        lifespan=lifespan,
+    )
+
+    api_router = APIRouter(prefix="/api")
+    api_router.include_router(auth_router)
+    api_router.include_router(graphql_router, prefix="/graphql")
+    app.include_router(api_router)
+    # sits outside /api and is @public, so probes need neither auth nor a policy
+    app.include_router(health_router)
+
+    app.openapi = OpenAPIConfiguration(app)
+    return app
+
+
 def create_app() -> FastAPI:
+    """Build the runnable app: the API definition plus telemetry, settings, sessions, authN and middleware."""
     configure_telemetry()
     instrument_clients()
 
@@ -55,34 +92,10 @@ def create_app() -> FastAPI:
             finally:
                 await redis_client.aclose()
 
-    schema = Schema(
-        query=QUERY,
-        mutation=MUTATION,
-        extensions=[
-            GraphQLOperationSpanExtension,
-            ResolverLoggingExtension,
-            ErrorHandlingExtension,
-            ContextExtension,
-        ],
-    )
-    graphql_router = GraphQLRouter(schema)
-
-    app = FastAPI(
-        title="RistOps BFF APIs",
-        version="1.0",
-        summary="APIs to interact with RistOps BFF",
-        lifespan=lifespan,
-    )
+    app = build_api(lifespan)
 
     register_exception_handler(app, RequestValidationExceptionHandler)
     register_exception_handler(app, GenericHttpExceptionHandler)
-
-    api_router = APIRouter(prefix="/api")
-    api_router.include_router(auth_router)
-    api_router.include_router(graphql_router, prefix="/graphql")
-    app.include_router(api_router)
-    # sits outside /api and is @public, so probes need neither auth nor a policy
-    app.include_router(health_router)
 
     public_registry = PublicRoutesRegistry(app)
 
@@ -115,9 +128,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    openapi_configuration = OpenAPIConfiguration(app)
-    app.openapi = openapi_configuration
 
     # wraps the ASGI app itself, outside every middleware above, so a server span is already
     # active by the time RequestContextMiddleware runs

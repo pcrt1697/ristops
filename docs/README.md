@@ -24,6 +24,7 @@ docker compose -f docker/docker-compose.local.yaml up -d        # infrastructure
 | [be-reservation](services/be-reservation.md) | Services, openings, closings and reservations |
 | be-menu | Menus, sections and products (planned) |
 | be-order | Orders, order items, states and courses (planned) |
+| [be-chat](services/be-chat.md) | AI assistant chat: conversations and agent runs (in progress) |
 | [bff-web](services/bff-web.md) | GraphQL BFF for the web frontend |
 
 ## Libraries
@@ -36,6 +37,7 @@ docker compose -f docker/docker-compose.local.yaml up -d        # infrastructure
 | [ristops-lib-redis](libraries/lib-redis.md) | Redis client and stream consumer |
 | [ristops-lib-neo4j](libraries/lib-neo4j.md) | Neo4j async driver, transactions and migrations |
 | [ristops-lib-otel](libraries/lib-otel.md) | OpenTelemetry instrumentation: traces, metrics and logs |
+| [ristops-lib-agent](libraries/lib-agent.md) | Stateless LLM agent runtime: tool loop, HTTP tools, typed events (in progress) |
 
 ## Architecture
 

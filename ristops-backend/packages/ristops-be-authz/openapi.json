@@ -1,0 +1,1330 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RistOps auth APIs",
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/resources/{resource_type}/{resource_id}/acl": {
+      "post": {
+        "tags": [
+          "resources"
+        ],
+        "summary": "Grant Resource Access",
+        "description": "Grant a role to a user on the resource.",
+        "operationId": "grant_resource_access_api_resources__resource_type___resource_id__acl_post",
+        "parameters": [
+          {
+            "name": "resource_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ResourceType",
+              "description": "Resource type"
+            },
+            "description": "Resource type"
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Resource identifier",
+              "title": "Resource Id"
+            },
+            "description": "Resource identifier"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AclResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "resources"
+        ],
+        "summary": "Revoke Resource Access",
+        "description": "Revoke a user's role on the resource.",
+        "operationId": "revoke_resource_access_api_resources__resource_type___resource_id__acl_delete",
+        "parameters": [
+          {
+            "name": "resource_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ResourceType",
+              "description": "Resource type"
+            },
+            "description": "Resource type"
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Resource identifier",
+              "title": "Resource Id"
+            },
+            "description": "Resource identifier"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ID of the user to revoke access from",
+              "title": "User Id"
+            },
+            "description": "ID of the user to revoke access from"
+          },
+          {
+            "name": "role_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Role to revoke on the resource",
+              "title": "Role Id"
+            },
+            "description": "Role to revoke on the resource"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/resources/{resource_type}/{resource_id}/users": {
+      "get": {
+        "tags": [
+          "resources"
+        ],
+        "summary": "Get Resource Users",
+        "description": "Search users with granted access to the resource.",
+        "operationId": "get_resource_users_api_resources__resource_type___resource_id__users_get",
+        "parameters": [
+          {
+            "name": "resource_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ResourceType",
+              "description": "Resource type"
+            },
+            "description": "Resource type"
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Resource identifier",
+              "title": "Resource Id"
+            },
+            "description": "Resource identifier"
+          },
+          {
+            "name": "filter.username",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by username using `contains` operator.",
+              "title": "Filter.Username"
+            },
+            "description": "Filter by username using `contains` operator."
+          },
+          {
+            "name": "filter.display_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by display name using `contains` operator.",
+              "title": "Filter.Display Name"
+            },
+            "description": "Filter by display name using `contains` operator."
+          },
+          {
+            "name": "filter.permission",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by permission using `contains` operator.",
+              "title": "Filter.Permission"
+            },
+            "description": "Filter by permission using `contains` operator."
+          },
+          {
+            "name": "filter.role_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by role using `contains` operator.",
+              "title": "Filter.Role Id"
+            },
+            "description": "Filter by role using `contains` operator."
+          },
+          {
+            "name": "filter.role_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by role name using `contains` operator.",
+              "title": "Filter.Role Name"
+            },
+            "description": "Filter by role name using `contains` operator."
+          },
+          {
+            "name": "filter.scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResourceType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by the scope (resource type) of the roles the user holds.",
+              "title": "Filter.Scope"
+            },
+            "description": "Filter by the scope (resource type) of the roles the user holds."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "0-indexed page number",
+              "default": 0,
+              "title": "Page"
+            },
+            "description": "0-indexed page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Sortable fields: username, id, display_name. Prefix a field with '-' for descending.",
+              "title": "Sort"
+            },
+            "description": "Sortable fields: username, id, display_name. Prefix a field with '-' for descending."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ResourceUserGrantsResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users/{user_id}/roles": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get User Roles",
+        "description": "List unique permissions a user holds on a resource, including permissions inherited from ancestor resources.",
+        "operationId": "get_user_roles_api_users__user_id__roles_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "User ID",
+              "title": "User Id"
+            },
+            "description": "User ID"
+          },
+          {
+            "name": "resource_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Resource ID",
+              "title": "Resource Id"
+            },
+            "description": "Resource ID"
+          },
+          {
+            "name": "resource_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Resource type",
+              "title": "Resource Type"
+            },
+            "description": "Resource type"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListUserGrantsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users/{user_id}/resources": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get User Resources",
+        "description": "List unique resources the user has grants, including grants inherited from ancestor resources.",
+        "operationId": "get_user_resources_api_users__user_id__resources_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "User ID",
+              "title": "User Id"
+            },
+            "description": "User ID"
+          },
+          {
+            "name": "resource_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ResourceType",
+              "description": "Resource type"
+            },
+            "description": "Resource type"
+          },
+          {
+            "name": "permissions",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of permissions",
+              "title": "Permissions"
+            },
+            "description": "List of permissions"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListUserResourceGrantsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users/{user_id}/acl-check": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Acl Check",
+        "description": "Evaluate whether the user satisfies the requested grants.",
+        "operationId": "acl_check_api_users__user_id__acl_check_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "User ID",
+              "title": "User Id"
+            },
+            "description": "User ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AclCheckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/roles/{role_id}": {
+      "get": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "Get Role",
+        "description": "Find a role by ID",
+        "operationId": "get_role_api_roles__role_id__get",
+        "parameters": [
+          {
+            "name": "role_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "User ID",
+              "title": "Role Id"
+            },
+            "description": "User ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/roles": {
+      "get": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "Get Roles",
+        "description": "List roles, optionally filtered by id, name or permission.",
+        "operationId": "get_roles_api_roles_get",
+        "parameters": [
+          {
+            "name": "role_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by role id using `contains` operator",
+              "title": "Role Id"
+            },
+            "description": "Filter by role id using `contains` operator"
+          },
+          {
+            "name": "role_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by role name using `contains` operator",
+              "title": "Role Name"
+            },
+            "description": "Filter by role name using `contains` operator"
+          },
+          {
+            "name": "permission",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by permission name using `contains` operator",
+              "title": "Permission"
+            },
+            "description": "Filter by permission name using `contains` operator"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResourceType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by the resource type the role can be assigned to",
+              "title": "Scope"
+            },
+            "description": "Filter by the resource type the role can be assigned to"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListRolesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/permissions": {
+      "get": {
+        "tags": [
+          "permissions"
+        ],
+        "summary": "Get Permissions",
+        "description": "List permissions",
+        "operationId": "get_permissions_api_permissions_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Permission query applied using `contains` operator",
+              "title": "Query"
+            },
+            "description": "Permission query applied using `contains` operator"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPermissionsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns as soon as the app is able to serve requests. Deliberately checks no downstream dependency: container orchestration uses it to decide whether the process is up, not whether the whole stack is.",
+        "operationId": "get_health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AclCheckRequest": {
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/AuthorizationGrant"
+            },
+            "type": "array",
+            "title": "Grants",
+            "description": "Grants to evaluate for the user"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grants"
+        ],
+        "title": "AclCheckRequest",
+        "description": "Body for an ACL check; the user comes from the path."
+      },
+      "AclResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Acl ID"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Acl creation time"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "description": "ID of the user the access was granted to"
+          },
+          "role_id": {
+            "type": "string",
+            "title": "Role Id",
+            "description": "ID of the role granted on the resource"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/AuthorizationResource",
+            "description": "Resource the access was granted on"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "Optional grant expiry time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "user_id",
+          "role_id",
+          "resource"
+        ],
+        "title": "AclResponse"
+      },
+      "AuthorizationGrant": {
+        "properties": {
+          "resource": {
+            "$ref": "#/components/schemas/AuthorizationResource",
+            "description": "ACL resource"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions",
+            "description": "List of permission"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource",
+          "permissions"
+        ],
+        "title": "AuthorizationGrant",
+        "description": "ACL grant resource definition. "
+      },
+      "AuthorizationResource": {
+        "properties": {
+          "resource_id": {
+            "type": "string",
+            "title": "Resource Id",
+            "description": "ACL resource identifier"
+          },
+          "resource_type": {
+            "$ref": "#/components/schemas/ResourceType",
+            "description": "ACL resource type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource_id",
+          "resource_type"
+        ],
+        "title": "AuthorizationResource",
+        "description": "ACL resource definition."
+      },
+      "AuthorizationResponse": {
+        "properties": {
+          "is_authorized": {
+            "type": "boolean",
+            "title": "Is Authorized",
+            "description": "Indicates whether the user is authorized to access the resource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_authorized"
+        ],
+        "title": "AuthorizationResponse"
+      },
+      "GrantRoleRequest": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "description": "ID of the user to grant the role to"
+          },
+          "role_id": {
+            "type": "string",
+            "title": "Role Id",
+            "description": "Role to grant on the resource"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "Optional expiry; the grant is ignored once this time passes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "role_id"
+        ],
+        "title": "GrantRoleRequest",
+        "description": "Body for granting a role on a resource; the resource comes from the path."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus",
+            "description": "Liveness status of the service."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "description": "Liveness probe payload. "
+      },
+      "HealthStatus": {
+        "type": "string",
+        "enum": [
+          "ok"
+        ],
+        "title": "HealthStatus"
+      },
+      "ListPermissionsResponse": {
+        "properties": {
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions",
+            "description": "List of permissions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "permissions"
+        ],
+        "title": "ListPermissionsResponse"
+      },
+      "ListRolesResponse": {
+        "properties": {
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleResponse"
+            },
+            "type": "array",
+            "title": "Roles",
+            "description": "List of roles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "roles"
+        ],
+        "title": "ListRolesResponse"
+      },
+      "ListUserGrantsResponse": {
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionGrant"
+            },
+            "type": "array",
+            "title": "Grants",
+            "description": "Permission grants, grouped by role and source resource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grants"
+        ],
+        "title": "ListUserGrantsResponse"
+      },
+      "ListUserResourceGrantsResponse": {
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceGrant"
+            },
+            "type": "array",
+            "title": "Grants",
+            "description": "Permission grants, grouped by role and source resource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grants"
+        ],
+        "title": "ListUserResourceGrantsResponse"
+      },
+      "Page_ResourceUserGrantsResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceUserGrantsResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "Page[ResourceUserGrantsResponse]"
+      },
+      "PermissionGrant": {
+        "properties": {
+          "resource": {
+            "$ref": "#/components/schemas/AuthorizationResource",
+            "description": "Resource on which the role is assigned"
+          },
+          "role_id": {
+            "type": "string",
+            "title": "Role Id",
+            "description": "Role that grants the permissions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource",
+          "role_id"
+        ],
+        "title": "PermissionGrant",
+        "description": "A set of permissions derived from a single role granted on a specific resource."
+      },
+      "ResourceGrant": {
+        "properties": {
+          "resource": {
+            "$ref": "#/components/schemas/AuthorizationResource"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RolePermissions"
+            },
+            "type": "array",
+            "title": "Roles",
+            "description": "Roles granted by the resource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource",
+          "roles"
+        ],
+        "title": "ResourceGrant"
+      },
+      "ResourceType": {
+        "type": "string",
+        "enum": [
+          "app",
+          "venue",
+          "service",
+          "reservation",
+          "permission",
+          "role",
+          "acl",
+          "user"
+        ],
+        "title": "ResourceType"
+      },
+      "ResourceUserGrantsResponse": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "description": "User identifier"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/RoleGrant"
+            },
+            "type": "array",
+            "title": "Grants",
+            "description": "List of grants"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "grants"
+        ],
+        "title": "ResourceUserGrantsResponse"
+      },
+      "RoleGrant": {
+        "properties": {
+          "resource": {
+            "$ref": "#/components/schemas/AuthorizationResource",
+            "description": "Resource to which the role is granted"
+          },
+          "role_id": {
+            "type": "string",
+            "title": "Role Id",
+            "description": "ID of the role granted on the resource"
+          },
+          "assigned_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Assigned At",
+            "description": "Assignment date"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "Optional grant expiry time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource",
+          "role_id",
+          "assigned_at"
+        ],
+        "title": "RoleGrant"
+      },
+      "RolePermissions": {
+        "properties": {
+          "role_id": {
+            "type": "string",
+            "title": "Role Id",
+            "description": "Role that grants the permissions"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions",
+            "description": "Permissions granted by the role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role_id",
+          "permissions"
+        ],
+        "title": "RolePermissions"
+      },
+      "RoleResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Role identifier"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ResourceType",
+            "description": "Resource type this role can be assigned to"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Role name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Role description"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions",
+            "description": "Permissions granted by the role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "scope",
+          "name",
+          "description",
+          "permissions"
+        ],
+        "title": "RoleResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

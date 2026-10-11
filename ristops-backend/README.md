@@ -10,6 +10,7 @@ Python uv workspace containing all backend services and shared libraries.
 | [be-authz](packages/ristops-be-authz/README.md)     | ACL, role and permission management |
 | [be-venue](packages/ristops-be-venue/README.md)     | Venue registry                      |
 | [be-reservation](packages/ristops-be-reservation/README.md) | Services, openings, closings and reservations |
+| [be-chat](packages/ristops-be-chat/README.md)       | AI assistant chat service           |
 | [bff-web](packages/ristops-bff-web/README.md)       | GraphQL BFF for the web frontend    |
 | [batch-demo](packages/ristops-batch-demo/README.md) | Dump demo data                      |
 
@@ -23,6 +24,7 @@ Python uv workspace containing all backend services and shared libraries.
 | [ristops-lib-redis](packages/ristops-lib-redis/README.md) | Redis client and stream consumer                                        |
 | [ristops-lib-neo4j](packages/ristops-lib-neo4j/README.md) | Neo4j async driver, transactions and migrations                         |
 | [ristops-lib-otel](packages/ristops-lib-otel/README.md)   | OpenTelemetry instrumentation: traces, metrics and logs over OTLP       |
+| [ristops-lib-agent](packages/ristops-lib-agent/README.md) | Stateless LLM agent runtime: tool loop, HTTP tools, typed events        |
 
 ## Architecture
 

@@ -28,6 +28,12 @@
       <sourceFolder url="file://$MODULE_DIR$/packages/ristops-be-reservation/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-otel" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-otel/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/ristops-be-chat" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/ristops-be-chat/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-agent" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-agent/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-mcp-server" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/ristops-lib-mcp-server/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
     </content>
     <orderEntry type="jdk" jdkName="uv (ristops-backend)" jdkType="Python SDK" />

@@ -148,4 +148,14 @@ my-command = "my_package.cli:my_command"
 
 [project.entry-points."ristops.cli.commands.start"]
 my-app = "my_package.app:create_app"
+
+[project.entry-points."ristops.cli.commands.openapi.export"]
+my-app = "my_package.app:build_api"
 ```
+
+A service's `app.py` has two factories. `build_api()` builds the API definition only (metadata,
+routes, OpenAPI configuration) and reads no settings, so `ristops openapi export <app>` can write
+the OpenAPI schema without an environment. `create_app()` starts from `build_api()` and adds
+telemetry, settings, authentication, authorization and middleware; it is what `ristops start <app>`
+runs. Router-level dependencies such as `AuthZInterceptor` are passed to `build_api()`, because
+FastAPI copies them into each route when the route is included.

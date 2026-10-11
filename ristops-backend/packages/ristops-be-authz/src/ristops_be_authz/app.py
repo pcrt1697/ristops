@@ -1,7 +1,9 @@
 import logging
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, APIRouter, Depends
+from fastapi import FastAPI, APIRouter, Depends, params
+from starlette.types import Lifespan
 
 from ristops_be_authz.domain.acl.service import check_acl_authorization
 from ristops_be_authz.domain.permission.routers import permissions_router
@@ -55,23 +57,20 @@ async def lifespan(_: FastAPI):
     _logger.info("Shutdown complete")
 
 
-def create_app() -> FastAPI:
-    configure_telemetry()
-    instrument_clients()
+def build_api(lifespan: Lifespan[FastAPI] | None = None, dependencies: Sequence[params.Depends] = ()) -> FastAPI:
+    """Build the API definition: metadata, routes and OpenAPI configuration.
 
-    settings = BackendServiceSettings.get()
-    jwt_decoder = ClientTokenDecoder(settings.authn_url)
-
+    Reads no settings and performs no I/O, so the OpenAPI schema can be exported without an environment.
+    `dependencies` are set at construction because FastAPI copies router dependencies into each route when the
+    route is included.
+    """
     app = FastAPI(
         title="RistOps auth APIs",
         version="1.0",
         summary="REST APIs to interact with RistOps auth backend",
         lifespan=lifespan,
+        dependencies=dependencies,
     )
-
-    # needs user ID and a session in the context
-    authz_dependency = AuthZInterceptor(authorizer=check_acl_authorization)
-    app.router.dependencies.append(Depends(authz_dependency))
 
     api_router = APIRouter(prefix="/api")
     api_router.include_router(resource_router)
@@ -81,6 +80,22 @@ def create_app() -> FastAPI:
     app.include_router(api_router)
     # sits outside /api and is @public, so probes need neither auth nor a policy
     app.include_router(health_router)
+
+    app.openapi = OpenAPIConfiguration(app)
+    return app
+
+
+def create_app() -> FastAPI:
+    """Build the runnable app: the API definition plus telemetry, settings, authN/authZ and middleware."""
+    configure_telemetry()
+    instrument_clients()
+
+    settings = BackendServiceSettings.get()
+    jwt_decoder = ClientTokenDecoder(settings.authn_url)
+
+    # needs user ID and a session in the context
+    authz_dependency = AuthZInterceptor(authorizer=check_acl_authorization)
+    app = build_api(lifespan, [Depends(authz_dependency)])
 
     public_registry = PublicRoutesRegistry(app)
 
@@ -99,9 +114,6 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
     # wraps everything
     app.add_middleware(GenericExceptionMiddleware)
-
-    openapi_configuration = OpenAPIConfiguration(app)
-    app.openapi = openapi_configuration
 
     # wraps the ASGI app itself, outside every middleware above, so a server span is already
     # active by the time RequestContextMiddleware runs

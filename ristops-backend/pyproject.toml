@@ -8,6 +8,7 @@ dependencies = [
     "ristops-be-authz",
     "ristops-be-venue",
     "ristops-be-reservation",
+    "ristops-be-chat",
     "ristops-batch-demo",
     "ristops-lib-core",
     "ristops-lib-be",
@@ -15,6 +16,7 @@ dependencies = [
     "ristops-lib-redis",
     "ristops-lib-neo4j",
     "ristops-lib-otel",
+    "ristops-lib-agent",
 ]
 
 [tool.uv.sources]
@@ -23,6 +25,7 @@ ristops-be-authn = { workspace = true }
 ristops-be-authz = { workspace = true }
 ristops-be-venue = { workspace = true }
 ristops-be-reservation = { workspace = true }
+ristops-be-chat = { workspace = true }
 ristops-batch-demo = { workspace = true }
 ristops-lib-core = { workspace = true }
 ristops-lib-be = { workspace = true }
@@ -30,8 +33,17 @@ ristops-lib-sql = { workspace = true }
 ristops-lib-redis = { workspace = true }
 ristops-lib-neo4j = { workspace = true }
 ristops-lib-otel = { workspace = true }
+ristops-lib-agent = { workspace = true }
 
 
 [tool.uv.workspace]
 members = ["packages/*"]
 exclude = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["packages/ristops-lib-core/tests"]

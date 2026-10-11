@@ -1,0 +1,743 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RistOps Venue APIs",
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/venues": {
+      "get": {
+        "tags": [
+          "venues"
+        ],
+        "summary": "Get Venues",
+        "description": "Return a paginated, filtered, sorted list of venues.\nResults are filtered base on venues the user has access to.",
+        "operationId": "get_venues_api_venues_get",
+        "parameters": [
+          {
+            "name": "filter.name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by name of the venue using a like operator.",
+              "title": "Filter.Name"
+            },
+            "description": "Filter by name of the venue using a like operator."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "0-indexed page number",
+              "default": 0,
+              "title": "Page"
+            },
+            "description": "0-indexed page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Sortable fields: id, name, created_at. Prefix a field with '-' for descending.",
+              "title": "Sort"
+            },
+            "description": "Sortable fields: id, name, created_at. Prefix a field with '-' for descending."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_VenueResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "venues"
+        ],
+        "summary": "Create",
+        "description": "Create a new venue.",
+        "operationId": "create_api_venues_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VenueCreationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VenueResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/venues/{venue_id}": {
+      "get": {
+        "tags": [
+          "venues"
+        ],
+        "summary": "Get",
+        "description": "Return a venue by ID.",
+        "operationId": "get_api_venues__venue_id__get",
+        "parameters": [
+          {
+            "name": "venue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Venue ID",
+              "title": "Venue Id"
+            },
+            "description": "Venue ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VenueResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Venue not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "venues"
+        ],
+        "summary": "Update",
+        "description": "Update a venue. Only fields present in the request body are modified.",
+        "operationId": "update_api_venues__venue_id__patch",
+        "parameters": [
+          {
+            "name": "venue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Venue ID",
+              "title": "Venue Id"
+            },
+            "description": "Venue ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VenueUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VenueResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Venue not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/venues/{venue_id}/actions": {
+      "post": {
+        "tags": [
+          "venues"
+        ],
+        "summary": "Perform Action",
+        "description": "Perform a lifecycle action on a venue: activate/close (owner) or disable/enable\n(app-admin). The required permission depends on `action_type`; the venue's current status\ndetermines whether the specific transition is valid (409 otherwise).",
+        "operationId": "perform_action_api_venues__venue_id__actions_post",
+        "parameters": [
+          {
+            "name": "venue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Venue ID",
+              "title": "Venue Id"
+            },
+            "description": "Venue ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VenueActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VenueResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Venue not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue status does not allow this transition, or (for activate) no services are configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown action_type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns as soon as the app is able to serve requests. Deliberately checks no downstream dependency: container orchestration uses it to decide whether the process is up, not whether the whole stack is.",
+        "operationId": "get_health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Error title"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "description": "Standard error response payload. "
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus",
+            "description": "Liveness status of the service."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "description": "Liveness probe payload. "
+      },
+      "HealthStatus": {
+        "type": "string",
+        "enum": [
+          "ok"
+        ],
+        "title": "HealthStatus"
+      },
+      "Page_VenueResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VenueResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "Page[VenueResponse]"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VenueActionRequest": {
+        "properties": {
+          "action_type": {
+            "$ref": "#/components/schemas/VenueActionType",
+            "description": "The action to perform."
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_type"
+        ],
+        "title": "VenueActionRequest",
+        "description": "Request body for performing a lifecycle action on a venue."
+      },
+      "VenueActionType": {
+        "type": "string",
+        "enum": [
+          "activate",
+          "close",
+          "disable",
+          "enable"
+        ],
+        "title": "VenueActionType",
+        "description": "A lifecycle action that can be performed on a venue — distinct from `VenueStatus`:\nACTIVATE and ENABLE both land on ACTIVE, but are different actions requiring different\npermissions depending on the venue's current status."
+      },
+      "VenueCreationRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Name",
+            "description": "Name of the venue."
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Address",
+            "description": "Address of the venue."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Optional description of the venue."
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "description": "IANA timezone name of the venue (e.g. 'Europe/Rome')."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "address",
+          "timezone"
+        ],
+        "title": "VenueCreationRequest",
+        "description": "Request body for creating a new venue."
+      },
+      "VenueResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Resource identifier."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Name of the venue."
+          },
+          "address": {
+            "type": "string",
+            "title": "Address",
+            "description": "Address of the venue."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Description of the venue."
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "description": "IANA timezone name of the venue."
+          },
+          "status": {
+            "$ref": "#/components/schemas/VenueStatus",
+            "description": "Current lifecycle status of the venue."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Date and time when the object was created."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Date and time when the object was updated."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "address",
+          "timezone",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "VenueResponse",
+        "description": "Response body representing a venue."
+      },
+      "VenueStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "active",
+          "disabled",
+          "closed"
+        ],
+        "title": "VenueStatus"
+      },
+      "VenueUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "New name of the venue."
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address",
+            "description": "New address of the venue."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "New description of the venue."
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone",
+            "description": "New IANA timezone name of the venue."
+          }
+        },
+        "type": "object",
+        "title": "VenueUpdateRequest",
+        "description": "Request body for updating an existing venue. Unset fields are not modified."
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

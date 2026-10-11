@@ -1,0 +1,3015 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RistOps Reservation APIs",
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/services": {
+      "get": {
+        "tags": [
+          "services"
+        ],
+        "summary": "Get Services",
+        "description": "Return services for a venue matching the given filters, sorted per the query.\nNot paginated. Authorized against the venue.",
+        "operationId": "get_services_api_services_get",
+        "parameters": [
+          {
+            "name": "filter.venue_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Filter by venue ID.",
+              "title": "Filter.Venue Id"
+            },
+            "description": "Filter by venue ID."
+          },
+          {
+            "name": "filter.name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by name of the service using a like operator.",
+              "title": "Filter.Name"
+            },
+            "description": "Filter by name of the service using a like operator."
+          },
+          {
+            "name": "filter.date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Include services still running on or after this date (window start).",
+              "title": "Filter.Date From"
+            },
+            "description": "Include services still running on or after this date (window start)."
+          },
+          {
+            "name": "filter.date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Include services already running on or before this date (window end).",
+              "title": "Filter.Date To"
+            },
+            "description": "Include services already running on or before this date (window end)."
+          },
+          {
+            "name": "filter.include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include deleted services. Excluded by default.",
+              "default": false,
+              "title": "Filter.Include Deleted"
+            },
+            "description": "Include deleted services. Excluded by default."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Sortable fields: id, name, date_from, date_to, created_at. Prefix a field with '-' for descending.",
+              "title": "Sort"
+            },
+            "description": "Sortable fields: id, name, date_from, date_to, created_at. Prefix a field with '-' for descending."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "services"
+        ],
+        "summary": "Create",
+        "description": "Create a new service under a venue. Authorized against the venue, since the service\ndoes not exist yet. Its hours are set separately, through the openings endpoint.",
+        "operationId": "create_api_services_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceCreationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Venue not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue is not accepting config changes, or the service would be open at the same time as another service of the venue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/services/{service_id}": {
+      "get": {
+        "tags": [
+          "services"
+        ],
+        "summary": "Get",
+        "description": "Return a service by ID. Authorized against the service itself, inheriting grants from\nits venue via the ReBAC hierarchy.",
+        "operationId": "get_api_services__service_id__get",
+        "parameters": [
+          {
+            "name": "service_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Service ID",
+              "title": "Service Id"
+            },
+            "description": "Service ID"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return the service even if it has been deleted",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "Return the service even if it has been deleted"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Service not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "services"
+        ],
+        "summary": "Update",
+        "description": "Update a service. Only fields present in the request body are modified. Authorized\nagainst the service itself.",
+        "operationId": "update_api_services__service_id__patch",
+        "parameters": [
+          {
+            "name": "service_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Service ID",
+              "title": "Service Id"
+            },
+            "description": "Service ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Service not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue is not accepting config changes, or the new validity period would make the service overlap another service of the venue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "services"
+        ],
+        "summary": "Delete",
+        "description": "Delete a service by ID. Authorized against the service itself.",
+        "operationId": "delete_api_services__service_id__delete",
+        "parameters": [
+          {
+            "name": "service_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Service ID",
+              "title": "Service Id"
+            },
+            "description": "Service ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Service not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue is not accepting config changes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/services/{service_id}/openings": {
+      "put": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Upsert Openings",
+        "description": "Replace a service's weekly opening hours with the submitted set. Authorized against the\nservice itself.",
+        "operationId": "upsert_openings_api_services__service_id__openings_put",
+        "parameters": [
+          {
+            "name": "service_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Service ID",
+              "title": "Service Id"
+            },
+            "description": "Service ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpeningsUpsertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpeningsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Service not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue is not accepting config changes, or the hours would make the service overlap another service of the venue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Get Service Openings",
+        "description": "Return a service's weekly opening hours. Authorized against the service itself.",
+        "operationId": "get_service_openings_api_services__service_id__openings_get",
+        "parameters": [
+          {
+            "name": "service_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Service ID",
+              "title": "Service Id"
+            },
+            "description": "Service ID"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return the openings even if the service has been deleted",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "Return the openings even if the service has been deleted"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpeningsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Service not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/venues/{venue_id}/closings": {
+      "post": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Create Venue Closing",
+        "description": "Close one or more of the venue's services over a date range. Pass every service for a\nvenue-wide shutdown. Authorized against the venue itself.",
+        "operationId": "create_venue_closing_api_venues__venue_id__closings_post",
+        "parameters": [
+          {
+            "name": "venue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Venue ID",
+              "title": "Venue Id"
+            },
+            "description": "Venue ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClosingCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClosingResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Venue or service not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue is not accepting config changes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Get Venue Closings",
+        "description": "Return the venue's closings matching the query, paginated. Authorized against the venue.",
+        "operationId": "get_venue_closings_api_venues__venue_id__closings_get",
+        "parameters": [
+          {
+            "name": "venue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Venue ID",
+              "title": "Venue Id"
+            },
+            "description": "Venue ID"
+          },
+          {
+            "name": "filter.date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Include items whose period ends on or after this date (window start).",
+              "title": "Filter.Date From"
+            },
+            "description": "Include items whose period ends on or after this date (window start)."
+          },
+          {
+            "name": "filter.date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Include items whose period starts on or before this date (window end).",
+              "title": "Filter.Date To"
+            },
+            "description": "Include items whose period starts on or before this date (window end)."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "0-indexed page number",
+              "default": 0,
+              "title": "Page"
+            },
+            "description": "0-indexed page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Sortable fields: date_from, date_to, created_at, id. Prefix a field with '-' for descending.",
+              "title": "Sort"
+            },
+            "description": "Sortable fields: date_from, date_to, created_at, id. Prefix a field with '-' for descending."
+          },
+          {
+            "name": "filter.service_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return only closings applying to this service.",
+              "title": "Filter.Service Id"
+            },
+            "description": "Return only closings applying to this service."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ClosingResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/venues/{venue_id}/closings/{closing_id}": {
+      "patch": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Update Venue Closing",
+        "description": "Update a closing. Authorized against the venue itself.",
+        "operationId": "update_venue_closing_api_venues__venue_id__closings__closing_id__patch",
+        "parameters": [
+          {
+            "name": "venue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Venue ID",
+              "title": "Venue Id"
+            },
+            "description": "Venue ID"
+          },
+          {
+            "name": "closing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Closing ID",
+              "title": "Closing Id"
+            },
+            "description": "Closing ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClosingUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClosingResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Closing or service not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue is not accepting config changes, or shrinking the closing would leave two services open at the same time",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Delete Venue Closing",
+        "description": "Delete a closing. Authorized against the venue itself.",
+        "operationId": "delete_venue_closing_api_venues__venue_id__closings__closing_id__delete",
+        "parameters": [
+          {
+            "name": "venue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Venue ID",
+              "title": "Venue Id"
+            },
+            "description": "Venue ID"
+          },
+          {
+            "name": "closing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Closing ID",
+              "title": "Closing Id"
+            },
+            "description": "Closing ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Closing not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue is not accepting config changes, or removing the closing would leave two services open at the same time",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservations/calendar": {
+      "get": {
+        "tags": [
+          "reservations"
+        ],
+        "summary": "Calendar",
+        "description": "Per-day, per-service occupancy of a venue over a date window: which services run each day,\ntheir hours, and how many seats are taken. Also the source of what is still bookable on a\nday. Authorized against the venue.",
+        "operationId": "calendar_api_reservations_calendar_get",
+        "parameters": [
+          {
+            "name": "venue_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Identifier of the venue to summarize.",
+              "title": "Venue Id"
+            },
+            "description": "Identifier of the venue to summarize."
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "First venue-local business date of the window (inclusive).",
+              "title": "Date From"
+            },
+            "description": "First venue-local business date of the window (inclusive)."
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Last venue-local business date of the window (inclusive).",
+              "title": "Date To"
+            },
+            "description": "Last venue-local business date of the window (inclusive)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservations/{reservation_id}": {
+      "get": {
+        "tags": [
+          "reservations"
+        ],
+        "summary": "Get",
+        "description": "Return a reservation by ID. Authorized against the reservation itself, inheriting grants\nfrom its venue via the ReBAC hierarchy.",
+        "operationId": "get_api_reservations__reservation_id__get",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Reservation ID",
+              "title": "Reservation Id"
+            },
+            "description": "Reservation ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Reservation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "reservations"
+        ],
+        "summary": "Update",
+        "description": "Update a reservation. Only fields present in the request body are modified; changing the\ntime or party size re-validates the booking against its service. Authorized against the\nreservation itself.",
+        "operationId": "update_api_reservations__reservation_id__patch",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Reservation ID",
+              "title": "Reservation Id"
+            },
+            "description": "Reservation ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Reservation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue is not accepting reservations, the service is not open at the new time, or not enough seats remain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservations": {
+      "get": {
+        "tags": [
+          "reservations"
+        ],
+        "summary": "Get Reservations",
+        "description": "Return reservations for a venue matching the given filters, sorted and paginated per the\nquery. Authorized against the venue.",
+        "operationId": "get_reservations_api_reservations_get",
+        "parameters": [
+          {
+            "name": "filter.venue_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Filter by venue ID. Mandatory.",
+              "title": "Filter.Venue Id"
+            },
+            "description": "Filter by venue ID. Mandatory."
+          },
+          {
+            "name": "filter.service_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to reservations booked into this service.",
+              "title": "Filter.Service Id"
+            },
+            "description": "Filter to reservations booked into this service."
+          },
+          {
+            "name": "filter.status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReservationStatus"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to reservations in any of these statuses.",
+              "title": "Filter.Status"
+            },
+            "description": "Filter to reservations in any of these statuses."
+          },
+          {
+            "name": "filter.date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Include reservations on or after this business date.",
+              "title": "Filter.Date From"
+            },
+            "description": "Include reservations on or after this business date."
+          },
+          {
+            "name": "filter.date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Include reservations on or before this business date.",
+              "title": "Filter.Date To"
+            },
+            "description": "Include reservations on or before this business date."
+          },
+          {
+            "name": "filter.violations_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return only reservations that violate the current schedule (the 'needs attention' view).",
+              "default": false,
+              "title": "Filter.Violations Only"
+            },
+            "description": "Return only reservations that violate the current schedule (the 'needs attention' view)."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "0-indexed page number",
+              "default": 0,
+              "title": "Page"
+            },
+            "description": "0-indexed page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Sortable fields: id, reservation_date, created_at. Prefix a field with '-' for descending.",
+              "title": "Sort"
+            },
+            "description": "Sortable fields: id, reservation_date, created_at. Prefix a field with '-' for descending."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ReservationResponse_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "reservations"
+        ],
+        "summary": "Create",
+        "description": "Book a reservation into one of a venue's services. Authorized against the venue, since the\nreservation does not exist yet.",
+        "operationId": "create_api_reservations_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationCreationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Venue or service not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Venue is not accepting reservations, the service is not open at the requested time, or not enough seats remain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservations/{reservation_id}/actions": {
+      "post": {
+        "tags": [
+          "reservations"
+        ],
+        "summary": "Actions",
+        "description": "Apply a status-change action to a reservation (confirm/reject/cancel/check-in/no-show/\nwithdraw). The request body is discriminated on ``action`` (the verb); the required permission\nis resolved per action (e.g. ``reservation:confirm``), authorized against the reservation\nitself. A check-in also records the arrival time; any action may attach ``notes``.",
+        "operationId": "actions_api_reservations__reservation_id__actions_post",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Reservation ID",
+              "title": "Reservation Id"
+            },
+            "description": "Reservation ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/ConfirmReservationAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RejectReservationAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CancelReservationAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CheckInReservationAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NoShowReservationAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WithdrawReservationAction"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "action",
+                  "mapping": {
+                    "confirm": "#/components/schemas/ConfirmReservationAction",
+                    "reject": "#/components/schemas/RejectReservationAction",
+                    "cancel": "#/components/schemas/CancelReservationAction",
+                    "check_in": "#/components/schemas/CheckInReservationAction",
+                    "no_show": "#/components/schemas/NoShowReservationAction",
+                    "withdraw": "#/components/schemas/WithdrawReservationAction"
+                  }
+                },
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Reservation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns as soon as the app is able to serve requests. Deliberately checks no downstream dependency: container orchestration uses it to decide whether the process is up, not whether the whole stack is.",
+        "operationId": "get_health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CalendarDay": {
+        "properties": {
+          "business_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Business Date",
+            "description": "Venue-local business date."
+          },
+          "closed": {
+            "type": "boolean",
+            "title": "Closed",
+            "description": "Whether a closing removes every service that would otherwise run on this date. False when nothing was scheduled at all."
+          },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/CalendarServiceSummary"
+            },
+            "type": "array",
+            "title": "Services"
+          },
+          "closed_services": {
+            "items": {
+              "$ref": "#/components/schemas/ClosedServiceSummary"
+            },
+            "type": "array",
+            "title": "Closed Services",
+            "description": "Services a closing removes that day which still hold bookings. They are not in `services`, since they no longer run."
+          },
+          "deleted_services": {
+            "items": {
+              "$ref": "#/components/schemas/DeletedServiceSummary"
+            },
+            "type": "array",
+            "title": "Deleted Services",
+            "description": "Deleted services that still hold bookings on that day. They are not in `services`, since they no longer run."
+          }
+        },
+        "type": "object",
+        "required": [
+          "business_date",
+          "closed"
+        ],
+        "title": "CalendarDay",
+        "description": "One business date of the calendar window."
+      },
+      "CalendarResponse": {
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/CalendarDay"
+            },
+            "type": "array",
+            "title": "Days"
+          }
+        },
+        "type": "object",
+        "title": "CalendarResponse",
+        "description": "Per-day occupancy of a venue over the requested window — the day's shape and what is left\nto book. Days with no service running and no closing are omitted, so a caller can render\n\"nothing scheduled\" by absence."
+      },
+      "CalendarServiceSummary": {
+        "properties": {
+          "service_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Service Id",
+            "description": "Service the summary belongs to."
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name",
+            "description": "Name of that service."
+          },
+          "opens_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Opens At",
+            "description": "Venue-local opening datetime, naive. May cross midnight for an overnight opening, in which case it closes on the following calendar day."
+          },
+          "closes_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Closes At",
+            "description": "Venue-local closing datetime, naive."
+          },
+          "capacity": {
+            "type": "integer",
+            "title": "Capacity",
+            "description": "Seats the service can take on the date."
+          },
+          "booked": {
+            "type": "integer",
+            "title": "Booked",
+            "description": "Seats taken by live bookings on the date."
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining",
+            "description": "Seats still free on the date; negative when over capacity."
+          },
+          "reservation_count": {
+            "type": "integer",
+            "title": "Reservation Count",
+            "description": "Number of live bookings on the date."
+          },
+          "over_capacity": {
+            "type": "boolean",
+            "title": "Over Capacity",
+            "description": "Whether the booked seats exceed the capacity."
+          }
+        },
+        "type": "object",
+        "required": [
+          "service_id",
+          "service_name",
+          "opens_at",
+          "closes_at",
+          "capacity",
+          "booked",
+          "remaining",
+          "reservation_count",
+          "over_capacity"
+        ],
+        "title": "CalendarServiceSummary",
+        "description": "How full one service is on one business date."
+      },
+      "CancelReservationAction": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Staff notes to record with this action (replaces the existing notes)."
+          },
+          "action": {
+            "type": "string",
+            "const": "cancel",
+            "title": "Action",
+            "description": "Action: cancel."
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "CancelReservationAction",
+        "description": "Cancel a reservation → canceled. Requires ``reservation:cancel``."
+      },
+      "CheckInReservationAction": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Staff notes to record with this action (replaces the existing notes)."
+          },
+          "action": {
+            "type": "string",
+            "const": "check_in",
+            "title": "Action",
+            "description": "Action: check_in."
+          },
+          "arrival_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time",
+            "description": "Venue-local time of arrival; defaults to the current venue-local time if omitted."
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "CheckInReservationAction",
+        "description": "Check a reservation in (the party arrived) → checked_in. Requires ``reservation:check-in``."
+      },
+      "ClosedServiceSummary": {
+        "properties": {
+          "service_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Service Id",
+            "description": "Service the closing removes."
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name",
+            "description": "Name of that service."
+          },
+          "reservation_count": {
+            "type": "integer",
+            "title": "Reservation Count",
+            "description": "Pending or confirmed bookings still held on the service that day, which staff need to resolve."
+          }
+        },
+        "type": "object",
+        "required": [
+          "service_id",
+          "service_name",
+          "reservation_count"
+        ],
+        "title": "ClosedServiceSummary",
+        "description": "A service a closing removes from one business date while it still holds bookings."
+      },
+      "ClosingCreateRequest": {
+        "properties": {
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From",
+            "description": "First date of the closing period (inclusive)."
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To",
+            "description": "Last date of the closing period (inclusive)."
+          },
+          "service_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Service Ids",
+            "description": "Services this closing applies to. Pass every service of the venue for a venue-wide shutdown."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Description of this closing."
+          }
+        },
+        "type": "object",
+        "required": [
+          "date_from",
+          "date_to",
+          "service_ids"
+        ],
+        "title": "ClosingCreateRequest",
+        "description": "Request body for creating a closing: a date range and the services it closes."
+      },
+      "ClosingResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Resource identifier."
+          },
+          "venue_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Venue Id",
+            "description": "Identifier of the venue this closing belongs to."
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From",
+            "description": "First date of the closing period (inclusive)."
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To",
+            "description": "Last date of the closing period (inclusive)."
+          },
+          "service_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Service Ids",
+            "description": "Services this closing applies to."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Description of this closing."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Date and time when the object was created."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Date and time when the object was updated."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "venue_id",
+          "date_from",
+          "date_to",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ClosingResponse",
+        "description": "Response body representing a closing."
+      },
+      "ClosingUpdateRequest": {
+        "properties": {
+          "date_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date From",
+            "description": "New first date of the closing period (inclusive)."
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date To",
+            "description": "New last date of the closing period (inclusive)."
+          },
+          "service_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Ids",
+            "description": "New complete set of services this closing applies to."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "New description of this closing."
+          }
+        },
+        "type": "object",
+        "title": "ClosingUpdateRequest",
+        "description": "Request body for updating a closing. Unset fields are not modified; ``service_ids``, when\ngiven, replaces the full set of targeted services."
+      },
+      "ConfirmReservationAction": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Staff notes to record with this action (replaces the existing notes)."
+          },
+          "action": {
+            "type": "string",
+            "const": "confirm",
+            "title": "Action",
+            "description": "Action: confirm."
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "ConfirmReservationAction",
+        "description": "Confirm a reservation (accept it) → confirmed. Requires ``reservation:confirm``."
+      },
+      "DeletedServiceSummary": {
+        "properties": {
+          "service_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Service Id",
+            "description": "The deleted service."
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name",
+            "description": "Name of that service."
+          },
+          "reservation_count": {
+            "type": "integer",
+            "title": "Reservation Count",
+            "description": "Pending or confirmed bookings still held on the service that day, which staff need to resolve."
+          }
+        },
+        "type": "object",
+        "required": [
+          "service_id",
+          "service_name",
+          "reservation_count"
+        ],
+        "title": "DeletedServiceSummary",
+        "description": "A deleted service that still holds bookings on one business date."
+      },
+      "ErrorResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Error title"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "description": "Standard error response payload. "
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus",
+            "description": "Liveness status of the service."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "description": "Liveness probe payload. "
+      },
+      "HealthStatus": {
+        "type": "string",
+        "enum": [
+          "ok"
+        ],
+        "title": "HealthStatus"
+      },
+      "NoShowReservationAction": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Staff notes to record with this action (replaces the existing notes)."
+          },
+          "action": {
+            "type": "string",
+            "const": "no_show",
+            "title": "Action",
+            "description": "Action: no_show."
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "NoShowReservationAction",
+        "description": "Mark a reservation as a no-show (the party did not arrive) → no_show. Requires\n``reservation:no-show``."
+      },
+      "OpeningResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Resource identifier."
+          },
+          "service_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Service Id",
+            "description": "Identifier of the service this opening belongs to."
+          },
+          "weekday": {
+            "$ref": "#/components/schemas/Weekday",
+            "description": "Day of the week this opening applies to."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "time",
+            "title": "Start Time",
+            "description": "Time the service opens."
+          },
+          "end_time": {
+            "type": "string",
+            "format": "time",
+            "title": "End Time",
+            "description": "Time the service closes."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Description of this opening."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Date and time when the object was created."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Date and time when the object was updated."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "service_id",
+          "weekday",
+          "start_time",
+          "end_time",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "OpeningResponse",
+        "description": "Response body representing a service opening."
+      },
+      "OpeningUpsertRequest": {
+        "properties": {
+          "weekday": {
+            "$ref": "#/components/schemas/Weekday",
+            "description": "Day of the week this opening applies to."
+          },
+          "start_time": {
+            "type": "string",
+            "format": "time",
+            "title": "Start Time",
+            "description": "Time the service opens."
+          },
+          "end_time": {
+            "type": "string",
+            "format": "time",
+            "title": "End Time",
+            "description": "Time the service closes. An end at or before the start runs the opening overnight, closing on the following day."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Description of this opening."
+          }
+        },
+        "type": "object",
+        "required": [
+          "weekday",
+          "start_time",
+          "end_time"
+        ],
+        "title": "OpeningUpsertRequest",
+        "description": "One weekday's opening hours within an openings upsert."
+      },
+      "OpeningsResponse": {
+        "properties": {
+          "openings": {
+            "items": {
+              "$ref": "#/components/schemas/OpeningResponse"
+            },
+            "type": "array",
+            "title": "Openings"
+          }
+        },
+        "type": "object",
+        "title": "OpeningsResponse",
+        "description": "Response body listing a service's weekly openings."
+      },
+      "OpeningsUpsertRequest": {
+        "properties": {
+          "openings": {
+            "items": {
+              "$ref": "#/components/schemas/OpeningUpsertRequest"
+            },
+            "type": "array",
+            "title": "Openings",
+            "description": "The service's complete weekly hours. Submitting an empty list clears them."
+          }
+        },
+        "type": "object",
+        "title": "OpeningsUpsertRequest",
+        "description": "Request body replacing a service's full set of weekly openings."
+      },
+      "Page_ClosingResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClosingResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "Page[ClosingResponse]"
+      },
+      "Page_ReservationResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReservationResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "Page[ReservationResponse]"
+      },
+      "RejectReservationAction": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Staff notes to record with this action (replaces the existing notes)."
+          },
+          "action": {
+            "type": "string",
+            "const": "reject",
+            "title": "Action",
+            "description": "Action: reject."
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "RejectReservationAction",
+        "description": "Reject a reservation (decline it) → rejected. Requires ``reservation:reject``."
+      },
+      "ReservationCreationRequest": {
+        "properties": {
+          "venue_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Venue Id",
+            "description": "Identifier of the venue this reservation belongs to."
+          },
+          "service_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Service Id",
+            "description": "Identifier of the service to book into. The requested time must fall within that service's opening window on the date."
+          },
+          "contact_name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Contact Name",
+            "description": "Name of the customer."
+          },
+          "contact_phone_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Phone Number",
+            "description": "Phone number of the customer."
+          },
+          "contact_email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 320
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email",
+            "description": "Email of the customer."
+          },
+          "party_size": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Party Size",
+            "description": "Number of people."
+          },
+          "reservation_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Reservation Date",
+            "description": "Reservation date and time as venue-local wall-clock, naive (no timezone offset). Minute granularity only."
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Free-form staff notes about the reservation."
+          }
+        },
+        "type": "object",
+        "required": [
+          "venue_id",
+          "service_id",
+          "contact_name",
+          "party_size",
+          "reservation_date"
+        ],
+        "title": "ReservationCreationRequest",
+        "description": "Request body for creating a new reservation."
+      },
+      "ReservationResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Resource identifier."
+          },
+          "venue_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Venue Id",
+            "description": "Identifier of the venue this reservation belongs to."
+          },
+          "service_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Service Id",
+            "description": "Identifier of the service this reservation is booked into."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReservationStatus",
+            "description": "Status of the reservation."
+          },
+          "reservation_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Reservation Date",
+            "description": "Reservation date and time as venue-local wall-clock, naive (no offset)."
+          },
+          "party_size": {
+            "type": "integer",
+            "title": "Party Size",
+            "description": "Number of people."
+          },
+          "arrival_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time",
+            "description": "Actual time of arrival, once checked in."
+          },
+          "contact_name": {
+            "type": "string",
+            "title": "Contact Name",
+            "description": "Name of the customer."
+          },
+          "contact_phone_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Phone Number",
+            "description": "Phone number of the customer."
+          },
+          "contact_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email",
+            "description": "Email of the customer."
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Free-form staff notes about the reservation."
+          },
+          "violation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReservationViolation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "If set, why this reservation no longer fits the current schedule (computed on read for live future bookings; null when it still fits)."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Date and time when the object was created."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Date and time when the object was updated."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "venue_id",
+          "service_id",
+          "status",
+          "reservation_date",
+          "party_size",
+          "contact_name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReservationResponse",
+        "description": "Response body representing a reservation."
+      },
+      "ReservationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "confirmed",
+          "rejected",
+          "canceled",
+          "checked_in",
+          "no_show",
+          "withdrawn"
+        ],
+        "title": "ReservationStatus"
+      },
+      "ReservationUpdateRequest": {
+        "properties": {
+          "service_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Id",
+            "description": "Move the booking to this service. The booking is checked against it like a new one, so this is how a booking left on a closed or deleted service is given a new one."
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Name",
+            "description": "New name of the customer."
+          },
+          "contact_phone_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Phone Number",
+            "description": "New phone number of the customer."
+          },
+          "party_size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Party Size",
+            "description": "New number of people."
+          },
+          "reservation_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Date",
+            "description": "New reservation date and time as venue-local wall-clock, naive (no timezone offset). Minute granularity only. Must still fall within the booked service's opening window."
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "New staff notes about the reservation."
+          }
+        },
+        "type": "object",
+        "title": "ReservationUpdateRequest",
+        "description": "Request body for updating an existing reservation. Unset fields are not modified."
+      },
+      "ReservationViolation": {
+        "type": "string",
+        "enum": [
+          "no_service",
+          "closed",
+          "outside_hours"
+        ],
+        "title": "ReservationViolation",
+        "description": "Why a live (pending/confirmed) reservation no longer fits its service's current schedule.\nComputed on read — reservations are never mutated by a schedule change."
+      },
+      "ServiceCreationRequest": {
+        "properties": {
+          "venue_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Venue Id",
+            "description": "Identifier of the venue this service belongs to."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Name",
+            "description": "Name of the service."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Optional description of the service."
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From",
+            "description": "First date the service runs on (inclusive)."
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date To",
+            "description": "Last date the service runs on (inclusive). Omit to run it indefinitely; set it equal to `date_from` for a one-shot service."
+          },
+          "capacity": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Capacity",
+            "description": "Maximum number of seats bookable on any date the service runs."
+          }
+        },
+        "type": "object",
+        "required": [
+          "venue_id",
+          "name",
+          "date_from",
+          "capacity"
+        ],
+        "title": "ServiceCreationRequest",
+        "description": "Request body for creating a new service."
+      },
+      "ServiceResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Resource identifier."
+          },
+          "venue_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Venue Id",
+            "description": "Identifier of the venue this service belongs to."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Name of the service."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Description of the service."
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From",
+            "description": "First date the service runs on (inclusive)."
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date To",
+            "description": "Last date the service runs on (inclusive); null runs it indefinitely."
+          },
+          "capacity": {
+            "type": "integer",
+            "title": "Capacity",
+            "description": "Maximum number of seats bookable on any date the service runs."
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At",
+            "description": "Date and time when the object was deleted; null while active."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Date and time when the object was created."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Date and time when the object was updated."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "venue_id",
+          "name",
+          "date_from",
+          "capacity",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ServiceResponse",
+        "description": "Response body representing a service."
+      },
+      "ServiceUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "New name of the service."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "New description of the service."
+          },
+          "date_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date From",
+            "description": "New first date the service runs on (inclusive)."
+          },
+          "date_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date To",
+            "description": "New last date the service runs on (inclusive); null runs it indefinitely."
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity",
+            "description": "New maximum number of seats bookable on any date the service runs."
+          }
+        },
+        "type": "object",
+        "title": "ServiceUpdateRequest",
+        "description": "Request body for updating an existing service. Unset fields are not modified."
+      },
+      "ServicesResponse": {
+        "properties": {
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/ServiceResponse"
+            },
+            "type": "array",
+            "title": "Services"
+          }
+        },
+        "type": "object",
+        "required": [
+          "services"
+        ],
+        "title": "ServicesResponse",
+        "description": "Response body listing services."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "Weekday": {
+        "type": "string",
+        "enum": [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday"
+        ],
+        "title": "Weekday",
+        "description": "Days of the week, in Python's Monday=0..Sunday=6 order (matching `date.weekday()`)."
+      },
+      "WithdrawReservationAction": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Staff notes to record with this action (replaces the existing notes)."
+          },
+          "action": {
+            "type": "string",
+            "const": "withdraw",
+            "title": "Action",
+            "description": "Action: withdraw."
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "WithdrawReservationAction",
+        "description": "Withdraw a booking the venue can no longer honor → withdrawn — a venue-initiated\ncancellation, distinct from a customer ``cancel`` or a pre-acceptance ``reject`` (e.g. after a\nclosure or schedule change makes the booking impossible). Requires ``reservation:withdraw``."
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

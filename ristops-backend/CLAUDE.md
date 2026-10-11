@@ -18,6 +18,9 @@ uv sync
 ristops seed-authn
 ristops seed-authz
 
+# Export the OpenAPI schema of a service (no environment needed)
+ristops openapi export be-reservation -f packages/ristops-be-reservation/openapi.json -o
+
 # Generate SQL DDL for a service
 ristops sql-database generate-ddl be-authn
 
@@ -27,6 +30,9 @@ ristops sql-database create-tables be-authn
 # Reset a database (DESTRUCTIVE, schema only — reseed separately)
 ristops sql-database nuke be-authn   # drop + recreate tables (SQL services)
 ristops nuke-authz                   # delete all nodes (authz/Neo4j)
+
+# Run the tests (a package's tests directory is run on its own: its conftest.py and helpers.py are not namespaced)
+pytest packages/ristops-lib-core/tests
 
 # Run the CLI debugger
 python scripts/run_command.py <args>
@@ -112,6 +118,10 @@ runs.
 its CLI commands under `[project.entry-points."ristops.cli.commands"]` and its startable FastAPI
 apps under `[project.entry-points."ristops.cli.commands.start"]` in `pyproject.toml`.
 The `ristops start <app>` command discovers registered apps dynamically.
+
+Each service's `app.py` separates `build_api()` (metadata, routes, OpenAPI configuration; no
+settings, no I/O), registered under `ristops.cli.commands.openapi.export`, from `create_app()`
+(telemetry, settings, authN/authZ, middleware), registered under `ristops.cli.commands.start`.
 
 ### Inter-service HTTP
 

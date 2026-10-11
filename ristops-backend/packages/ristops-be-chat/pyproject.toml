@@ -1,0 +1,14 @@
+[project]
+name = "ristops-be-chat"
+version = "0.1.0"
+dependencies = [
+    "fastapi",
+    "ristops-lib-core",
+    "ristops-lib-otel",
+    "ristops-lib-be",
+    "ristops-lib-sql",
+    "ristops-lib-agent",
+]
+
+[project.scripts]
+ristops = "ristops_lib_core.cli.entrypoint:main"

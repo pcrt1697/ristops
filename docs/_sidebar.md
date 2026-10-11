@@ -7,6 +7,7 @@
   - [be-authz](services/be-authz.md)
   - [be-venue](services/be-venue.md)
   - [be-reservation](services/be-reservation.md)
+  - [be-chat](services/be-chat.md)
   - [bff-web](services/bff-web.md)
 
 - **Libraries**
@@ -16,6 +17,7 @@
   - [lib-redis](libraries/lib-redis.md)
   - [lib-neo4j](libraries/lib-neo4j.md)
   - [lib-otel](libraries/lib-otel.md)
+  - [lib-agent](libraries/lib-agent.md)
 
 - [Local Environment](deployment.md)
 
