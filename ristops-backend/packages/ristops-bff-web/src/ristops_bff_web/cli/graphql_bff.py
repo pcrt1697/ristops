@@ -36,7 +36,7 @@ def graphql_bff(_: click.Context) -> None:
 )
 def export_schema(file: str | None, overwrite: bool) -> None:
     """Export the BFF GraphQL schema as SDL."""
-    sdl = print_schema(schema)
+    sdl = print_schema(schema) + "\n"
     if file:
         out = pathlib.Path(file)
         if out.exists() and not overwrite:
@@ -44,7 +44,7 @@ def export_schema(file: str | None, overwrite: bool) -> None:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(sdl)
     else:
-        click.echo(sdl)
+        click.echo(sdl, nl=False)
 
 
 # noinspection PyTypeChecker

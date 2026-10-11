@@ -29,14 +29,15 @@ reachable from the browser (`http://localhost:8000`), never a Compose service na
 
 ## GraphQL types
 
-TypeScript types for GraphQL queries and mutations are generated from the BFF schema. Before
-running codegen, export the current schema from `ristops-backend/`:
+TypeScript types for GraphQL queries and mutations are generated from the BFF schema,
+committed at `graphql/schema.gql`. The `export-api-schemas` pre-commit hook keeps it in sync with
+the backend; to export it by hand, from `ristops-backend/`:
 
 ```bash
 ristops graphql-bff export-schema -f ../ristops-web/graphql/schema.gql --overwrite
 ```
 
-Then regenerate the types:
+Regenerate the types:
 
 ```bash
 npm run graphql:gen

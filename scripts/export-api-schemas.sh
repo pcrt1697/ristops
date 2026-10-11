@@ -3,7 +3,7 @@
 # Regenerates the committed API schemas of the backend:
 #   - the OpenAPI schema of every app registered under the `ristops.cli.commands.openapi.export`
 #     entry-point group, written to ristops-backend/packages/ristops-<app>/openapi.json
-#   - the GraphQL SDL of bff-web, written to ristops-backend/packages/ristops-bff-web/schema.graphql
+#   - the GraphQL SDL of bff-web, written to ristops-web/graphql/schema.gql, where the frontend codegen reads it
 #
 # Run by the `export-api-schemas` pre-commit hook. It always rewrites every file and exits non-zero
 # only when an export fails; pre-commit detects the modified files and stops the commit.
@@ -31,4 +31,4 @@ for app in ${apps}; do
   run ristops openapi export "${app}" -f "${package_dir}/openapi.json" -o
 done
 
-run ristops graphql-bff export-schema -f "${PACKAGES_DIR}/ristops-bff-web/schema.graphql" -o
+run ristops graphql-bff export-schema -f "${REPO_ROOT}/ristops-web/graphql/schema.gql" -o

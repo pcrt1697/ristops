@@ -123,6 +123,15 @@ Each service's `app.py` separates `build_api()` (metadata, routes, OpenAPI confi
 settings, no I/O), registered under `ristops.cli.commands.openapi.export`, from `create_app()`
 (telemetry, settings, authN/authZ, middleware), registered under `ristops.cli.commands.start`.
 
+### Committed API schemas
+
+Each service's OpenAPI schema (`packages/<package>/openapi.json`) and the bff-web GraphQL SDL
+(`ristops-web/graphql/schema.gql`) are committed, so API changes show up in review. They are
+generated, never edited by hand: the `export-api-schemas` pre-commit hook
+(`.pre-commit-config.yaml` at the repository root) runs `scripts/export-api-schemas.sh`, which
+exports every app registered under `ristops.cli.commands.openapi.export` plus the SDL. When the
+hook rewrites a schema it stops the commit; review the diff, stage the files and commit again.
+
 ### Inter-service HTTP
 
 `HttpClient` from `ristops-lib-core` wraps `httpx.AsyncClient`. It injects

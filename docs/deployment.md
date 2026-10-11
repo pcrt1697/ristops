@@ -53,6 +53,30 @@ docker compose -f docker/docker-compose.local.yaml up -d
 Applications then run on the host — backend services via `ristops start <app>`, frontend via
 `npm run dev`. Stop the Vite dev server before starting the full stack, since both use port 5173.
 
+### Git hooks
+
+The repository uses [pre-commit](https://pre-commit.com). Install the hooks once per clone, from
+the repository root:
+
+```bash
+pre-commit install
+```
+
+The `export-api-schemas` hook regenerates the committed API schemas whenever backend code changes:
+the OpenAPI schema of each service (`ristops-backend/packages/<package>/openapi.json`) and the
+bff-web GraphQL SDL (`ristops-web/graphql/schema.gql`). It runs `scripts/export-api-schemas.sh`,
+which needs no environment or running service. If the hook rewrites a schema, the commit stops:
+review the diff, stage the files and commit again.
+
+Run it without committing:
+
+```bash
+pre-commit run export-api-schemas --all-files
+```
+
+Skipping it (`git commit --no-verify`, or `SKIP=export-api-schemas`) leaves the committed schemas
+stale until the next run; there is no other check.
+
 Database schemas are created by the `init-db` one-shot service, which this stack runs too. On a
 fresh database, seed the admin user once:
 

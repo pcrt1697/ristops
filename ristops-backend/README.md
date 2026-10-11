@@ -80,6 +80,13 @@ via `AuthZInterceptor`.
 uv sync
 ```
 
+Install the git hooks once per clone, from the repository root (requires
+[pre-commit](https://pre-commit.com), e.g. `uv tool install pre-commit`):
+
+```bash
+pre-commit install
+```
+
 Start the infrastructure the services depend on. This also runs `init-db`, which creates the
 SQL schemas and tables, so only the admin user has to be seeded on a fresh database:
 

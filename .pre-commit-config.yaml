@@ -9,4 +9,4 @@ repos:
         # the script regenerates every schema, so it takes no file list
         pass_filenames: false
         # backend code and package metadata, plus the generated schemas so a hand edit is overwritten
-        files: ^ristops-backend/packages/[^/]+/(src/.*\.py|pyproject\.toml|openapi\.json|schema\.graphql)$
+        files: ^(ristops-backend/packages/[^/]+/(src/.*\.py|pyproject\.toml|openapi\.json)|ristops-web/graphql/schema\.gql)$
