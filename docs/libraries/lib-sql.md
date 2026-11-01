@@ -61,7 +61,7 @@ the page carries the correct total).
 Filtering is deliberately generic: the executor only ANDs together whatever conditions the builder
 returns. Authorization scoping — "only the venues the user may access" — is therefore just another
 condition the caller injects, never something the executor knows about. See the pagination/search
-base types in [lib-core](lib-core.md#pagination--search).
+base types in [lib-core](lib-core.md#pagination-and-search).
 
 ```python
 search_query_executor = SearchQueryExecutor[VenueSearchQuery, VenueSearchScope, VenueEntity, VenueResponse](

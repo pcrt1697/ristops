@@ -1,28 +1,31 @@
 <!-- markdownlint-disable MD041 -->
 
-- [Overview](README.md)
+- [Overview](/README.md)
 
 - **Services**
-  - [be-authn](services/be-authn.md)
-  - [be-authz](services/be-authz.md)
-  - [be-venue](services/be-venue.md)
-  - [be-reservation](services/be-reservation.md)
-  - [be-chat](services/be-chat.md)
-  - [bff-web](services/bff-web.md)
+  - [be-authn](/services/be-authn.md)
+  - [be-authz](/services/be-authz.md)
+  - [be-venue](/services/be-venue.md)
+  - [be-reservation](/services/be-reservation.md)
+  - [be-chat](/services/be-chat.md)
+  - [bff-web](/services/bff-web.md)
 
 - **Libraries**
-  - [lib-core](libraries/lib-core.md)
-  - [lib-be](libraries/lib-be.md)
-  - [lib-sql](libraries/lib-sql.md)
-  - [lib-redis](libraries/lib-redis.md)
-  - [lib-neo4j](libraries/lib-neo4j.md)
-  - [lib-otel](libraries/lib-otel.md)
-  - [lib-agent](libraries/lib-agent.md)
+  - [lib-core](/libraries/lib-core.md)
+  - [lib-be](/libraries/lib-be.md)
+  - [lib-sql](/libraries/lib-sql.md)
+  - [lib-redis](/libraries/lib-redis.md)
+  - [lib-neo4j](/libraries/lib-neo4j.md)
+  - [lib-otel](/libraries/lib-otel.md)
+  - [lib-agent](/libraries/lib-agent.md)
 
-- [Local Environment](deployment.md)
+- **Design**
+  - [AI assistant](/design/ai-assistant.md)
 
-- [Event-Driven Architecture](events.md)
+- [Local Environment](/deployment.md)
 
-- [ADRs](adr.md)
+- [Event-Driven Architecture](/events.md)
 
-- [Backlog](backlog.md)
+- [ADRs](/adr.md)
+
+- [Backlog](/backlog.md)

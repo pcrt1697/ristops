@@ -110,7 +110,7 @@ Each client exposes its bound `httpx.AsyncClient` via `.client`; using it outsid
 `with_clients` context raises. Clients are independent objects, so each domain imports only the
 ones it needs rather than reaching into a shared registry.
 
-## Pagination & search
+## Pagination and search
 
 `schema/pagination.py` provides the shared building blocks for list endpoints:
 
